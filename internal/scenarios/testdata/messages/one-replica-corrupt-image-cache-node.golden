@@ -1,10 +1,10 @@
 10:06:15 settled
-🟠 web in shop (prod-eu-1) cannot start (create container error). Cause not found yet: its node and registry are healthy and unchanged. It fails with "failed to resolve rootfs: layer does not exist". To see why the container cannot start, run kubectl describe pods web- -n shop
-🟠 web in shop (prod-eu-1) cannot start (create container error).
-| 🟠 **web** in **shop** (**prod-eu-1**) cannot start (create container error).
-| Cause not found yet: its node and registry are healthy and unchanged.
+🟠 web in shop (prod-eu-1) cannot start (create container error) because node node-c is what the failing workloads have in common, though it looks healthy. It fails with "failed to resolve rootfs: layer does not exist". Replicas that do not depend on it are healthy. To check the node's conditions and recent events, run kubectl describe node node-c
+🟠 web in shop (prod-eu-1) cannot start (create container error) because node node-c is what the failing workloads have in common, though it looks healthy.
+| 🟠 **web** in **shop** (**prod-eu-1**) cannot start (create container error) because node **node-c** is what the failing workloads have in common, though it looks healthy.
 | It fails with `failed to resolve rootfs: layer does not exist`.
-| To see why the container cannot start, run
+| Replicas that do not depend on it are healthy.
+| To check the node's conditions and recent events, run
 | ```
-| kubectl describe pods web- -n shop
+| kubectl describe node node-c
 | ```

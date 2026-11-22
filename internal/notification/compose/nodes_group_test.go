@@ -50,8 +50,9 @@ func TestGroupedNodeOutageSpeaksOfAllNodesInThePlural(t *testing.T) {
 		"for about two minutes: n1, n2 and n3.")
 	assert.Contains(t, note, "They report \"Kubelet stopped posting node "+
 		"status\".")
-	assert.Contains(t, note, "the kubelets stopped reporting, so check "+
-		"the machines behind these nodes.")
+	assert.Contains(t, note, "The kubelets stopped reporting and the cause is "+
+		"outside the cluster's view; check the machines behind these "+
+		"nodes.")
 	assert.NotContains(t, note, "It reports")
 	assert.NotContains(t, note, "so check the machine behind node")
 }
@@ -63,7 +64,8 @@ func TestLoneNodeKeepsTheSingularProof(t *testing.T) {
 
 	assert.Contains(t, note, "It reports \"Kubelet stopped posting node "+
 		"status\".")
-	assert.Contains(t, note, "so check the machine behind node n1.")
+	assert.Contains(t, note, "outside the cluster's view; check the "+
+		"machine behind node n1.")
 }
 
 func spreadPod(app, suffix string) inventory.EntityID {

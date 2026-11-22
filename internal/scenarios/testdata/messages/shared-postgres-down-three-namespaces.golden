@@ -1,24 +1,16 @@
-10:11:15 roll-up
-🟠 kwatch (prod-eu-1) found two new problems at the same time. ledger in billing and two other workloads keep crashing with the same error. pg in data keeps running out of memory because its memory limit is too low for normal use. Each one alerts on its own when it changes or resolves.
-🟠 kwatch (prod-eu-1) found two new problems at the same time.
-| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
-|
-| **Problems**
-| - **ledger** in **billing** and two other workloads keep crashing with the same error
-| - pg (**data**) keeps running out of memory because its memory limit — too low for normal use
-|
-| *Each one alerts on its own when it changes or resolves.*
-10:18:00 material change
-🟠 ledger in billing (prod-eu-1) and two other workloads keep crashing with the same error. It fails with "dial tcp: lookup pg.data.svc.cluster.local: no endpoints". Its last run lasted ten seconds; six restarts since its pod was created about one hour ago. Service ledger in billing; service gen in reports; service api in shop can't serve traffic.
-Related alerts: 9 not-ready pods, 3 unavailable workloads
-To read the output of the last crash, run kubectl logs deploy/ledger -c app -n billing --previous
-🟠 ledger in billing (prod-eu-1) and two other workloads keep crashing with the same error.
-| 🟠 **ledger** in **billing** (**prod-eu-1**) and two other workloads keep crashing with the same error.
-| It fails with `dial tcp: lookup pg.data.svc.cluster.local: no endpoints`.
-| Its last run lasted ten seconds; six restarts since its pod was created about one hour ago.
+10:11:15 settled
+🟠 pg in data (prod-eu-1) keeps running out of memory. ledger fails calling service pg with "dial tcp pg.data.svc.cluster.local:5432: connect: connection refused". It was killed within 10 seconds of starting. Service ledger in billing; service gen in reports; service api in shop can't serve traffic. Its containers have no memory limit, so nothing caps their memory use. It runs a single replica.
+Related alerts: 9 crash loops
+To read the output of the last crash, run kubectl logs pg-0 -c app -n data --previous
+🟠 pg in data (prod-eu-1) keeps running out of memory.
+| 🟠 pg in **data** (**prod-eu-1**) keeps running out of memory.
+| **ledger** fails calling service pg with `dial tcp pg.data.svc.cluster.local:5432: connect: connection refused`.
+| It was killed within 10 seconds of starting.
 | Service **ledger** in **billing**; service **gen** in **reports**; service **api** in **shop** can't serve traffic.
-| Related alerts: 9 not-ready pods, 3 unavailable workloads
+| Its containers have no memory limit, so nothing caps their memory use.
+| It runs a single replica.
+| Related alerts: 9 crash loops
 | To read the output of the last crash, run
 | ```
-| kubectl logs deploy/ledger -c app -n billing --previous
+| kubectl logs pg-0 -c app -n data --previous
 | ```

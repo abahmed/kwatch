@@ -1,13 +1,13 @@
 10:31:15 settled
-🟠 kube-apiserver in kube-system (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use. It was killed within 10 seconds of starting. Two restarts since its pod was created about two hours ago. Fix: raise the memory limit of container app in deployment/kube-apiserver above 2Gi. To read the output of the last crash, run kubectl logs deploy/kube-apiserver -c app -n kube-system --previous
-🟠 kube-apiserver in kube-system (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use.
-| 🟠 **kube-apiserver** in **kube-system** (**prod-eu-1**) keeps running out of memory because its memory limit is too low for normal use.
+🟠 Pod kube-apiserver-n1 in kube-system (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use. It was killed within 10 seconds of starting. Two restarts since its pod was created about two hours ago. Fix: raise the memory limit of container kube-apiserver in pod/kube-apiserver-n1 above 2Gi. To read the output of the last crash, run kubectl logs kube-apiserver-n1 -c kube-apiserver -n kube-system --previous
+🟠 Pod kube-apiserver-n1 in kube-system (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use.
+| 🟠 Pod **kube-apiserver-n1** in **kube-system** (**prod-eu-1**) keeps running out of memory because its memory limit is too low for normal use.
 | It was killed within 10 seconds of starting.
 | Two restarts since its pod was created about two hours ago.
-| Fix: raise the memory limit of container app in deployment/kube-apiserver above 2Gi.
+| Fix: raise the memory limit of container kube-apiserver in pod/kube-apiserver-n1 above 2Gi.
 | To read the output of the last crash, run
 | ```
-| kubectl logs deploy/kube-apiserver -c app -n kube-system --previous
+| kubectl logs kube-apiserver-n1 -c kube-apiserver -n kube-system --previous
 | ```
 10:31:45 settled
 🔴 The Kubernetes API (prod-eu-1) has been failing for about two minutes. It reports "Get "https://10.96.0.1:443/readyz": dial tcp 10.96.0.1:443: connect: connection refused". To see which API server health checks fail, run kubectl get --raw '/readyz?verbose'
@@ -21,6 +21,10 @@
 | ```
 | kubectl get --raw '/readyz?verbose'
 | ```
+10:36:00 material change
+🟠 Pod kube-apiserver-n1 in kube-system (prod-eu-1) has not been ready for three minutes now.
+🟠 Pod kube-apiserver-n1 in kube-system (prod-eu-1) has not been ready for three minutes now.
+| 🟠 Pod **kube-apiserver-n1** in **kube-system** (**prod-eu-1**) has not been ready for three minutes now.
 10:37:15 settled
 🟠 Cron job minutely-sync in reports (prod-eu-1) is failing: scheduled run did not start (due five minutes ago). To see the object's state and events, run kubectl describe cronjob minutely-sync -n reports
 🟠 Cron job minutely-sync in reports (prod-eu-1) is failing: scheduled run did not start (due five minutes ago).

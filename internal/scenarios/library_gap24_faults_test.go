@@ -4,6 +4,8 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // gap24FaultScenarios: workload and configuration faults.
@@ -11,6 +13,7 @@ func gap24FaultScenarios() []scenario {
 	return []scenario{
 		gap24OOMLimit(), gap24ImageTypo(), gap24BadRolloutKey(),
 		gap24ProbePort(), gap24CertificateExpired(),
+		gap24ChronicReminder(),
 	}
 }
 
@@ -116,6 +119,36 @@ func gap24CertificateExpired() scenario {
 				w.setReady(0)
 				c.update(w.objects())
 				c.after(45 * time.Second)
+			}
+		},
+	}
+}
+
+func gap24ChronicReminder() scenario {
+	return scenario{
+		expect: g24Exp("wording-first-message-ongoing-chronic",
+			"A Deployment crash-loops for twenty-two hours, its first "+
+				"page acknowledged; the reminder states the duration "+
+				"as a count and keeps the one action.",
+			"deployment/shop/api", "notify", 2, "node//n1").
+			tail(2 * time.Hour),
+		build: func(c *cluster) {
+			c.list(c.node("n1", "zone-a"))
+			w := c.deployment("shop", "api", "registry.example.com/api:4", 2)
+			c.list(w.objects())
+			c.list(w.pod(0, "n1"), w.pod(1, "n1"))
+			c.after(time.Minute)
+			w.setReady(0)
+			for hour := int32(1); hour <= 22; hour++ {
+				for i := range 2 {
+					c.update(w.pod(i, "n1", crashLoop(1, "Error",
+						"config key missing", hour*12)))
+				}
+				c.update(w.objects())
+				if hour == 1 {
+					annotate(c, w, kube.AckAnnotation, "ack", false)
+				}
+				c.after(time.Hour)
 			}
 		},
 	}

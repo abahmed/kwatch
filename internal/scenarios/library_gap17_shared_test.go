@@ -24,7 +24,7 @@ func gap17PostgresDown() scenario {
 				"OOMKilled and crash-loops; Deployments of three other "+
 				"namespaces log its cross-namespace name with no "+
 				"endpoints. One incident, rooted at the database.",
-			"statefulset/data/pg", "page", "deployment/shop/api",
+			"statefulset/data/pg", "notify", "deployment/shop/api",
 			"deployment/billing/ledger", "deployment/reports/gen").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
@@ -37,8 +37,9 @@ func gap17PostgresDown() scenario {
 				c.update(operatorBroker(c, sts, 0, "n1", crashLoop(137,
 					"OOMKilled", "", round)))
 				c.update(clusterSlice(c, "data", "pg"))
-				g17Victims(c, apps, round, "dial tcp: lookup "+
-					g17FQDN(c, "pg", "data")+": no endpoints")
+				g17Victims(c, apps, round, "dial tcp "+
+					g17FQDN(c, "pg", "data")+":5432: connect: "+
+					"connection refused")
 			})
 		},
 	}
@@ -114,13 +115,18 @@ func gap17NFSDown() scenario {
 			"A shared NFS server Deployment is NotReady and Pending "+
 				"after a drain; pods of three namespaces that mount its "+
 				"volumes stay in ContainerCreating on mount timeouts.",
-			"scheduling//Insufficient memory", "notify",
+			"deployment/storage/nfs-server", "notify",
 			"deployment/shop/web", "deployment/billing/api",
 			"deployment/reports/gen").budget(3).tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
 			nfs := g17Up(c, "storage", "nfs-server", 1)
-			apps := g17Apps(c, 2, "shop/web", "billing/api", "reports/gen")
+			c.list(scheduleClass(c, "nfs", "Immediate"))
+			var apps []*workload
+			for _, app := range [][2]string{{"shop", "web"},
+				{"billing", "api"}, {"reports", "gen"}} {
+				apps = append(apps, gap5bNFSConsumer(c, app[0], app[1]))
+			}
 			c.after(10 * time.Minute)
 			c.update(nfs.pod(0, "", pendingUnscheduled("0/1 nodes are "+
 				"available: 1 Insufficient memory.")))

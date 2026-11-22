@@ -200,6 +200,8 @@ func gap17ClusterRoleEdited() scenario {
 			var apps []*workload
 			for _, app := range [][2]string{{"shop", "api"},
 				{"billing", "api"}, {"jobs", "runner"}} {
+				c.list(&corev1.ServiceAccount{
+					ObjectMeta: c.meta(app[0], "agent")})
 				c.list(rbacObject(c, "RoleBinding", app[0], "app-discovery",
 					map[string]any{"subjects": []any{map[string]any{
 						"kind": "ServiceAccount", "name": "agent",

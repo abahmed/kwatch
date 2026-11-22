@@ -14,13 +14,12 @@ import (
 // what was seen and where to look. The plural is for an outage of
 // several nodes.
 func unknownNodeWords(name string) string {
-	return "kwatch cannot see why from inside the cluster: the kubelet " +
-		"stopped reporting, so check the machine behind node " + name + "."
+	return "The kubelet stopped reporting and the cause is outside the " +
+		"cluster's view; check the machine behind node " + name + "."
 }
 
-const unknownNodesText = "kwatch cannot see why from inside the cluster: " +
-	"the kubelets stopped reporting, so check the machines behind these " +
-	"nodes."
+const unknownNodesText = "The kubelets stopped reporting and the cause " +
+	"is outside the cluster's view; check the machines behind these nodes."
 
 // nodeLead reports a case led by one node that is NotReady or silent.
 func nodeLead(f caseFacts) bool {

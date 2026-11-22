@@ -60,6 +60,8 @@ var placeRules = []placeRule{
 	{RuleConfigMissingOrChanged, Snapshot.missingRefPlace},
 	{"used-missing", Snapshot.missingRefPlace},
 	{"scheduler-capacity", Snapshot.schedulingPlace},
+	{"quota-exhausted", Snapshot.quotaPlace},
+	{"certificate-expired", Snapshot.certificatePlace},
 }
 
 // placeEntities are the entities a cause is about: what it explains,

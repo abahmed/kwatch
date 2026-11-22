@@ -2,7 +2,7 @@
   "name": "shared-postgres-down-three-namespaces",
   "description": "A shared StatefulSet database in its own namespace is OOMKilled and crash-loops; Deployments of three other namespaces log its cross-namespace name with no endpoints. One incident, rooted at the database.",
   "root": "statefulset/data/pg",
-  "tier": "page",
+  "tier": "notify",
   "maxMessages": 2,
   "mustNotBlame": [
     "deployment/shop/api",

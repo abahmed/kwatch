@@ -1,4 +1,4 @@
-10:06:15 settled
+10:04:15 settled
 🟠 CertificateSigningRequest csr-9d4k1 (prod-eu-1) is failing: certificate request was approved but no certificate was issued. To see the object's state and events, run kubectl describe certificatesigningrequest csr-9d4k1
 🟠 CertificateSigningRequest csr-9d4k1 (prod-eu-1) is failing: certificate request was approved but no certificate was issued.
 | 🟠 CertificateSigningRequest **csr-9d4k1** (**prod-eu-1**) is failing: certificate request was approved but no certificate was issued.

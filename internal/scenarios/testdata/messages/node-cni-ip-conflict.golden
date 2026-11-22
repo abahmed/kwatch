@@ -9,7 +9,7 @@
 | kubectl describe node n2
 | ```
 10:07:00 material change
-🟠 Node n2 (prod-eu-1) is now also affecting orders in shop: it has only 2 of 3 replicas ready and has been Pending since it was scheduled. It is also affecting cart in shop: it is failing: networking cannot be set up.
-🟠 Node n2 (prod-eu-1) is now also affecting orders in shop: it has only 2 of 3 replicas ready and has been Pending since it was scheduled.
-| 🟠 Node n2 (**prod-eu-1**) is now also affecting **orders** in shop: it has only 2 of 3 replicas ready and has been Pending since it was scheduled.
+🟠 Node n2 (prod-eu-1) is now also affecting orders in shop: it has been Pending since it was scheduled and has only 2 of 3 replicas ready. It is also affecting cart in shop: it is failing: networking cannot be set up.
+🟠 Node n2 (prod-eu-1) is now also affecting orders in shop: it has been Pending since it was scheduled and has only 2 of 3 replicas ready.
+| 🟠 Node n2 (**prod-eu-1**) is now also affecting **orders** in shop: it has been Pending since it was scheduled and has only 2 of 3 replicas ready.
 | It is also affecting **cart** in shop: it is failing: networking cannot be set up.

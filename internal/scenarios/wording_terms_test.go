@@ -81,8 +81,10 @@ var wordingTable = []wordingTerms{
 			"kubectl describe pvc chunks -n observability"},
 		not: []string{"delete", "logs filling"}},
 	{name: "wording-quota-forbids-pods",
-		contain: []string{"compute in shop", "requests.cpu"},
-		not:     []string{"cluster is full", "no nodes", "capacity"}},
+		contain: []string{"compute in shop", "requests.cpu",
+			"Fix: raise requests.cpu in resourcequota/compute|" +
+				"lower the requests of workloads in namespace shop"},
+		not: []string{"cluster is full", "no nodes", "capacity"}},
 	{name: "wording-probe-port-mismatch",
 		contain: []string{"web is failing in shop", "port 80|:80", "8080",
 			"Fix: set the readiness probe of container",
@@ -96,7 +98,8 @@ var wordingTable = []wordingTerms{
 		not: []string{"rotated by"}},
 	{name: "wording-certificate-expired-handshake",
 		contain: []string{"Affected: payments", "bank-client-tls",
-			"expired"},
+			"expired",
+			"Fix: renew the certificate in secret/bank-client-tls"},
 		not: []string{"will expire", "almost"}},
 	// Moved from wording-webhook-down-fail-closed (twin:
 	// webhook-no-endpoints).
@@ -121,12 +124,11 @@ var wordingTable = []wordingTerms{
 			"does not exist", "Fix: point ingress/shop at a service that exists",
 			"kubectl describe ingress shop -n shop"},
 		not: []string{"502", "controller", "load balancer"}},
-	// Moved from wording-first-message-ongoing-chronic (twin:
-	// long-page-reminder).
-	{name: "long-page-reminder",
-		contain: []string{"Node n1"},
+	{name: "wording-first-message-ongoing-chronic",
 		not: []string{"again", "still no fix", "getting worse", "escalat*",
-			"urgent"},
+			"urgent"}},
+	{name: "long-page-reminder",
+		contain:  []string{"Node n1"},
 		reminder: []string{"still down"}},
 }
 

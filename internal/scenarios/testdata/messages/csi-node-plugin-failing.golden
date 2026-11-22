@@ -14,6 +14,7 @@ To read the output of the last crash, run kubectl logs ds/ebs-csi-node -c app -n
 | kubectl logs ds/ebs-csi-node -c app -n kube-system --previous
 | ```
 10:16:30 material change
-🟠 ebs-csi-node in kube-system (prod-eu-1) now has 1 of 2 replicas ready.
+🟠 ebs-csi-node in kube-system (prod-eu-1) now has 1 of 2 replicas ready. It is now also affecting api in shop: it has been Pending since it was scheduled.
 🟠 ebs-csi-node in kube-system (prod-eu-1) now has 1 of 2 replicas ready.
 | 🟠 **ebs-csi-node** in **kube-system** (**prod-eu-1**) now has 1 of 2 replicas ready.
+| It is now also affecting **api** in shop: it has been Pending since it was scheduled.

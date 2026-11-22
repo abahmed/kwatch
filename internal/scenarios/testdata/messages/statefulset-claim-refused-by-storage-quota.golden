@@ -1,11 +1,12 @@
 10:10:00 settled
-🟠 Quota storage-quota in streaming (prod-eu-1) is used up (requests.storage). ResourceQuota storage-quota: requests.storage 150Gi of 150Gi used; this pod asks 50Gi. Affected: queue.
+🟠 Quota storage-quota in streaming (prod-eu-1) is used up (requests.storage). ResourceQuota storage-quota: requests.storage 150Gi of 150Gi used; this pod asks 50Gi. Affected: queue. Fix: raise requests.storage in resourcequota/storage-quota or lower the requests of workloads in namespace streaming.
 Related alerts: 1 failed pod creation
 To see the object's state and events, run kubectl describe statefulset queue -n streaming
 🟠 Quota storage-quota in streaming (prod-eu-1) is used up (requests.storage).
 | 🟠 Quota **storage-quota** in **streaming** (**prod-eu-1**) is used up (requests.storage).
 | ResourceQuota storage-quota: requests.storage 150Gi of 150Gi used; this pod asks 50Gi.
 | Affected: **queue**.
+| Fix: raise requests.storage in resourcequota/storage-quota or lower the requests of workloads in namespace **streaming**.
 | Related alerts: 1 failed pod creation
 | To see the object's state and events, run
 | ```
