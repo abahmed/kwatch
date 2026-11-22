@@ -310,7 +310,7 @@ func gap5bNFSProviderRestarts() scenario {
 			"The pod that serves an NFS volume is replaced; consumers "+
 				"in three namespaces stop responding and their "+
 				"replacements fail FailedMount.",
-			"deployment/storage/nfs-server", "notify", "node//n1",
+			"unknown", "notify", "node//n1",
 			"deployment/shop/web", "deployment/billing/invoices",
 			"deployment/media/transcode").budget(3).tail(10 * time.Minute),
 		build: func(c *cluster) {

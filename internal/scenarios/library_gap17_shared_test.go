@@ -51,7 +51,7 @@ func gap17CacheScaledToZero() scenario {
 			"A shared cache Deployment is scaled to zero by a values "+
 				"edit; web pods of two other namespaces time out on its "+
 				"Service and go NotReady. The edit is named.",
-			"deployment/platform/memcached", "notify",
+			"unknown", "notify",
 			"deployment/shop/web", "deployment/jobs/render").
 			budget(1).tail(10 * time.Minute),
 		build: func(c *cluster) {

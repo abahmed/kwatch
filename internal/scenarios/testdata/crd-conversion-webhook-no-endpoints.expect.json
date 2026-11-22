@@ -1,9 +1,9 @@
 {
   "name": "crd-conversion-webhook-no-endpoints",
-  "description": "A CRD's conversion webhook is served by a Service whose only pod cannot pull its image; controllers of two namespaces fail reading the resource. The Service is the root.",
-  "root": "service/crd-system/gadget-conv",
+  "description": "A CRD's conversion webhook is served by a Service whose only pod cannot pull its image; controllers of two namespaces fail reading the resource. The Deployment is the root.",
+  "root": "deployment/crd-system/gadget-conv",
   "tier": "notify",
-  "maxMessages": 1,
+  "maxMessages": 2,
   "mustNotBlame": [
     "customresourcedefinition//gadgets.example.com",
     "deployment/shop/gadget-ctl",

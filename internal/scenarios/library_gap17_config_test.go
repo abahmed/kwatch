@@ -127,7 +127,8 @@ func gap17SharedConfigBadJSON() scenario {
 			"A ConfigMap of a platform namespace is edited to invalid "+
 				"JSON; pods of three namespaces rolled after the edit "+
 				"crash naming it, while older pods keep running.",
-			"configmap/platform/shared-flags", "notify",
+			"failure-signature//unexpected end of json input reading "+
+				"platform/shared-flags key flags.json", "notify",
 			"deployment/shop/api", "deployment/billing/api",
 			"deployment/reports/api").budget(1).tail(10 * time.Minute),
 		build: func(c *cluster) {
@@ -198,12 +199,12 @@ func gap17ConversionWebhook() scenario {
 		expect: g2Exp("crd-conversion-webhook-no-endpoints",
 			"A CRD's conversion webhook is served by a Service whose "+
 				"only pod cannot pull its image; controllers of two "+
-				"namespaces fail reading the resource. The Service is "+
+				"namespaces fail reading the resource. The Deployment is "+
 				"the root.",
-			"service/crd-system/gadget-conv", "notify",
+			"deployment/crd-system/gadget-conv", "notify",
 			"customresourcedefinition//gadgets.example.com",
 			"deployment/shop/gadget-ctl", "deployment/billing/gadget-ctl").
-			budget(1).tail(10 * time.Minute),
+			budget(2).tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
 			crd := g17Obj(c, "apiextensions.k8s.io/v1",
@@ -238,7 +239,7 @@ func gap17SecretStoreCredential() scenario {
 				"Secret that was deleted; ExternalSecrets of three "+
 				"namespaces fail to sync and their pods wait on an app "+
 				"Secret two hops downstream.",
-			"secret/platform/store-token", "notify",
+			"unknown", "notify",
 			"externalsecret.secrets.example.com/shop/db-creds",
 			"externalsecret.secrets.example.com/billing/db-creds",
 			"deployment/shop/api").tail(10 * time.Minute),

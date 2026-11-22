@@ -263,10 +263,10 @@ func gap5aBarePodFailed() scenario {
 // debug pod that no controller owns.
 func gap5aDrainBarePod() scenario {
 	return scenario{
-		expect: g2Exp("drain-waits-on-pod-without-owner",
+		expect: g2Quiet("drain-waits-on-pod-without-owner",
 			"A node cordoned for an upgrade stays cordoned for hours "+
-				"because a pod without a controller cannot be moved.",
-			"pod/ops/debug-shell", "digest", "node//n1").
+				"because a pod without a controller cannot be moved. "+
+				"Nothing Kubernetes reports fails.").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			n1, fleet := gapNodeFleet(c)

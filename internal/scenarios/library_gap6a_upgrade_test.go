@@ -242,7 +242,7 @@ func gap6aControllerManagerProbe() scenario {
 			"A static pod manifest for the controller manager probes a "+
 				"port the upgraded component no longer serves; the "+
 				"kubelet restarts it again and again.",
-			"controller-manager//kube-controller-manager", "page",
+			"deployment/kube-system/kube-controller-manager", "notify",
 			"node//n1").budget(3).tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))

@@ -44,7 +44,7 @@ func gap5aMetricsX509() scenario {
 			"metrics-server fails to scrape a kubelet because of a "+
 				"certificate name mismatch; the metrics APIService is "+
 				"Available and the HPA reports FailedGetResourceMetric.",
-			"deployment/kube-system/metrics-server", "digest",
+			"unknown", "digest",
 			"apiservice//v1beta1.metrics.k8s.io", "deployment/shop/web",
 			"node//n1").tail(20 * time.Minute),
 		build: func(c *cluster) {

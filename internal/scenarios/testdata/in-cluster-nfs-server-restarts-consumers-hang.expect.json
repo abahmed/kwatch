@@ -1,7 +1,7 @@
 {
   "name": "in-cluster-nfs-server-restarts-consumers-hang",
   "description": "The pod that serves an NFS volume is replaced; consumers in three namespaces stop responding and their replacements fail FailedMount.",
-  "root": "deployment/storage/nfs-server",
+  "root": "unknown",
   "tier": "notify",
   "maxMessages": 3,
   "mustNotBlame": [

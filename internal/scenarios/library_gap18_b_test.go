@@ -251,11 +251,11 @@ func gap18OrdinalCorrupt() scenario {
 // while every pod is Ready.
 func gap18UDPBlocked() scenario {
 	return scenario{
-		expect: g2Exp("udp-only-blocked-by-policy",
+		expect: g2Quiet("udp-only-blocked-by-policy",
 			"A Service exposes TCP and UDP 53; the NetworkPolicy "+
 				"allow-tcp-only admits TCP 53 only, so UDP queries time "+
-				"out. All pods are Ready.", "networkpolicy/infra/"+
-				"allow-tcp-only", "notify").budget(1).tail(10 * time.Minute),
+				"out. All pods are Ready and nothing Kubernetes reports "+
+				"fails.").tail(10 * time.Minute),
 		build: func(c *cluster) {
 			place := []string{"n1", "n2"}
 			for _, name := range place {

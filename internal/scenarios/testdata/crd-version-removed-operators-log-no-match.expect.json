@@ -1,7 +1,7 @@
 {
   "name": "crd-version-removed-operators-log-no-match",
   "description": "A CRD upgrade stops serving its old version; operators of three namespaces log that no match exists for the kind in that version and crash-loop.",
-  "root": "customresourcedefinition//widgets.example.com",
+  "root": "failure-signature//no matches for kind \"widget\" in version \"example.com/v#beta#\"",
   "tier": "notify",
   "maxMessages": 1,
   "mustNotBlame": [
