@@ -15,16 +15,3 @@ To check the node's conditions and recent events, run kubectl describe node n1
 🔴 Node n1 (prod-eu-1) is now also affecting db in shop: it has not been ready for three minutes.
 🔴 Node n1 (prod-eu-1) is now also affecting db in shop: it has not been ready for three minutes.
 | 🔴 Node n1 (**prod-eu-1**) is now also affecting db in shop: it has not been ready for three minutes.
-10:13:55 settled
-🟠 db in shop (prod-eu-1) is failing: volume is still attached to another node and cannot be attached to this one. Cause not found yet: its node, volumes and registry are healthy and unchanged. To see the pods' state and events, run kubectl describe pods db- -n shop
-🟠 db in shop (prod-eu-1) is failing: volume is still attached to another node and cannot be attached to this one.
-| 🟠 db in **shop** (**prod-eu-1**) is failing: volume is still attached to another node and cannot be attached to this one.
-| Cause not found yet: its node, volumes and registry are healthy and unchanged.
-| To see the pods' state and events, run
-| ```
-| kubectl describe pods db- -n shop
-| ```
-10:20:40 superseded by revised cause
-🟠 Moved: this is now part of the node n1 failure (prod-eu-1).
-🟠 Moved: this is now part of the node n1 failure (prod-eu-1).
-| 🟠 Moved: this is now part of the node n1 failure (**prod-eu-1**).

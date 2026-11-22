@@ -9,16 +9,8 @@
 | ```
 | kubectl logs queue-0 -c app -n streaming --previous
 | ```
-10:11:15 settled
-🟠 Disruption budget queue-pdb in streaming (prod-eu-1) is failing: blocks node drains: too few healthy pods. To see the object's state and events, run kubectl describe poddisruptionbudget queue-pdb -n streaming
-🟠 Disruption budget queue-pdb in streaming (prod-eu-1) is failing: blocks node drains: too few healthy pods.
-| 🟠 Disruption budget **queue-pdb** in **streaming** (**prod-eu-1**) is failing: blocks node drains: too few healthy pods.
-| To see the object's state and events, run
-| ```
-| kubectl describe poddisruptionbudget queue-pdb -n streaming
-| ```
 10:17:00 material change
-🟠 Disruption budget queue-pdb in streaming (prod-eu-1) now allows no eviction, so the drain of node n1 is blocked. It is now also affecting node n1: it is cordoned for maintenance.
-🟠 Disruption budget queue-pdb in streaming (prod-eu-1) now allows no eviction, so the drain of node n1 is blocked.
-| 🟠 Disruption budget **queue-pdb** in **streaming** (**prod-eu-1**) now allows no eviction, so the drain of node n1 is blocked.
-| It is now also affecting node n1: it is cordoned for maintenance.
+🟠 queue in streaming (prod-eu-1) is now also affecting disruption budget queue-pdb: it allows no eviction, so the drain of node n1 is blocked. It is also affecting node n1: it is cordoned for maintenance.
+🟠 queue in streaming (prod-eu-1) is now also affecting disruption budget queue-pdb: it allows no eviction, so the drain of node n1 is blocked.
+| 🟠 **queue** in **streaming** (**prod-eu-1**) is now also affecting disruption budget queue-pdb: it allows no eviction, so the drain of node n1 is blocked.
+| It is also affecting node n1: it is cordoned for maintenance.

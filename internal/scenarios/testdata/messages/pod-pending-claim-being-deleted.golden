@@ -6,11 +6,3 @@
 | ```
 | kubectl describe pvc pgdata -n shop
 | ```
-10:10:00 fix attempt
-🟠 Rollout generation 2 of db in shop (prod-eu-1) started at 10:10 UTC; watching volume claim pgdata in shop.
-🟠 Rollout generation 2 of db in shop (prod-eu-1) started at 10:10 UTC; watching volume claim pgdata in shop.
-| 🟠 Rollout generation 2 of db in **shop** (**prod-eu-1**) started at 10:10 UTC; watching volume claim **pgdata** in **shop**.
-10:20:00 fix attempt still failing
-🟠 Volume claim pgdata in shop (prod-eu-1) is still failing 10 minutes after rollout generation 2.
-🟠 Volume claim pgdata in shop (prod-eu-1) is still failing 10 minutes after rollout generation 2.
-| 🟠 Volume claim **pgdata** in **shop** (**prod-eu-1**) is still failing 10 minutes after rollout generation 2.

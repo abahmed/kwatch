@@ -16,7 +16,7 @@ To check the node's conditions and recent events, run kubectl describe node a1
 🔴 Node a1 (prod-eu-1) is now also affecting auth, cart and search in shop: they have not been ready for three minutes.
 | 🔴 Node a1 (**prod-eu-1**) is now also affecting **auth**, **cart** and **search** in shop: they have not been ready for three minutes.
 10:09:00 cause revised
-🔴 Cause changed (earlier: node a1): Zone zone-a (prod-eu-1) is failing as a whole: two nodes have not reported for about two minutes. One of its nodes reports "Kubelet stopped posting node status."
-🔴 Cause changed (earlier: node a1): Zone zone-a (prod-eu-1) is failing as a whole: two nodes have not reported for about two minutes.
-| 🔴 Cause changed (earlier: node a1): Zone **zone-a** (**prod-eu-1**) is failing as a whole: two nodes have not reported for about two minutes.
+🔴 Cause now known: Zone zone-a (prod-eu-1) is failing as a whole: two nodes have not reported for about two minutes. One of its nodes reports "Kubelet stopped posting node status."
+🔴 Cause now known: Zone zone-a (prod-eu-1) is failing as a whole: two nodes have not reported for about two minutes.
+| 🔴 Cause now known: Zone **zone-a** (**prod-eu-1**) is failing as a whole: two nodes have not reported for about two minutes.
 | One of its nodes reports `Kubelet stopped posting node status.`

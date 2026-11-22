@@ -14,54 +14,7 @@
 🔴 Node n1 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
 🔴 Node n1 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
 | 🔴 Node n1 (**prod-eu-1**) is now also affecting **cart**, **orders** and **payments** in shop: they have not been ready for three minutes.
-10:08:45 settled
-🔴 Node n2 (prod-eu-1) has not been ready for about two minutes. The cause is not clear yet. It reports "container runtime network not ready: … Network plugin returns error: cni plugin not initialized". To check the node's conditions and recent events, run kubectl describe node n2
-🔴 Node n2 (prod-eu-1) has not been ready for about two minutes.
-| 🔴 Node n2 (**prod-eu-1**) has not been ready for about two minutes.
-| The cause is not clear yet.
-| It reports
-| ```
-| container runtime network not ready: … Network plugin returns error: cni plugin not initialized
-| ```
-| To check the node's conditions and recent events, run
-| ```
-| kubectl describe node n2
-| ```
-10:10:20 material change
-🔴 Node n2 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
-🔴 Node n2 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
-| 🔴 Node n2 (**prod-eu-1**) is now also affecting **cart**, **orders** and **payments** in shop: they have not been ready for three minutes.
-10:10:45 settled
-🔴 Node n3 (prod-eu-1) has not been ready for about two minutes. The cause is not clear yet. It reports "container runtime network not ready: … Network plugin returns error: cni plugin not initialized". To check the node's conditions and recent events, run kubectl describe node n3
-🔴 Node n3 (prod-eu-1) has not been ready for about two minutes.
-| 🔴 Node n3 (**prod-eu-1**) has not been ready for about two minutes.
-| The cause is not clear yet.
-| It reports
-| ```
-| container runtime network not ready: … Network plugin returns error: cni plugin not initialized
-| ```
-| To check the node's conditions and recent events, run
-| ```
-| kubectl describe node n3
-| ```
-10:12:20 material change
-🔴 Node n3 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
-🔴 Node n3 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
-| 🔴 Node n3 (**prod-eu-1**) is now also affecting **cart**, **orders** and **payments** in shop: they have not been ready for three minutes.
-10:12:45 settled
-🔴 Node n4 (prod-eu-1) has not been ready for about two minutes. The cause is not clear yet. It reports "container runtime network not ready: … Network plugin returns error: cni plugin not initialized". To check the node's conditions and recent events, run kubectl describe node n4
-🔴 Node n4 (prod-eu-1) has not been ready for about two minutes.
-| 🔴 Node n4 (**prod-eu-1**) has not been ready for about two minutes.
-| The cause is not clear yet.
-| It reports
-| ```
-| container runtime network not ready: … Network plugin returns error: cni plugin not initialized
-| ```
-| To check the node's conditions and recent events, run
-| ```
-| kubectl describe node n4
-| ```
-10:14:20 material change
-🔴 Node n4 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
-🔴 Node n4 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
-| 🔴 Node n4 (**prod-eu-1**) is now also affecting **cart**, **orders** and **payments** in shop: they have not been ready for three minutes.
+10:18:20 material change
+🔴 Nodes n1–n4 (prod-eu-1) are now also affecting cart, orders and payments in shop: they have only 1 of 5 replicas ready and have not been ready for three minutes.
+🔴 Nodes n1–n4 (prod-eu-1) are now also affecting cart, orders and payments in shop: they have only 1 of 5 replicas ready and have not been ready for three minutes.
+| 🔴 Nodes n1–n4 (**prod-eu-1**) are now also affecting **cart**, **orders** and **payments** in shop: they have only 1 of 5 replicas ready and have not been ready for three minutes.

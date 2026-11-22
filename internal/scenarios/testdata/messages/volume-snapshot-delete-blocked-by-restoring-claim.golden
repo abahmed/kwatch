@@ -1,12 +1,7 @@
-10:01:15 settled
-🟠 VolumeSnapshot nightly in shop (prod-eu-1) is stuck deleting because volume claim restore-data is restored from the snapshot whose deletion waits for it. To see why the volume claim is not usable, run kubectl describe pvc restore-data -n shop
-🟠 VolumeSnapshot nightly in shop (prod-eu-1) is stuck deleting because volume claim restore-data is restored from the snapshot whose deletion waits for it.
-| 🟠 VolumeSnapshot **nightly** in **shop** (**prod-eu-1**) is stuck deleting because volume claim **restore-data** is restored from the snapshot whose deletion waits for it.
-| To see why the volume claim is not usable, run
-| ```
-| kubectl describe pvc restore-data -n shop
-| ```
-10:02:00 material change
-🟠 Volume claim restore-data in shop (prod-eu-1) has been waiting for a volume for two minutes now.
-🟠 Volume claim restore-data in shop (prod-eu-1) has been waiting for a volume for two minutes now.
-| 🟠 Volume claim **restore-data** in **shop** (**prod-eu-1**) has been waiting for a volume for two minutes now.
+10:31:15 digest
+🟡 kwatch summary (prod-eu-1): one new low-priority problem. Volume claim restore-data in shop has been waiting for a volume for two minutes. Not urgent: kwatch alerts on its own if it gets worse.
+🟡 kwatch summary (prod-eu-1): one new low-priority problem.
+| 🟡 **kwatch summary** · prod-eu-1 — 1 problem
+|
+| **Problems**
+| - Volume claim **restore-data** in **shop** has been waiting for a volume for two minutes
