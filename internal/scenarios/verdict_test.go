@@ -61,7 +61,9 @@ func (v verdict) problems() []string {
 		}
 	}
 	add(slices.ContainsFunc(v.cases, func(c scorecard.Case) bool {
-		return !c.Correct
+		// A hedge on an ambiguous label names the rival too, and the
+		// gate does not count it either.
+		return !c.Correct && !(c.Hedged && c.Ambiguous)
 	}), "wrong root")
 	add(slices.ContainsFunc(v.cases, scorecard.Case.WrongStated),
 		"wrong root stated")
