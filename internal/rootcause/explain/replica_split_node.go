@@ -1,6 +1,7 @@
 package explain
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -15,7 +16,13 @@ import (
 func (v *view) cleanReplicaSplit(
 	node inventory.EntityID, effects []inventory.EntityID,
 ) bool {
-	if node.Kind != kube.KindNode || len(effects) == 0 {
+	if node.Kind != kube.KindNode && !isTopology(node) ||
+		len(effects) == 0 {
+		return false
+	}
+	// A group is only blamed over its nodes when the failures sit on
+	// several of them: one node's failures are that node's.
+	if isTopology(node) && v.nodesOf(effects) < 2 {
 		return false
 	}
 	for _, effect := range effects {
@@ -46,7 +53,7 @@ func (v *view) splitOnNode(effect, node inventory.EntityID) bool {
 		switch {
 		case !onNode:
 			continue
-		case at == node:
+		case at == node || v.inGroup(at, node):
 			// A sibling that runs here beside the failing ones fits a
 			// node-local error too (the kubelet rejects some pods and
 			// not others); nodeLocalErrors gates that.
@@ -60,6 +67,15 @@ func (v *view) splitOnNode(effect, node inventory.EntityID) bool {
 	return elsewhere > 0
 }
 
+// inGroup reports whether node belongs to the zone or pool group.
+func (v *view) inGroup(node, group inventory.EntityID) bool {
+	if !isTopology(group) {
+		return false
+	}
+	return slices.Contains(v.s.Model.Related(node, inventory.PartOf,
+		inventory.Outgoing), group)
+}
+
 // splitAlone reports a node candidate that splits its effects cleanly
 // and that nothing else explains: no other candidate, besides a
 // workload's own row, covers any of them. A cause with its own evidence
@@ -69,13 +85,15 @@ func (v *view) splitAlone(
 	cs *candidateSet, c *candidate, effects []inventory.EntityID,
 ) bool {
 	if v.workloadsOf(effects) != 1 || !v.cleanReplicaSplit(c.id, effects) ||
-		!v.nodeLocalErrors(effects) {
+		!isTopology(c.id) && !v.nodeLocalErrors(effects) {
 		return false
 	}
 	for id, other := range cs.byID {
 		// A shared error signature of one workload is pruned later for
 		// want of a second workload: it explains nothing yet.
-		if id == c.id || other.isSelf() ||
+		if id == c.id || other.isSelf() || v.pullSplitBy(other, c.id) ||
+			v.inGroup(id, c.id) || v.needsMoreWorkloads(other) ||
+			isTopology(id) && !v.cleanReplicaSplit(id, effects) ||
 			(id.Kind == KindFailureSignature &&
 				v.workloadsOf(other.direct()) < SharedMinWorkloads) {
 			continue
@@ -117,4 +135,41 @@ func (v *view) nodeLocalErrors(effects []inventory.EntityID) bool {
 		}
 	}
 	return false
+}
+
+// pullSplitBy reports a registry candidate that the zone or pool group
+// outweighs: its pulls fail only inside group, which runs elsewhere.
+func (v *view) pullSplitBy(other *candidate, group inventory.EntityID) bool {
+	g, ok := v.pullSplit(other)
+	return ok && g == group
+}
+
+// needsMoreWorkloads reports a candidate whose every row wants failures
+// in more workloads than it has: applyMinWorkloads drops it later, so
+// it explains nothing yet.
+func (v *view) needsMoreWorkloads(c *candidate) bool {
+	groups := effectsNeedingWorkloads(c)
+	for _, g := range groups {
+		counted := g.effects
+		if g.inferred {
+			counted = c.direct()
+		}
+		if v.workloadsOf(counted) >= g.need {
+			return false
+		}
+	}
+	return len(groups) > 0
+}
+
+// nodesOf counts the distinct nodes the effects' pods run on.
+func (v *view) nodesOf(effects []inventory.EntityID) int {
+	nodes := map[inventory.EntityID]bool{}
+	for _, effect := range effects {
+		if pod, ok := v.podOf(effect); ok {
+			if at, on := v.nodeOf(pod); on {
+				nodes[at] = true
+			}
+		}
+	}
+	return len(nodes)
 }

@@ -19,7 +19,9 @@ var sharedFactorModes = []detection.Mode{ModeSharedFactor}
 
 // sharedFactorKinds are the kinds workloads share and that can break
 // several of them at once while showing nothing themselves.
-var sharedFactorKinds = map[inventory.Kind]bool{kube.KindNode: true}
+var sharedFactorKinds = map[inventory.Kind]bool{
+	kube.KindNode: true, kube.KindZone: true, kube.KindNodePool: true,
+}
 
 // sharedFactorState is the state of an upstream entity that showed no
 // finding and no change: the SharedFactor pseudo mode when its kind is

@@ -229,7 +229,7 @@ func (v *view) addUpstream(cs *candidateSet, effect inventory.EntityID) {
 				continue
 			}
 		}
-		if v.throughHealthyNode(r) {
+		if v.throughHealthyNode(r) && !sharedFactorOnlyState(cause) {
 			cs.reject(r.id, effect, "the node between it and "+
 				effect.String()+" is healthy")
 			continue
@@ -395,4 +395,16 @@ func failures(findings map[inventory.EntityID][]detection.Finding,
 	}
 	sortIDs(out)
 	return out
+}
+
+// sharedFactorOnlyState reports a cause that is only suspected as what
+// the failures share, not one with a finding of its own: a zone that
+// holds every failing replica reaches them through healthy nodes.
+func sharedFactorOnlyState(s state) bool {
+	for _, m := range s.modes {
+		if m.mode != ModeSharedFactor {
+			return false
+		}
+	}
+	return len(s.modes) > 0
 }

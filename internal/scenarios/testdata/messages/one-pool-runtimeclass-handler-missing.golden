@@ -1,8 +1,9 @@
 10:06:15 settled
-🟠 sandboxed in secure (prod-eu-1) is failing: networking cannot be set up. Cause not found yet: its node and registry are healthy and unchanged. To see the pods' state and events, run kubectl describe pods sandboxed- -n secure
-🟠 sandboxed in secure (prod-eu-1) is failing: networking cannot be set up.
-| 🟠 **sandboxed** in **secure** (**prod-eu-1**) is failing: networking cannot be set up.
-| Cause not found yet: its node and registry are healthy and unchanged.
+🟠 Node pool pool-b (prod-eu-1) is failing. Replicas that do not depend on it are healthy. Affected: sandboxed in secure. To see the pods' state and events, run kubectl describe pods sandboxed- -n secure
+🟠 Node pool pool-b (prod-eu-1) is failing.
+| 🟠 Node pool **pool-b** (**prod-eu-1**) is failing.
+| Replicas that do not depend on it are healthy.
+| Affected: **sandboxed** in **secure**.
 | To see the pods' state and events, run
 | ```
 | kubectl describe pods sandboxed- -n secure

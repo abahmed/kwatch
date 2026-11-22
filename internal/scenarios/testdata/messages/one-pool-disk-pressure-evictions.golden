@@ -1,12 +1,16 @@
-10:07:15 roll-up
-🟠 kwatch (prod-eu-1) found four new problems at the same time. shipper in logs is failing: exited with code 137. Node pool-logs-1 is low on disk space. Node pool-logs-2 is low on disk space. Node pool-logs-3 is low on disk space. Each one alerts on its own when it changes or resolves.
-🟠 kwatch (prod-eu-1) found four new problems at the same time.
-| 🟠 **kwatch roll-up** · prod-eu-1 — 4 new problems at the same time
-|
-| **Problems**
-| - **shipper** (**logs**) — exited with code 137
-| - Node **pool-logs-1** — low on disk space
-| - Node **pool-logs-2** — low on disk space
-| - Node **pool-logs-3** — low on disk space
-|
-| *Each one alerts on its own when it changes or resolves.*
+10:07:15 settled
+🟠 Node pool pool-logs (prod-eu-1) is failing as a whole: three nodes are low on disk space. Every app that uses it is failing. All four failing apps use it. Affected: shipper in logs.
+Related alerts: 7 error alerts, 7 evictions
+To see why the pod was evicted, run kubectl describe pods shipper- -n logs
+Proof: all 7 replicas fail, on 3 nodes.
+🟠 Node pool pool-logs (prod-eu-1) is failing as a whole: three nodes are low on disk space.
+| 🟠 Node pool **pool-logs** (**prod-eu-1**) is failing as a whole: three nodes are low on disk space.
+| Every app that uses it is failing.
+| All four failing apps use it.
+| Affected: **shipper** in **logs**.
+| Related alerts: 7 error alerts, 7 evictions
+| To see why the pod was evicted, run
+| ```
+| kubectl describe pods shipper- -n logs
+| ```
+| *Proof: all 7 replicas fail, on 3 nodes.*

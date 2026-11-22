@@ -195,7 +195,7 @@ func gap18RuntimeClass() scenario {
 			"A Deployment with runtimeClassName gvisor: pods on pool-a "+
 				"run, pods that land on pool-b fail to create a sandbox "+
 				"because no runsc handler is configured there.",
-			"node//b1", "notify", "deployment/secure/sandboxed").
+			"nodepool//pool-b", "notify", "deployment/secure/sandboxed").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(g18Node(c, "a1", "zone-a", "pool-a"),

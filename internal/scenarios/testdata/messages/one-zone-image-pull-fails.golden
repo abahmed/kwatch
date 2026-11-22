@@ -1,8 +1,10 @@
 10:06:15 settled
-🟠 render in media (prod-eu-1) cannot pull its image, likely because registry registry.example.com cannot be reached. It fails with "Back-off pulling image: dial tcp: lookup mirror.zone-c.internal: i/o timeout". Every error mentions it. To see why the container cannot start, run kubectl describe pods render- -n media
-🟠 render in media (prod-eu-1) cannot pull its image, likely because registry registry.example.com cannot be reached.
-| 🟠 **render** in **media** (**prod-eu-1**) cannot pull its image, likely because registry **registry.example.com** cannot be reached.
-| It fails with `Back-off pulling image: dial tcp: lookup mirror.zone-c.internal: i/o timeout`. Every error mentions it.
+🟠 Zone zone-c (prod-eu-1) is failing. One of them reports "Back-off pulling image: dial tcp: lookup mirror.zone-c.internal: i/o timeout". Every error mentions it. Replicas that do not depend on it are healthy. Affected: render in media. To see why the container cannot start, run kubectl describe pods render- -n media
+🟠 Zone zone-c (prod-eu-1) is failing.
+| 🟠 Zone **zone-c** (**prod-eu-1**) is failing.
+| One of them reports `Back-off pulling image: dial tcp: lookup mirror.zone-c.internal: i/o timeout`. Every error mentions it.
+| Replicas that do not depend on it are healthy.
+| Affected: **render** in **media**.
 | To see why the container cannot start, run
 | ```
 | kubectl describe pods render- -n media

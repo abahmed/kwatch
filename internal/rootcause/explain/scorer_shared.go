@@ -37,7 +37,12 @@ func scoreShared(v *view, c *candidate) outcome {
 	workloads := v.workloadsOf(effects)
 	switch {
 	case c.split:
-		return outcome{weight: ReplicaSplitWeight,
+		w := ReplicaSplitWeight
+		if isTopology(c.id) && v.nodeLocalErrors(effects) {
+			// The errors name what a node does: the group is it.
+			w += ReplicaSplitWeight
+		}
+		return outcome{weight: w,
 			code: rootcause.ProofReplicasNodeLocal,
 			text: "the workload's replicas on other nodes run"}
 	case workloads >= SharedMinWorkloads:

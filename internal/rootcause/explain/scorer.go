@@ -60,6 +60,7 @@ var scorers = []scorer{
 	{"outcome", scoreOutcome},
 	{"revision", scoreRevision},
 	{"shared", scoreShared},
+	{"pull-split", scorePullSplit},
 	{"co-onset", scoreCoOnset},
 	{"baseline", scoreBaseline},
 	{"quality", scoreQuality},

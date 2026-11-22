@@ -24,6 +24,22 @@ var sharedRows = []Row{
 		MinWorkloads: CoOnsetMinWorkloads,
 	},
 	{
+		// A zone or pool that holds every failing replica of a workload
+		// while the replicas outside it run: the group is what differs.
+		// Like a node it shows nothing itself; the clean split is the
+		// evidence (applySharedFactorWindow).
+		Name:   "shared-zone",
+		Cause:  Side{Kind: kube.KindZone, Modes: sharedFactorModes},
+		Link:   LinkContains,
+		Effect: anything, Prior: 0.4,
+	},
+	{
+		Name:   "shared-nodepool",
+		Cause:  Side{Kind: kube.KindNodePool, Modes: sharedFactorModes},
+		Link:   LinkContains,
+		Effect: anything, Prior: 0.4,
+	},
+	{
 		// The kubelet of a node refuses a pod by its own accounting
 		// (OutOfcpu, OutOfmemory): the refusal is about that node, so
 		// one workload is enough.

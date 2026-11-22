@@ -24,6 +24,7 @@ func gap18aScenarios() []scenario {
 func g18Node(c *cluster, name, zone, pool string) *corev1.Node {
 	node := c.node(name, zone)
 	node.Labels["pool"] = pool
+	node.Labels["eks.amazonaws.com/nodegroup"] = pool
 	return node
 }
 
@@ -173,7 +174,7 @@ func gap18PoolDiskPressure() scenario {
 		expect: g2Exp("one-pool-disk-pressure-evictions",
 			"All three nodes of pool-logs raise DiskPressure; kubelets "+
 				"evict seven pods of a Deployment on ephemeral storage. "+
-				"Other pools are healthy.", "node//pool-logs-1", "notify").
+				"Other pools are healthy.", "nodepool//pool-logs", "notify").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			names := []string{"pool-logs-1", "pool-logs-2", "pool-logs-3"}
