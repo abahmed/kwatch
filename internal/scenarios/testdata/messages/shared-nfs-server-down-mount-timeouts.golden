@@ -9,16 +9,22 @@
 | - **web** (**shop**) — volume cannot be mounted
 |
 | *Each one alerts on its own when it changes or resolves.*
-10:13:15 settled
-🟠 nfs-server in storage (prod-eu-1) has waited two minutes for a node because no node has enough memory. The scheduler says "0/1 nodes are available: 1 Insufficient memory." To see the pods' state and events, run kubectl describe pods nfs-server- -n storage
-🟠 nfs-server in storage (prod-eu-1) has waited two minutes for a node because no node has enough memory.
-| 🟠 **nfs-server** in **storage** (**prod-eu-1**) has waited two minutes for a node because no node has enough memory.
+10:12:30 cause revised
+🟠 nfs-server in storage (prod-eu-1) has waited two minutes for a node. The scheduler says "0/1 nodes are available: 1 Insufficient memory." All four failing apps use it. Affected: api in billing; gen in reports; web in shop.
+Related alerts: 3 failed mount alerts, 3 pending pods
+To see the pods' state and events, run kubectl describe pods nfs-server- -n storage
+🟠 nfs-server in storage (prod-eu-1) has waited two minutes for a node.
+| 🟠 **nfs-server** in **storage** (**prod-eu-1**) has waited two minutes for a node.
 | The scheduler says `0/1 nodes are available: 1 Insufficient memory.`
+| All four failing apps use it.
+| Affected: **api** in **billing**; **gen** in **reports**; **web** in **shop**.
+| Related alerts: 3 failed mount alerts, 3 pending pods
 | To see the pods' state and events, run
 | ```
 | kubectl describe pods nfs-server- -n storage
 | ```
 10:20:00 material change
-🟠 nfs-server in storage (prod-eu-1) is now also affecting service nfs-server: it has no ready backends.
-🟠 nfs-server in storage (prod-eu-1) is now also affecting service nfs-server: it has no ready backends.
-| 🟠 **nfs-server** in **storage** (**prod-eu-1**) is now also affecting service nfs-server: it has no ready backends.
+🟠 nfs-server in storage (prod-eu-1) now has no ready replicas (0 of 1). It is now also affecting api in billing; gen in reports; web in shop: they have no ready replicas (0 of 1).
+🟠 nfs-server in storage (prod-eu-1) now has no ready replicas (0 of 1).
+| 🟠 **nfs-server** in **storage** (**prod-eu-1**) now has no ready replicas (0 of 1).
+| It is now also affecting **api** in **billing**; **gen** in **reports**; **web** in shop: they have no ready replicas (0 of 1).

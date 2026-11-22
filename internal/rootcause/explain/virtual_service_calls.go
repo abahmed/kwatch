@@ -27,6 +27,10 @@ type clusterCall struct {
 	// cascade is set when no error names the Service: a liveness kill
 	// that runs the readiness check stands for the call.
 	cascade bool
+	// mount is set when the Service is only the address of a volume
+	// the pod mounts: the workloads behind it are blamed, never the
+	// Service.
+	mount bool
 }
 
 // serviceMentions find host names in error text, most precise first:
@@ -97,7 +101,7 @@ var serviceCallRows = []Row{
 		Cause: Side{Kind: kube.KindService,
 			Modes: []detection.Mode{detection.ModeNoEndpoints}},
 		Link:   LinkCalls,
-		Effect: Side{Kind: kube.KindPod, Modes: callerFailures},
+		Effect: Side{Kind: kube.KindPod, Modes: callerOrMount},
 		Prior:  0.6,
 	},
 	{
@@ -107,7 +111,7 @@ var serviceCallRows = []Row{
 		Cause: Side{Group: AnyGroup, Kind: AnyKind,
 			Modes: []detection.Mode{ModeBackendsFailing}},
 		Link:   LinkBacks,
-		Effect: Side{Kind: kube.KindPod, Modes: callerFailures},
+		Effect: Side{Kind: kube.KindPod, Modes: callerOrMount},
 		Prior:  0.7,
 	},
 	{
@@ -117,7 +121,7 @@ var serviceCallRows = []Row{
 		Cause: Side{Group: AnyGroup, Kind: AnyKind,
 			Modes: []detection.Mode{ModeBackendChanged}},
 		Link:   LinkBacks,
-		Effect: Side{Kind: kube.KindPod, Modes: callerFailures},
+		Effect: Side{Kind: kube.KindPod, Modes: callerOrMount},
 		Prior:  0.65,
 	},
 	backendNotReadyRow, notReadyBackendRow,
@@ -136,7 +140,7 @@ func (v *view) serviceCallHops(pod inventory.EntityID) []hop {
 		return nil
 	}
 	var out []hop
-	if !call.cascade || !v.backendsFailing(call.service) {
+	if !call.mount && (!call.cascade || !v.backendsFailing(call.service)) {
 		out = append(out, hop{link: LinkCalls, to: call.service})
 	}
 	own := rootcause.TopOwner(v.s.Model, pod)
@@ -238,6 +242,9 @@ func (v *view) clusterCallOf(id inventory.EntityID) (clusterCall, bool) {
 	}
 	if found.line == "" {
 		found, _ = v.cascadeCall(unit)
+	}
+	if found.line == "" {
+		found, _ = v.mountCall(unit)
 	}
 	v.clusterCalls[unit] = found
 	return found, found.line != ""
