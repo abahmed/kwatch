@@ -219,6 +219,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | PLEGSlow | degraded | `NodePLEGSlow` | `kubelet_health` |
 | PausedEdit | degraded | `DeploymentPausedEdit` | `workload_paused` |
 | Pending | degraded | `PhasePending`, `PodPending` | `generic`, `pod` |
+| Pod.BlocksDrain | degraded | `PodBlocksDrain` | `pod_drain_blocked` |
 | PortMismatch | failing | `IngressBackendPortMissing`, `ServicePortMismatch` | `ingress_ports`, `service_ports` |
 | Preempted | degraded | `PodPreempted` | `pod_preempted` |
 | Preempted.Repeatedly | degraded | `PodPreemptedRepeatedly` | `pod_preemption` |

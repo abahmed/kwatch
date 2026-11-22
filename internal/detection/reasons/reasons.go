@@ -350,6 +350,7 @@ const (
 	PdbOverlap                    = "PdbOverlap"
 	PdbSyncFailed                 = "PdbSyncFailed"
 	PdbBlocksDrain                = "PdbBlocksDrain"
+	PodBlocksDrain                = "PodBlocksDrain"
 	ResourceClaimUnallocated      = "ResourceClaimUnallocated"
 	FailedPrepareDynamicResources = "FailedPrepareDynamicResources"
 	VolumeDetachFailure           = "VolumeDetachFailure"

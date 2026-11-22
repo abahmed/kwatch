@@ -90,6 +90,7 @@ var workloadReasons = []ReasonInfo{
 	reason(reasons.PdbOverlap, ModeBudgetOverlap),
 	reason(reasons.PdbSyncFailed, ModeBudgetSyncFailed),
 	reason(reasons.PdbBlocksDrain, ModeBudgetBlocksDrain),
+	reason(reasons.PodBlocksDrain, ModePodBlocksDrain).digest(),
 	reason(reasons.ResourceClaimUnallocated, ModeDeviceUnallocated),
 	reason(reasons.FailedPrepareDynamicResources, ModeDevicePrepareFailed).
 		event(Critical),

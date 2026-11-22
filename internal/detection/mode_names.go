@@ -237,6 +237,7 @@ const (
 	ModeBudgetOverlap                 Mode = "Budget.Overlap"
 	ModeBudgetSyncFailed              Mode = "Budget.SyncFailed"
 	ModeBudgetBlocksDrain             Mode = "Budget.BlocksDrain"
+	ModePodBlocksDrain                Mode = "Pod.BlocksDrain"
 	ModeDeviceUnallocated             Mode = "Device.Unallocated"
 	ModeDevicePrepareFailed           Mode = "Device.PrepareFailed"
 	ModeVolumeDetachFailed            Mode = "Volume.DetachFailed"
