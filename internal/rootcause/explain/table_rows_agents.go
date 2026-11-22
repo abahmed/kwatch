@@ -59,7 +59,7 @@ var agentRows = []Row{
 	{
 		// A storage driver the pod's error names is registered by a
 		// DaemonSet that has no pod on the pod's node.
-		Name: "node-agent-absent",
+		Name: RuleNodeAgentAbsent,
 		Cause: Side{Kind: kube.KindDaemonSet,
 			Modes: []detection.Mode{ModeAgentAbsent}},
 		Link: LinkNodeAgent,

@@ -12,7 +12,7 @@ var clusterRows = concatRows(schedulerNamesRows(), memoryHogRows, resolverWorklo
 	pullWithoutSecretRow, diskHogRow, accountNoGrantRow, roleShortRow,
 	accountReplacedRow,
 	{
-		Name: "registry-refuses",
+		Name: RuleRegistryRefuses,
 		Cause: Side{Kind: kube.KindRegistry, Modes: []detection.Mode{
 			pullAuth, pullRateLimit, pullServer, pullNetwork,
 			pullStatus, pullUnexplained, pullRemoved}},
@@ -22,7 +22,7 @@ var clusterRows = concatRows(schedulerNamesRows(), memoryHogRows, resolverWorklo
 	{
 		// A certificate the nodes reject is the registry's, however
 		// many images fail: no image can cause it.
-		Name: "registry-refuses",
+		Name: RuleRegistryRefuses,
 		Cause: Side{Kind: kube.KindRegistry,
 			Modes: []detection.Mode{pullTLS}},
 		Link: LinkPulls, Effect: podSide(detection.ModeImagePull), Prior: 0.7,

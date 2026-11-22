@@ -8,6 +8,8 @@ package explain
 // package compares a rule with these constants, never with a string.
 const (
 	RuleSelf                         = "self"
+	RuleRegistryRefuses              = "registry-refuses"
+	RuleNodeAgentAbsent              = "node-agent-absent"
 	RuleRollout                      = "rollout"
 	RuleOwnChange                    = "own-change"
 	RuleConfigMissingOrChanged       = "config-missing-or-changed"

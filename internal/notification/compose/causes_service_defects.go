@@ -1,5 +1,7 @@
 package compose
 
+import "github.com/abahmed/kwatch/internal/rootcause/explain"
+
 // Wording and category of the rows that blame a Service whose own
 // declaration cannot carry the call, or a policy that isolates it.
 func init() {
@@ -11,14 +13,14 @@ func init() {
 				"not resolve"},
 		"service-family-mismatch": {
 			words: "uses an IP family its pods have no address in"},
-		"finalizer-holds-addresses": {
+		explain.RuleFinalizerHoldsAddresses: {
 			words: "holds Terminating pods that keep their addresses in use"},
 		"policy-isolates-backend": {
 			words: "cuts off every pod of the service the API server calls"},
 	} {
 		causeWords[rule] = w
 		causeCategories[rule] = categoryDependency
-		if rule == "finalizer-holds-addresses" {
+		if rule == explain.RuleFinalizerHoldsAddresses {
 			causeCategories[rule] = categoryFinalizer
 		}
 	}
