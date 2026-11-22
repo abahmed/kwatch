@@ -13,47 +13,8 @@ To check the node's conditions and recent events, run kubectl describe node n1
 🔴 Node n1 (prod-eu-1) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
 🔴 Node n1 (prod-eu-1) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
 | 🔴 Node n1 (**prod-eu-1**) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
-10:08:30 settled
-🔴 Node n2 (prod-eu-1) is low on memory. The cause is not clear yet.
-Related alerts: 1 node problem
-To check the node's conditions and recent events, run kubectl describe node n2
-🔴 Node n2 (prod-eu-1) is low on memory.
-| 🔴 Node n2 (**prod-eu-1**) is low on memory.
-| The cause is not clear yet.
-| Related alerts: 1 node problem
-| To check the node's conditions and recent events, run
-| ```
-| kubectl describe node n2
-| ```
-10:09:00 material change
-🔴 Node n2 (prod-eu-1) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
-🔴 Node n2 (prod-eu-1) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
-| 🔴 Node n2 (**prod-eu-1**) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
-10:12:00 settled
-🔴 Node n3 (prod-eu-1) is low on memory. The cause is not clear yet.
-Related alerts: 1 node problem
-To check the node's conditions and recent events, run kubectl describe node n3
-🔴 Node n3 (prod-eu-1) is low on memory.
-| 🔴 Node n3 (**prod-eu-1**) is low on memory.
-| The cause is not clear yet.
-| Related alerts: 1 node problem
-| To check the node's conditions and recent events, run
-| ```
-| kubectl describe node n3
-| ```
-10:12:30 material change
-🔴 Node n3 (prod-eu-1) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
-🔴 Node n3 (prod-eu-1) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
-| 🔴 Node n3 (**prod-eu-1**) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
-10:15:30 material change
-🔴 Node n1 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes and have only 2 of 3 replicas ready.
-🔴 Node n1 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes and have only 2 of 3 replicas ready.
-| 🔴 Node n1 (**prod-eu-1**) is now also affecting **cart**, **orders** and **payments** in shop: they have not been ready for three minutes and have only 2 of 3 replicas ready.
-10:19:00 material change
-🔴 Node n2 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
-🔴 Node n2 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
-| 🔴 Node n2 (**prod-eu-1**) is now also affecting **cart**, **orders** and **payments** in shop: they have not been ready for three minutes.
-10:22:30 material change
-🔴 Node n3 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
-🔴 Node n3 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
-| 🔴 Node n3 (**prod-eu-1**) is now also affecting **cart**, **orders** and **payments** in shop: they have not been ready for three minutes.
+10:08:00 cause revised
+🔴 Cause changed (earlier: node n1): ingest in batch (prod-eu-1) is down because it runs the nodes it is placed on out of memory, so they stop reporting. Replicas that do not depend on it are healthy.
+🔴 Cause changed (earlier: node n1): ingest in batch (prod-eu-1) is down because it runs the nodes it is placed on out of memory, so they stop reporting.
+| 🔴 Cause changed (earlier: node n1): **ingest** in **batch** (**prod-eu-1**) is down because it runs the nodes it is placed on out of memory, so they stop reporting.
+| Replicas that do not depend on it are healthy.

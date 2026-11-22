@@ -31,6 +31,9 @@ func scoreShared(v *view, c *candidate) outcome {
 	if fillsDisks(c) {
 		return diskHogOutcome(effects)
 	}
+	if exhaustsMemory(c) {
+		return memoryHogOutcome(effects)
+	}
 	workloads := v.workloadsOf(effects)
 	switch {
 	case c.split:

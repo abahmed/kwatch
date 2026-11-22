@@ -89,6 +89,9 @@ const (
 	// ProofFillsDisks: the pods of a workload hold most of the disk in use
 	// on each of Count nodes whose disk is short (shared).
 	ProofFillsDisks ProofCode = "fills-disks"
+	// ProofExhaustsMemory: the kernel killed the process of a workload
+	// for memory on each of Count nodes (shared).
+	ProofExhaustsMemory ProofCode = "exhausts-memory"
 	// ProofBaseline: the cause deviates Count percent from its learned
 	// baseline (baseline).
 	ProofBaseline ProofCode = "baseline"

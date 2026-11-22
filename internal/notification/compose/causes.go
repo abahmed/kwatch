@@ -149,6 +149,9 @@ var causeWords = map[string]causeWording{
 	"workload-fills-disks": {
 		words: "fills the disks of the nodes it runs on, so pods on " +
 			"those nodes are evicted"},
+	"workload-exhausts-memory": {
+		words: "runs the nodes it is placed on out of memory, so " +
+			"they stop reporting"},
 	"account-has-no-grant": {
 		words: "is named by no role binding, so nothing is granted to it"},
 	"role-lacks-grant": {
@@ -352,6 +355,13 @@ var proofWriters = map[rootcause.ProofCode]func(rootcause.Proof) string{
 	},
 	rootcause.ProofFillsDisks: func(p rootcause.Proof) string {
 		return "its pods hold most of the disk in use on " +
+			numberWord(p.Count) + " nodes"
+	},
+	rootcause.ProofExhaustsMemory: func(p rootcause.Proof) string {
+		if p.Count == 1 {
+			return "the kernel killed its process for memory there"
+		}
+		return "the kernel killed its process for memory on " +
 			numberWord(p.Count) + " nodes"
 	},
 	rootcause.ProofChanged: func(p rootcause.Proof) string {
