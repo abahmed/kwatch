@@ -15,7 +15,7 @@ import (
 const (
 	// DefaultCertificateIssue is how long an approved CSR may wait for
 	// its signer; kube-controller-manager signs within seconds.
-	DefaultCertificateIssue = 5 * time.Minute
+	DefaultCertificateIssue = 3 * time.Minute
 	// DefaultServingApproval is how long a kubelet serving CSR may wait
 	// for approval. kube-controller-manager never approves them, so an
 	// approver must; until then the kubelet has no serving certificate

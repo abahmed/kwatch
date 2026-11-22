@@ -29,14 +29,14 @@ const (
 // gatedPendingFactor stretches the pending threshold for a pod held by
 // scheduling gates. A gate is held on purpose by the controller that
 // added it, often while it waits for capacity or quota, so only a gate
-// held five times as long as an ordinary pending pod looks forgotten.
-const gatedPendingFactor = 5
+// held three times as long as an ordinary pending pod looks forgotten.
+const gatedPendingFactor = 3
 
 // startedPendingFactor stretches the pending threshold for a pod that is
 // scheduled but has not started. Its container findings already report
 // image and configuration problems, so the pod itself only reports a
-// wait three times as long as an ordinary pending pod.
-const startedPendingFactor = 3
+// wait one and a half times as long as an ordinary pending pod.
+const startedPendingFactor = 1.5
 
 // Pod detects pod-level failures: unschedulable, evicted, failed, stuck
 // terminating, and not ready for longer than the pod's own startup budget.
@@ -189,8 +189,8 @@ func (d Pod) notStarted(
 	if initRunning(ctx, e.ID) {
 		return nil
 	}
-	wait := d.thresholds.Pending*startedPendingFactor +
-		bootGraceFor(ctx, e)
+	wait := time.Duration(float64(d.thresholds.Pending)*
+		startedPendingFactor) + bootGraceFor(ctx, e)
 	if !sustained(ctx, "pod-pending", started, wait) {
 		return nil
 	}

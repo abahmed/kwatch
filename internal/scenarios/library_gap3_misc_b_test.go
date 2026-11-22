@@ -303,10 +303,14 @@ func gap3HeadlessNotReady() scenario {
 			updated.Status.ReadyReplicas = 0
 			updated.Status.AvailableReplicas = 0
 			c.update(updated)
+			// A pod that stays unready keeps the time it turned so.
+			var pods [3]*corev1.Pod
+			for i := range pods {
+				pods[i] = operatorBroker(c, sts, i, "n"+itoa(i%2+1),
+					notReady)
+			}
 			for round := int32(1); round <= 8; round++ {
-				for i := range 3 {
-					pod := operatorBroker(c, sts, i,
-						"n"+itoa(i%2+1), notReady)
+				for i, pod := range pods {
 					c.update(pod)
 					gapKubelet(c, pod, "Unhealthy", "Readiness probe "+
 						"failed: cluster not formed: cannot resolve "+

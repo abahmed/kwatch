@@ -32,11 +32,15 @@ func gap3Stall(
 	c *cluster, fleet []*workload, node string, idx int, message string,
 	rounds int32,
 ) {
+	// The pod turned unready once: it keeps that time while it stays so.
+	pods := make([]*corev1.Pod, len(fleet))
+	for i, w := range fleet {
+		pods[i] = w.pod(idx, node, notReady)
+	}
 	for round := int32(1); round <= rounds; round++ {
-		for _, w := range fleet {
-			pod := w.pod(idx, node, notReady)
-			c.update(pod)
-			gapKubelet(c, pod, "Unhealthy", message, round)
+		for i, w := range fleet {
+			c.update(pods[i])
+			gapKubelet(c, pods[i], "Unhealthy", message, round)
 			w.setReady(2)
 			c.update(w.objects())
 		}

@@ -37,7 +37,7 @@ func timeToFirstRoot(
 			continue
 		}
 		start := firstObservation(log, a.incident,
-			failureStart(a.incident, log.Start))
+			failureStart(log, a.incident, a.at))
 		return firstRoot{scenario: e.Name, delay: a.at.Sub(start)}, true
 	}
 	return firstRoot{}, false

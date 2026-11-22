@@ -18,7 +18,7 @@ const kindCRD inventory.Kind = "customresourcedefinition"
 
 // resizeDeferredGrace is how long a deferred resize may wait for room on
 // the node before it is reported; the kubelet retries it.
-const resizeDeferredGrace = 5 * time.Minute
+const resizeDeferredGrace = 3 * time.Minute
 
 func init() {
 	registerNodeAndWorkload()
