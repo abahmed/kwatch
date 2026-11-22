@@ -7,6 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // ModeEphemeralTooLow is a pod the kubelet evicted for using more
@@ -46,10 +47,29 @@ func (v *view) podConfigModes(pod inventory.EntityID) []detection.Mode {
 	if ephemeralOverLimit.MatchString(text) {
 		modes = append(modes, ModeEphemeralTooLow)
 	}
-	if memoryOverRequest.MatchString(text) {
+	if memoryOverRequest.MatchString(text) && v.onlyEvicted(pod) {
 		modes = append(modes, ModeMemoryOverRequest)
 	}
 	return modes
+}
+
+// onlyEvicted reports that no pod of another workload was evicted from
+// the pod's node: the kubelet evicts pods above their request first, so
+// the message alone says nothing when it evicts several workloads.
+func (v *view) onlyEvicted(pod inventory.EntityID) bool {
+	own := rootcause.TopOwner(v.s.Model, pod)
+	for _, node := range v.s.Model.Related(pod, inventory.RunsOn,
+		inventory.Outgoing) {
+		for _, other := range v.s.Model.Related(node, inventory.RunsOn,
+			inventory.Incoming) {
+			if other != pod &&
+				v.hasMode(other, []detection.Mode{detection.ModeEvicted}) &&
+				rootcause.TopOwner(v.s.Model, other) != own {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // ModeMemoryOverRequest is a pod the kubelet evicted for memory, naming
