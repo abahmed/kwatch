@@ -1,16 +1,13 @@
-10:11:15 settled
-🟠 invoices in billing (prod-eu-1) keeps crashing because external endpoint 10.244.0.10:8080 cannot be reached. It fails with "dial tcp 10.244.0.10:8080: connect: no route to host". Every error mentions it. Both failing apps use it. Affected: cart in shop. To read the output of the last crash, run kubectl logs deploy/invoices -c app -n billing --previous
-Proof: both replicas fail, on 2 nodes (invoices); both replicas fail, on 2 nodes (cart).
-🟠 invoices in billing (prod-eu-1) keeps crashing because external endpoint 10.244.0.10:8080 cannot be reached.
-| 🟠 **invoices** in **billing** (**prod-eu-1**) keeps crashing because external endpoint **10.244.0.10:8080** cannot be reached.
-| It fails with `dial tcp 10.244.0.10:8080: connect: no route to host`. Every error mentions it.
-| Both failing apps use it.
-| Affected: **cart** in **shop**.
-| To read the output of the last crash, run
-| ```
-| kubectl logs deploy/invoices -c app -n billing --previous
-| ```
-| *Proof: both replicas fail, on 2 nodes (invoices); both replicas fail, on 2 nodes (cart).*
+10:11:15 roll-up
+🟠 kwatch (prod-eu-1) found two new problems at the same time. invoices in billing keeps crashing. cart in shop keeps crashing. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - **invoices** in **billing** keeps crashing
+| - **cart** in **shop** keeps crashing
+|
+| *Each one alerts on its own when it changes or resolves.*
 10:11:45 settled
 🔴 etcd (prod-eu-1) has been failing for about two minutes. It reports "[-]etcd failed: etcdserver: leader changed". To see whether the API server's etcd check passes, run kubectl get --raw '/readyz?verbose'
 🔴 etcd (prod-eu-1) has been failing for about two minutes.

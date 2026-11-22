@@ -20,6 +20,8 @@ import (
 type addressIndex struct {
 	services map[string]inventory.EntityID
 	pods     map[string]inventory.EntityID
+	// slices are the addresses an EndpointSlice lists.
+	slices map[string]bool
 }
 
 // addresses builds the index on first use.
@@ -44,6 +46,7 @@ func (v *view) addresses() *addressIndex {
 	}
 	fill(kube.KindService, kube.AttrClusterIP, index.services)
 	fill(kube.KindPod, kube.AttrPodIP, index.pods)
+	index.slices = v.sliceAddresses()
 	v.addressIndex = index
 	return index
 }
@@ -102,4 +105,22 @@ func (v *view) servesPort(service inventory.EntityID, port int) bool {
 		}
 	}
 	return false
+}
+
+// sliceAddresses are the addresses the EndpointSlices of the model list.
+func (v *view) sliceAddresses() map[string]bool {
+	out := map[string]bool{}
+	for _, id := range v.s.Model.Entities(kube.KindEndpointSlice) {
+		e, ok := v.s.Model.Entity(id)
+		if !ok {
+			continue
+		}
+		for _, a := range strings.Split(
+			attrText(e, kube.AttrEndpointAddresses), ",") {
+			if ip := net.ParseIP(a); ip != nil {
+				out[ip.String()] = true
+			}
+		}
+	}
+	return out
 }
