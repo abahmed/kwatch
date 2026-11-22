@@ -122,7 +122,7 @@ func gap10RestartMidIncident() scenario {
 			Description: "Revision 8 of a Deployment crash-loops on a " +
 				"missing config key; kwatch restarts nine minutes in and " +
 				"relists everything. One page for the incident.",
-			Root: "deployment/shop/api", Tier: "notify", MaxMessages: 2,
+			Root: "deployment/shop/api", Tier: "notify", MaxMessages: 1,
 			SyncAfter: duration(30 * time.Second),
 			Tail:      duration(10 * time.Minute)},
 		build: func(c *cluster) {

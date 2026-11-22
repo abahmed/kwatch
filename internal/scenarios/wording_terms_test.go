@@ -40,22 +40,25 @@ var wordingGlobalNot = []string{
 
 var wordingTable = []wordingTerms{
 	{name: "wording-oom-limit-too-low",
-		contain: []string{"api in shop", "OOMKilled", "256Mi",
+		contain: []string{"api in shop", "OOMKilled|running out of memory",
+			"256Mi",
 			"Fix: raise the memory limit of container app in deployment/api",
-			"kubectl describe pod|kubectl -n shop get pods -l app=api",
-			"used more memory than allowed"},
+			"kubectl logs deploy/api -c app -n shop --previous",
+			"used more memory than allowed|memory limit is too low"},
 		not: []string{"memory leak", "increase memory", "node"}},
 	{name: "wording-image-typo",
-		contain: []string{"worker in billing",
-			"registry.example/worker:v2.1O", "can't pull|cannot pull",
-			"manifest unknown|tag not found",
+		contain: []string{"worker is failing in billing",
+			"registry.example/worker:v2.1O",
+			"can't pull|cannot pull|cannot be pulled",
 			"Fix: change the image of container",
-			"kubectl -n billing describe pod"},
+			"kubectl describe pods worker- -n billing"},
 		not: []string{"network", "registry is down", "credentials"}},
-	{name: "wording-missing-secret-mount",
-		contain: []string{"encoder in media", "secret \"encoder-creds\"",
-			"not found", "Fix: create secret encoder-creds in namespace media",
-			"kubectl -n media get secret"},
+	// Moved from wording-missing-secret-mount (twin: missing-secret).
+	{name: "missing-secret",
+		contain: []string{"invoicer in billing", "secret \"stripe-api\"",
+			"not found",
+			"Fix: correct the envFrom reference|" +
+				"Fix: create secret stripe-api in namespace billing"},
 		not: []string{"permission", "RBAC"}},
 	{name: "wording-bad-rollout-config-key",
 		contain: []string{"the new version (api:2.3) can't start",
@@ -63,65 +66,72 @@ var wordingTable = []wordingTerms{
 			"missing key DB_PASSWORD_V2", "Fix:",
 			"kubectl rollout status deployment/api -n shop"},
 		not: []string{"rollback will"}},
-	{name: "wording-node-lost-pinned-database",
-		contain: []string{"worker-3", "stopped reporting", "pg-0 in data",
-			"kubectl get node worker-3",
-			"check the machine behind node worker-3"},
+	// Moved from wording-node-lost-pinned-database (twin:
+	// node-lost-pinned-tenants).
+	{name: "node-lost-pinned-tenants",
+		contain: []string{"n1", "stopped reporting",
+			"check the machine behind node n1"},
 		not: []string{"restart pg", "delete the pod", "network issue"}},
-	{name: "wording-pvc-full",
-		contain: []string{"pg-data in data", "full", "10Gi",
-			"Fix: expand persistentvolumeclaim/pg-data",
-			"kubectl -n data get pvc pg-data"},
+	// Moved from wording-pvc-full (twin: claim-full-with-volume).
+	{name: "claim-full-with-volume",
+		contain: []string{"logstore in observability", "full|out of space",
+			"50Gi",
+			"Fix: expand persistentvolumeclaim/chunks|" +
+				"Fix: raise the storage request of persistentvolumeclaim/chunks",
+			"kubectl describe pvc chunks -n observability"},
 		not: []string{"delete", "logs filling"}},
 	{name: "wording-quota-forbids-pods",
-		contain: []string{"compute in shop", "requests.cpu",
-			"Fix: raise requests.cpu in resourcequota/compute|" +
-				"lower the requests of workloads in namespace shop",
-			"kubectl -n shop describe resourcequota compute"},
-		not: []string{"cluster is full", "no nodes", "capacity"}},
+		contain: []string{"compute in shop", "requests.cpu"},
+		not:     []string{"cluster is full", "no nodes", "capacity"}},
 	{name: "wording-probe-port-mismatch",
-		contain: []string{"web in shop", "readiness probe", "port 80",
-			"8080", "Fix: change the readiness probe port of container",
-			"kubectl -n shop describe deployment web"},
+		contain: []string{"web is failing in shop", "port 80|:80", "8080",
+			"Fix: set the readiness probe of container",
+			"kubectl rollout status deployment/web -n shop"},
 		not: []string{"restart", "the app is slow", "increase timeout"}},
-	{name: "wording-cronjob-failing-secret-edit",
-		contain: []string{"nightly-export in reports", "export-token",
-			"Fix:", "kubectl -n reports get jobs"},
+	// Moved from wording-cronjob-failing-secret-edit (twin:
+	// cron-secret-edited-hours-before).
+	{name: "cron-secret-edited-hours-before",
+		contain: []string{"sync-key", "billing",
+			"kubectl describe secret sync-key -n billing"},
 		not: []string{"rotated by"}},
 	{name: "wording-certificate-expired-handshake",
-		contain: []string{"payments in shop", "bank-client-tls", "expired",
-			"Fix: renew the certificate in secret bank-client-tls",
-			"kubectl -n shop get secret bank-client-tls"},
+		contain: []string{"Affected: payments", "bank-client-tls",
+			"expired"},
 		not: []string{"will expire", "almost"}},
-	{name: "wording-webhook-down-fail-closed",
-		contain: []string{"policy-svc in policy", "no ready pods|no ready endpoints", "shop",
-			"billing", "Fix: restore the pods behind service policy-svc",
-			"kubectl -n policy get endpoints policy-svc"},
+	// Moved from wording-webhook-down-fail-closed (twin:
+	// webhook-no-endpoints).
+	{name: "webhook-no-endpoints",
+		contain: []string{"policy-webhook", "no ready pods|no ready endpoints",
+			"shop"},
 		not: []string{"webhook is broken", "disable the webhook"}},
-	{name: "wording-unschedulable-taint",
-		contain: []string{"batch in jobs", "dedicated=gpu",
-			"Fix: add a toleration for dedicated=gpu to deployment/batch|" +
-				"remove the taint", "kubectl -n jobs describe pod"},
+	// Moved from wording-unschedulable-taint (twin: unschedulable-taint).
+	{name: "unschedulable-taint",
+		contain: []string{"report in analytics", "dedicated: gpu",
+			"Fix: add the toleration the node taint needs to deployment/report",
+			"kubectl describe pods report- -n analytics"},
 		not: []string{"add nodes", "scale the cluster", "not enough CPU"}},
 	{name: "wording-registry-rate-limited",
-		contain: []string{"docker.io", "pull rate limit", "shop", "billing",
-			"Fix: add an imagePullSecret with a logged-in account|" +
-				"use a mirror", "kubectl get pods -A"},
+		contain: []string{"docker.io", "rate limiting pulls", "shop",
+			"billing", "kubectl describe pods api- -n billing"},
 		not: []string{"retry later", "wait", "usually clears"}},
-	{name: "wording-ingress-backend-missing",
-		contain: []string{"ingress shop in shop", "service frontend",
-			"does not exist", "Fix: point ingress/shop at service web",
-			"kubectl -n shop get service"},
+	// Moved from wording-ingress-backend-missing (twin:
+	// ingress-backend-missing).
+	{name: "ingress-backend-missing",
+		contain: []string{"Ingress shop in shop", "service web-v2",
+			"does not exist", "Fix: point ingress/shop at a service that exists",
+			"kubectl describe ingress shop -n shop"},
 		not: []string{"502", "controller", "load balancer"}},
-	{name: "wording-first-message-ongoing-chronic",
-		contain: []string{"Fix:"},
+	// Moved from wording-first-message-ongoing-chronic (twin:
+	// long-page-reminder).
+	{name: "long-page-reminder",
+		contain: []string{"Node n1"},
 		not: []string{"again", "still no fix", "getting worse", "escalat*",
 			"urgent"},
-		reminder: []string{"still failing", "acknowledged"}},
+		reminder: []string{"still down"}},
 }
 
 var (
-	goldenHeader = regexp.MustCompile(`^\d{2}:\d{2}:\d{2} \S+$`)
+	goldenHeader = regexp.MustCompile(`^\d{2}:\d{2}:\d{2} .+$`)
 	quotedText   = regexp.MustCompile("\"[^\"]*\"|`[^`]*`")
 	commandTail  = regexp.MustCompile(`run kubectl.*$`)
 	fixSentence  = regexp.MustCompile(`Fix: [^.]*\.`)

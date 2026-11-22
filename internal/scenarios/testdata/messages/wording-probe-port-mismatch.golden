@@ -1,10 +1,10 @@
 10:09:45 settled
-🟠 web is failing in shop (prod-eu-1) after the 10:02 UTC release. The release changed the readinessProbe from http /healthz :8080 every 10s, timeout 1s, 3 failures to http /healthz :80 every 10s, timeout 1s, 3 failures. Only the new revision fails; the previous one stays healthy. Fix: give the readiness probe of container app in deployment/web more time (now http /healthz :80 every 10s, timeout 1s, 3 failures). To see the rollout state, run kubectl rollout status deployment/web -n shop
+🟠 web is failing in shop (prod-eu-1) after the 10:02 UTC release. The release changed the readinessProbe from http /healthz :8080 every 10s, timeout 1s, 3 failures to http /healthz :80 every 10s, timeout 1s, 3 failures. Only the new revision fails; the previous one stays healthy. Fix: set the readiness probe of container app in deployment/web to a port the app listens on (now 80). To see the rollout state, run kubectl rollout status deployment/web -n shop
 🟠 web is failing in shop (prod-eu-1) after the 10:02 UTC release.
 | 🟠 **web** is failing in **shop** (**prod-eu-1**) after the 10:02 UTC release.
 | The release changed the readinessProbe from http /healthz :8080 every 10s, timeout 1s, 3 failures to http /healthz :80 every 10s, timeout 1s, 3 failures.
 | Only the new revision fails; the previous one stays healthy.
-| Fix: give the readiness probe of container app in deployment/web more time (now http /healthz :80 every 10s, timeout 1s, 3 failures).
+| Fix: set the readiness probe of container app in deployment/web to a port the app listens on (now 80).
 | To see the rollout state, run
 | ```
 | kubectl rollout status deployment/web -n shop

@@ -64,6 +64,6 @@ func TestWriteNodeUnknownSaysKwatchCannotSeeWhy(t *testing.T) {
 
 	assert.Contains(t, got, "Kubelet stopped posting node status")
 	assert.Contains(t, got, "kwatch cannot see why from inside the "+
-		"cluster: the kubelet stopped reporting, so the node may be "+
-		"down or unreachable.")
+		"cluster: the kubelet stopped reporting, so check the machine "+
+		"behind node ip-10-0-1-2.")
 }

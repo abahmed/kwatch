@@ -1,7 +1,7 @@
 {
   "name": "one-zone-pods-cannot-reach-database",
   "description": "The two replicas of a Deployment on zone-b nodes fail readiness with a database dial timeout; the four others are Ready and the Service keeps four endpoints.",
-  "root": "node//n3",
+  "root": "zone//zone-b",
   "tier": "notify",
   "maxMessages": 2,
   "mustNotBlame": [

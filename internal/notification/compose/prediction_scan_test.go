@@ -36,8 +36,6 @@ var factualWording = map[string]string{
 	"Likely caused by: ":  "a related incident blamed without a cause",
 	"Most likely cause: ": "confidence wording of a diagnosis",
 	// A hypothesis about a state kwatch cannot observe now.
-	"may be down or unreachable":        "a node that stopped reporting",
-	"nodes may be down or ":             "nodes that stopped reporting",
 	" (it may run outside the cluster)": "a provisioner kwatch cannot see",
 	// What kwatch itself does next, not what the cluster will do.
 	"kwatch will write again": "kwatch's own behaviour",

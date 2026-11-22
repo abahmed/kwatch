@@ -74,11 +74,38 @@ func placeOfField(
 	}
 	for _, prefix := range containerFields {
 		if strings.HasPrefix(rest, prefix) {
+			if port, moved := movedProbePort(rest, field); moved {
+				return &detection.Place{Object: root, Container: name,
+					Path: rest + ".port", Value: port}
+			}
 			return &detection.Place{Object: root, Container: name,
 				Path: rest, Value: field.After}
 		}
 	}
 	return nil
+}
+
+// movedProbePort reports a probe whose change moved its port: the
+// summaries "http /healthz :8080 every 10s" before and after name
+// different ports. The port, not the timing, is then what to set back.
+func movedProbePort(
+	rest string, field inventory.FieldChange,
+) (string, bool) {
+	if !strings.HasSuffix(rest, "Probe") {
+		return "", false
+	}
+	before, after := summaryPort(field.Before), summaryPort(field.After)
+	return after, before != "" && after != "" && before != after
+}
+
+// summaryPort is the port of a probe summary: its ":8080" word.
+func summaryPort(summary string) string {
+	for _, word := range strings.Fields(summary) {
+		if port, ok := strings.CutPrefix(word, ":"); ok && port != "" {
+			return port
+		}
+	}
+	return ""
 }
 
 // containerPath splits a change path "containers[app].image" into the

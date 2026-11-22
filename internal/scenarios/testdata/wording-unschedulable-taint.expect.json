@@ -1,8 +1,0 @@
-{
-  "name": "wording-unschedulable-taint",
-  "description": "A pod is Pending six minutes because all five nodes carry a taint it does not tolerate; the message names the exact taint and one of its two fixes.",
-  "root": "deployment/jobs/batch",
-  "tier": "notify",
-  "maxMessages": 1,
-  "tail": "10m0s"
-}

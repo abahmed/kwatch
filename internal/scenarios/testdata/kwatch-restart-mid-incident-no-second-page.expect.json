@@ -3,7 +3,7 @@
   "description": "Revision 8 of a Deployment crash-loops on a missing config key; kwatch restarts nine minutes in and relists everything. One page for the incident.",
   "root": "deployment/shop/api",
   "tier": "notify",
-  "maxMessages": 2,
+  "maxMessages": 1,
   "syncAfter": "30s",
   "tail": "10m0s"
 }

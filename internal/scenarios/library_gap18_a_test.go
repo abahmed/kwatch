@@ -70,7 +70,7 @@ func gap18ZoneDatabase() scenario {
 			"The two replicas of a Deployment on zone-b nodes fail "+
 				"readiness with a database dial timeout; the four others "+
 				"are Ready and the Service keeps four endpoints.",
-			"node//n3", "notify", "deployment/shop/api").
+			"zone//zone-b", "notify", "deployment/shop/api").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			g18Zones(c)
@@ -96,7 +96,7 @@ func gap18ZoneImagePull() scenario {
 			"Three new pods of a rollout on zone-c nodes sit in "+
 				"ImagePullBackOff on a mirror lookup timeout; the same "+
 				"image pulls in zone-a and zone-b.",
-			"node//n5", "notify", "deployment/media/render").
+			"zone//zone-c", "notify", "deployment/media/render").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			for i, zone := range []string{"zone-a", "zone-a", "zone-b",

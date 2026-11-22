@@ -4,16 +4,13 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-
-	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // gap24FaultScenarios: workload and configuration faults.
 func gap24FaultScenarios() []scenario {
 	return []scenario{
-		gap24OOMLimit(), gap24ImageTypo(), gap24MissingSecretMount(),
-		gap24BadRolloutKey(), gap24ProbePort(), gap24CronSecret(),
-		gap24CertificateExpired(), gap24ChronicReminder(),
+		gap24OOMLimit(), gap24ImageTypo(), gap24BadRolloutKey(),
+		gap24ProbePort(), gap24CertificateExpired(),
 	}
 }
 
@@ -66,28 +63,6 @@ func gap24ImageTypo() scenario {
 	}
 }
 
-func gap24MissingSecretMount() scenario {
-	return scenario{
-		expect: g24Exp("wording-missing-secret-mount",
-			"A release mounts a Secret that does not exist; the new "+
-				"pods stay in ContainerCreating on FailedMount. The "+
-				"Secret is named without being read.",
-			"deployment/media/encoder", "notify", 1),
-		build: func(c *cluster) {
-			w := g24Roll(c, "media", "encoder",
-				"registry.example.com/encoder:3", 2, nil,
-				func(spec *corev1.PodSpec) {
-					spec.Volumes = []corev1.Volume{{Name: "creds",
-						VolumeSource: corev1.VolumeSource{Secret: &corev1.
-							SecretVolumeSource{
-							SecretName: c.n("encoder-creds")}}}}
-				})
-			g2Mount("MountVolume.SetUp failed for volume \"creds\" : "+
-				"secret \""+c.n("encoder-creds")+"\" not found")(c, w)
-		},
-	}
-}
-
 func gap24BadRolloutKey() scenario {
 	return scenario{
 		expect: g24Exp("wording-bad-rollout-config-key",
@@ -121,37 +96,6 @@ func gap24ProbePort() scenario {
 	}
 }
 
-func gap24CronSecret() scenario {
-	return scenario{
-		expect: g24Exp("wording-cronjob-failing-secret-edit",
-			"A nightly export fails three runs in a row, the first "+
-				"five minutes after the Secret it reads changed; the "+
-				"message states the change as a fact.",
-			"secret/reports/export-token", "notify", 1, "node//n1"),
-		build: func(c *cluster) {
-			secret := configSecret(c, "reports", "export-token", "token")
-			cron := scheduleCronJob(c, "reports", "nightly-export", "0 2 * * *")
-			spec := &cron.Spec.JobTemplate.Spec.Template.Spec
-			spec.Containers[0].Env = []corev1.EnvVar{configSecretEnv(
-				"API_TOKEN", "export-token", "token")}
-			c.list(c.node("n1", "zone-a"), secret, cron)
-			c.after(30 * time.Minute)
-			change := last(c, secret)
-			change.Data["token"] = []byte("changed")
-			editedBy(c, change, "kubectl-edit")
-			c.update(change)
-			c.after(5 * time.Minute)
-			for run := 1; run <= 3; run++ {
-				job := jobOf(c, cron, "nightly-export-"+itoa(run), c.now)
-				job.Status.Failed = 1
-				job.Status.Conditions = ambiguousJobFailed(c.now)
-				c.list(job)
-				c.after(time.Hour)
-			}
-		},
-	}
-}
-
 func gap24CertificateExpired() scenario {
 	return scenario{
 		expect: g24Exp("wording-certificate-expired-handshake",
@@ -172,36 +116,6 @@ func gap24CertificateExpired() scenario {
 				w.setReady(0)
 				c.update(w.objects())
 				c.after(45 * time.Second)
-			}
-		},
-	}
-}
-
-func gap24ChronicReminder() scenario {
-	return scenario{
-		expect: g24Exp("wording-first-message-ongoing-chronic",
-			"A Deployment crash-loops for twenty-two hours, its first "+
-				"page acknowledged; the reminder states the duration "+
-				"as a count and keeps the one action.",
-			"deployment/shop/api", "page", 2, "node//n1").
-			tail(2 * time.Hour),
-		build: func(c *cluster) {
-			c.list(c.node("n1", "zone-a"))
-			w := c.deployment("shop", "api", "registry.example.com/api:4", 2)
-			c.list(w.objects())
-			c.list(w.pod(0, "n1"), w.pod(1, "n1"))
-			c.after(time.Minute)
-			w.setReady(0)
-			for hour := int32(1); hour <= 22; hour++ {
-				for i := range 2 {
-					c.update(w.pod(i, "n1", crashLoop(1, "Error",
-						"config key missing", hour*12)))
-				}
-				c.update(w.objects())
-				if hour == 1 {
-					annotate(c, w, kube.AckAnnotation, "ack", false)
-				}
-				c.after(time.Hour)
 			}
 		},
 	}
