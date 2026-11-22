@@ -48,6 +48,7 @@ func (s Snapshot) Record(c Cause) rootcause.CauseRecord {
 	if blamed := s.BlamedChanges(c); len(blamed) > 0 {
 		change := latestEdit(blamed)
 		out.Change = &change
+		out.ChangeGap = changeGap(change, c.Onset)
 		if w, ok := blamedWorkload(s.Model, change, c.Covers); ok {
 			out.RollbackRevision = rollbackRevision(s.Model, w)
 			out.PreviousServed = s.previousServed(w)

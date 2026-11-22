@@ -232,6 +232,10 @@ func ownCause(cause *rootcause.CauseRecord) bool {
 // causeWordsFor is what follows the cause's name when it has no
 // finding of its own.
 func causeWordsFor(cause *rootcause.CauseRecord) string {
+	return measuredGap(cause, tableWordsFor(cause))
+}
+
+func tableWordsFor(cause *rootcause.CauseRecord) string {
 	if cause.Root.Kind == kube.KindRegistry {
 		class := strings.ToLower(string(cause.Mode))
 		if alias, ok := pullClassOfMode[class]; ok {

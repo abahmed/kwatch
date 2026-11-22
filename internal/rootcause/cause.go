@@ -30,6 +30,9 @@ type CauseRecord struct {
 	RootFindings []detection.Finding
 	// Change is the change blamed, when the cause is a modification.
 	Change *inventory.Change
+	// ChangeGap is how long after Change the first failure began; nil
+	// when either time is unknown or the failure began first.
+	ChangeGap *time.Duration `json:",omitempty"`
 	// RollbackRevision is the revision a rollback of a blamed rollout
 	// returns to, when it is known.
 	RollbackRevision string
