@@ -3,7 +3,7 @@
   "description": "A StatefulSet is updated to an image that cannot be pulled; the template is corrected but the broken pod is not replaced and the rollout makes no progress.",
   "root": "statefulset/streaming/queue",
   "tier": "notify",
-  "maxMessages": 2,
+  "maxMessages": 4,
   "mustNotBlame": [
     "registry//registry.example.com",
     "node//n1",

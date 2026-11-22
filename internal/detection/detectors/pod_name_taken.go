@@ -58,7 +58,7 @@ func namesPod(note inventory.Note, pod inventory.EntityID) bool {
 // conflictNamesPod reports a ConflictingController event whose pod the
 // model has and nobody owns: the pod carries the finding instead.
 func conflictNamesPod(
-	ctx detection.Context, e inventory.Entity, note inventory.Note,
+	ctx detection.Context, note inventory.Note,
 ) bool {
 	if ctx.Model == nil || note.Reason != "ConflictingController" {
 		return false
@@ -80,7 +80,7 @@ func nameHeldByPod(ctx detection.Context, e inventory.Entity) bool {
 		return false
 	}
 	for _, note := range ctx.Model.Notes(e.ID, ctx.Now.Add(-EventWindow)) {
-		if note.Warning && conflictNamesPod(ctx, e, note) {
+		if note.Warning && conflictNamesPod(ctx, note) {
 			return true
 		}
 	}

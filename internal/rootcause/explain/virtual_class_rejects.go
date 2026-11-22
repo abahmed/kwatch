@@ -31,7 +31,7 @@ var classRows = []Row{
 	},
 	{
 		// The same class, seen from the pod that waits for the claim.
-		Name: RuleStorageClassRejectsPending,
+		Name: RuleStorageClassRejects,
 		Cause: Side{Kind: kube.KindStorageClass,
 			Modes: []detection.Mode{ModeClassRejects}},
 		Link: LinkUses,

@@ -1,6 +1,7 @@
 package explain
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -37,7 +38,7 @@ func dnsConfigRowPair(
 			Signal: SignalDNS},
 		Prior: 0.75, InferredMinWorkloads: SharedMinWorkloads,
 	}, {
-		Name: name + "-resolver", Cause: cause, Link: LinkConfiguresDNS,
+		Name: name, Cause: cause, Link: LinkConfiguresDNS,
 		Effect: Side{Kind: kindClusterDNS, Modes: []detection.Mode{
 			detection.ModeUnavailable, detection.ModeActiveProbe,
 			ModeResolution}},
@@ -68,29 +69,46 @@ func (v *view) changedDNSHops() []hop {
 	return hopsTo(LinkConfiguresDNS, out...)
 }
 
-// dnsConfigObjects are the DNS Services, the ConfigMaps and the RBAC
-// objects named for the DNS servers' workload, present or not.
+// dnsConfigObjects are the DNS Services and the objects the DNS
+// servers' pods are configured by: the ConfigMaps they mount or
+// reference, and the roles that bind the accounts they run as, present
+// or not.
 func (v *view) dnsConfigObjects() []inventory.EntityID {
-	var out []inventory.EntityID
-	out = append(out, kube.DNSServices(v.s.Model)...)
-	for _, id := range v.s.Model.EntitiesIn(kube.KindConfigMap,
-		"kube-system") {
-		if dnsNamed(id.Name) {
-			out = append(out, id)
+	out := append([]inventory.EntityID(nil), kube.DNSServices(v.s.Model)...)
+	for _, pod := range kube.DNSServerPods(v.s.Model) {
+		for _, id := range v.s.Model.Related(pod, inventory.References,
+			inventory.Outgoing) {
+			if id.Kind == kube.KindConfigMap {
+				out = append(out, id)
+			}
+		}
+		for _, account := range v.accountsOf(pod) {
+			out = append(out, v.rolesBoundTo(account)...)
 		}
 	}
-	for _, id := range v.rbacCandidates() {
-		if id.Kind == "clusterrole" && dnsNamed(id.Name) {
-			out = append(out, id)
+	sortIDs(out)
+	return slices.Compact(out)
+}
+
+// rolesBoundTo are the ClusterRoles that bindings give the account,
+// whether or not the role still exists.
+func (v *view) rolesBoundTo(account inventory.EntityID) []inventory.EntityID {
+	var out []inventory.EntityID
+	for _, kind := range []inventory.Kind{kube.KindClusterRoleBinding,
+		kube.KindRoleBinding} {
+		for _, binding := range v.s.Model.Entities(kind) {
+			e, _ := v.s.Model.Entity(binding)
+			kindName, name, ok := strings.Cut(
+				attrText(e, kube.AttrRBACRole), "/")
+			entries := v.bindingAccounts(binding)
+			if ok && kindName == "ClusterRole" &&
+				subjectsCover(entries, account) {
+				out = append(out, inventory.CoreID(
+					kube.KindClusterRole, "", name))
+			}
 		}
 	}
 	return out
-}
-
-// dnsNamed reports a name made for CoreDNS or kube-dns.
-func dnsNamed(name string) bool {
-	return strings.Contains(name, "coredns") ||
-		strings.Contains(name, "kube-dns")
 }
 
 // dnsConfigCause reports a candidate blamed as a DNS object. The DNS

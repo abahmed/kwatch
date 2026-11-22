@@ -27,7 +27,6 @@ const (
 	RuleStorageClassMissing          = "storage-class-missing"
 	RuleStorageClassMissingPending   = "storage-class-missing-pending"
 	RuleStorageClassRejects          = "storage-class-rejects"
-	RuleStorageClassRejectsPending   = "storage-class-rejects-pending"
 	RuleClaimPinsVolume              = "claim-pins-volume"
 	RuleProvisionerDown              = "provisioner-down"
 	RuleProvisionerDownPending       = "provisioner-down-pending"

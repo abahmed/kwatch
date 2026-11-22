@@ -29,15 +29,15 @@ var dnsConfigRowCases = []rowCase{
 		build: func(f *fixture) inventory.EntityID {
 			return dnsClientCase(f, dnsService)
 		}},
-	{row: "dns-config-changed-resolver", want: dnsConfigMap.String(),
+	{row: "dns-config-changed", want: dnsConfigMap.String(),
 		build: func(f *fixture) inventory.EntityID {
 			return dnsProbeCase(f, dnsConfigMap)
 		}},
-	{row: "dns-role-changed-resolver", want: dnsRole.String(),
+	{row: "dns-role-changed", want: dnsRole.String(),
 		build: func(f *fixture) inventory.EntityID {
 			return dnsProbeCase(f, dnsRole)
 		}},
-	{row: "dns-service-changed-resolver", want: dnsService.String(),
+	{row: "dns-service-changed", want: dnsService.String(),
 		build: func(f *fixture) inventory.EntityID {
 			return dnsProbeCase(f, dnsService)
 		}},
@@ -48,12 +48,7 @@ var dnsConfigRowCases = []rowCase{
 func dnsClientCase(f *fixture, object inventory.EntityID) inventory.EntityID {
 	f.add(object)
 	f.change(object, 1, "metadata")
-	if object == dnsConfigMap {
-		// The DNS servers read the ConfigMap.
-		for _, pod := range f.workload("kube-system", "coredns", 1) {
-			f.relate(pod, inventory.References, object)
-		}
-	}
+	wireDNSServers(f, object)
 	pods := dnsVictims(f, dnsLookupText, "a", "b")
 	return pods[0]
 }
@@ -62,7 +57,31 @@ func dnsClientCase(f *fixture, object inventory.EntityID) inventory.EntityID {
 func dnsProbeCase(f *fixture, object inventory.EntityID) inventory.EntityID {
 	f.add(object)
 	f.change(object, 1, "metadata")
+	wireDNSServers(f, object)
 	f.fail(kube.ClusterDNS, "Unavailable.CoreDNS", failingH, 1,
 		dnsLookupText)
 	return kube.ClusterDNS
+}
+
+// wireDNSServers makes the DNS servers' pods read the ConfigMap or run
+// as the account a binding gives the role.
+func wireDNSServers(f *fixture, object inventory.EntityID) {
+	for _, pod := range f.workload("kube-system", "coredns", 1) {
+		switch object {
+		case dnsConfigMap:
+			f.relate(pod, inventory.References, object)
+		case dnsRole:
+			account := inventory.CoreID(kube.KindAccount, "kube-system",
+				"coredns")
+			binding := inventory.CoreID(kube.KindClusterRoleBinding, "",
+				"system:coredns")
+			f.add(account)
+			f.relate(pod, inventory.References, account)
+			role := "ClusterRole/" + object.Name
+			f.observe(binding, map[string]inventory.Value{
+				kube.AttrRBACRole: inventory.Text(role),
+				kube.AttrRBACAccounts: inventory.Text(
+					"kube-system/coredns")})
+		}
+	}
 }

@@ -14,6 +14,9 @@ func componentPodCase(
 		build: func(f *fixture) inventory.EntityID {
 			f.fail(component, mode, failingH, 1, "")
 			pod := f.workload("kube-system", name, 1)[0]
+			f.observe(pod, map[string]inventory.Value{
+				kube.AttrLabels: inventory.Text(
+					"component=" + name + ",tier=control-plane")})
 			f.fail(pod, detection.ModeCrashLoop, failingH, 2, "")
 			return pod
 		}}

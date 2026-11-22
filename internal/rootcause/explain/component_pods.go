@@ -1,8 +1,6 @@
 package explain
 
 import (
-	"strings"
-
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -13,8 +11,8 @@ import (
 // it crashing or not ready is the same fault, not a second one.
 const LinkComponentPod LinkType = "component-pod"
 
-// componentPods names the pods of the control-plane components kwatch
-// probes, by the name the pod or its workload carries.
+// componentPods maps the "component" label of a control-plane pod to
+// the component kwatch probes.
 var componentPods = map[string]inventory.EntityID{
 	"etcd":                    kube.Etcd,
 	"kube-scheduler":          kube.Scheduler,
@@ -44,16 +42,24 @@ var componentRows = func() []Row {
 	return rows
 }()
 
-// componentPodHops lead from a pod of a control-plane component to the
-// component. A healthy component shows no mode and is never blamed.
+// componentPodHops lead from a control-plane pod, found by the
+// tier=control-plane and component labels the kubelet's static pods
+// carry, to the component. A healthy component shows no mode and is
+// never blamed.
 func (v *view) componentPodHops(id inventory.EntityID) []hop {
-	if id.Kind != kube.KindPod || id.Namespace != "kube-system" {
+	if id.Kind != kube.KindPod {
 		return nil
 	}
-	for name, component := range componentPods {
-		if id.Name == name || strings.HasPrefix(id.Name, name+"-") {
-			return []hop{{link: LinkComponentPod, to: component}}
-		}
+	e, ok := v.s.Model.Entity(id)
+	if !ok {
+		return nil
+	}
+	labels := kube.ParseLabels(attrText(e, kube.AttrLabels))
+	if labels["tier"] != "control-plane" {
+		return nil
+	}
+	if component, ok := componentPods[labels["component"]]; ok {
+		return []hop{{link: LinkComponentPod, to: component}}
 	}
 	return nil
 }

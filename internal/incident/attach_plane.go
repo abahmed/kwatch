@@ -45,18 +45,18 @@ func (m *Manager) joinPlane(
 		if q.State != Settling && q.State != Open || q.Root == where.root {
 			continue
 		}
-		if q.fails(where.root) || m.restsOn(now, q, where.root, depth) {
+		if q.fails(where.root) || m.restsOn(now, q, depth) {
 			return placement{root: q.Root}
 		}
 	}
 	return where
 }
 
-// restsOn reports that the failure of root, at depth, is explained by
+// restsOn reports that a failure at depth is explained by
 // q: a control-plane component lower down, or a node outage for the API
 // server, opened within PlaneWindow of now.
 func (m *Manager) restsOn(
-	now time.Time, q *Incident, root inventory.EntityID, depth int,
+	now time.Time, q *Incident, depth int,
 ) bool {
 	if now.Sub(q.Opened).Abs() > PlaneWindow {
 		return false

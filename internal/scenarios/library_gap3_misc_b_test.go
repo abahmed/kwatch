@@ -17,8 +17,8 @@ import (
 func gap3MiscBScenarios() []scenario {
 	return []scenario{
 		gap3ReadinessGate(), gap3DevicePlugin(), gap3HPAAmbiguous(),
-		gap3HPAContainerMetric(), gap3ConflictingPod(),
-		gap3HeadlessNotReady(), gap3CoreDNSRBAC(), gap3Hairpin(),
+		gap3HPAContainerMetric(), gap3ConflictingPod(), gap3HeadlessNotReady(),
+		gap3CoreDNSRBAC(), gap3Hairpin(),
 		gap3MountBlip(), gap3NameserverLimit(), gap3DNSLatency(),
 	}
 }
@@ -219,6 +219,68 @@ func gap3ConflictingPod() scenario {
 	}
 }
 
+// gap3CoreDNSRBAC: an upgrade replaces the system:coredns ClusterRole with
+// one that cannot list EndpointSlices; CoreDNS runs but cannot answer for
+// Services, and apps of several namespaces fail their lookups.
+func gap3CoreDNSRBAC() scenario {
+	return scenario{
+		expect: g2Exp("coredns-cluster-role-edited",
+			"The ClusterRole CoreDNS uses loses access to "+
+				"EndpointSlices; CoreDNS pods stay Running but lookups "+
+				"of Services fail in several namespaces and the DNS "+
+				"probe fails.",
+			"clusterrole//system:coredns", "page", "node//n1", "node//n2",
+			"deployment/shop/cart", "deployment/billing/invoices"),
+		build: func(c *cluster) {
+			c.list(c.node("n1", "zone-a"), c.node("n2", "zone-b"))
+			role := func(resources ...any) *unstructured.Unstructured {
+				return rbacObject(c, "ClusterRole", "", "system:coredns",
+					map[string]any{"rules": []any{map[string]any{
+						"apiGroups": []any{"discovery.k8s.io"},
+						"resources": resources,
+						"verbs":     []any{"list", "watch"}}}})
+			}
+			dns := c.deployment("kube-system", "coredns",
+				"registry.k8s.io/coredns/coredns:v1.11.1", 2)
+			configTemplate(dns, func(spec *corev1.PodSpec) {
+				spec.ServiceAccountName = "coredns"
+			})
+			binding := rbacObject(c, "ClusterRoleBinding", "",
+				"system:coredns", map[string]any{
+					"subjects": []any{map[string]any{
+						"kind": "ServiceAccount", "name": "coredns",
+						"namespace": c.n("kube-system")}},
+					"roleRef": map[string]any{
+						"apiGroup": "rbac.authorization.k8s.io",
+						"kind":     "ClusterRole", "name": "system:coredns"}})
+			cart := c.deployment("shop", "cart",
+				"registry.example.com/cart:3.1", 2)
+			invoices := c.deployment("billing", "invoices",
+				"registry.example.com/invoices:1.8", 2)
+			c.list(role("endpointslices"), binding)
+			for _, w := range []*workload{dns, cart, invoices} {
+				c.list(w.objects())
+				c.list(w.pod(0, "n1"), w.pod(1, "n2"))
+			}
+			c.probe(kube.ClusterDNS, "")
+			c.after(10 * time.Minute)
+			c.update(role("pods"))
+			c.after(time.Minute)
+			for round := int32(1); round <= 6; round++ {
+				c.probe(kube.ClusterDNS, "lookup kubernetes.default.svc."+
+					"cluster.local on 10.96.0.10:53: server misbehaving")
+				if round >= 2 {
+					clusterDNSVictims(c, cart, "db.shop.svc.cluster.local",
+						round-1)
+					clusterDNSVictims(c, invoices,
+						"payments-api.billing.svc.cluster.local", round-1)
+				}
+				c.after(30 * time.Second)
+			}
+		},
+	}
+}
+
 // gap3HeadlessNotReady: a clustered StatefulSet's peers can only find each
 // other by name; the headless Service does not publish not-ready
 // addresses, so no peer resolves and none becomes ready.
@@ -252,57 +314,6 @@ func gap3HeadlessNotReady() scenario {
 						"NXDOMAIN", round)
 				}
 				c.after(time.Minute)
-			}
-		},
-	}
-}
-
-// gap3CoreDNSRBAC: an upgrade replaces the system:coredns ClusterRole with
-// one that cannot list EndpointSlices; CoreDNS runs but cannot answer for
-// Services, and apps of several namespaces fail their lookups.
-func gap3CoreDNSRBAC() scenario {
-	return scenario{
-		expect: g2Exp("coredns-cluster-role-edited",
-			"The ClusterRole CoreDNS uses loses access to "+
-				"EndpointSlices; CoreDNS pods stay Running but lookups "+
-				"of Services fail in several namespaces and the DNS "+
-				"probe fails.",
-			"clusterrole//system:coredns", "page", "node//n1", "node//n2",
-			"deployment/shop/cart", "deployment/billing/invoices"),
-		build: func(c *cluster) {
-			c.list(c.node("n1", "zone-a"), c.node("n2", "zone-b"))
-			role := func(resources ...any) *unstructured.Unstructured {
-				return rbacObject(c, "ClusterRole", "", "system:coredns",
-					map[string]any{"rules": []any{map[string]any{
-						"apiGroups": []any{"discovery.k8s.io"},
-						"resources": resources,
-						"verbs":     []any{"list", "watch"}}}})
-			}
-			dns := c.deployment("kube-system", "coredns",
-				"registry.k8s.io/coredns/coredns:v1.11.1", 2)
-			cart := c.deployment("shop", "cart",
-				"registry.example.com/cart:3.1", 2)
-			invoices := c.deployment("billing", "invoices",
-				"registry.example.com/invoices:1.8", 2)
-			c.list(role("endpointslices"))
-			for _, w := range []*workload{dns, cart, invoices} {
-				c.list(w.objects())
-				c.list(w.pod(0, "n1"), w.pod(1, "n2"))
-			}
-			c.probe(kube.ClusterDNS, "")
-			c.after(10 * time.Minute)
-			c.update(role("pods"))
-			c.after(time.Minute)
-			for round := int32(1); round <= 6; round++ {
-				c.probe(kube.ClusterDNS, "lookup kubernetes.default.svc."+
-					"cluster.local on 10.96.0.10:53: server misbehaving")
-				if round >= 2 {
-					clusterDNSVictims(c, cart, "db.shop.svc.cluster.local",
-						round-1)
-					clusterDNSVictims(c, invoices,
-						"payments-api.billing.svc.cluster.local", round-1)
-				}
-				c.after(30 * time.Second)
 			}
 		},
 	}

@@ -21,20 +21,26 @@ func (v *view) deferClusterDNS(viable []scored) []scored {
 		if d == dns.c || !v.coversDNSServer(d) {
 			continue
 		}
-		for effect, how := range dns.c.covers {
-			if _, covered := d.covers[effect]; !covered {
-				d.setCover(effect, how)
-			}
-		}
-		out := viable[:0:0]
-		for _, s := range viable {
-			if s.c != dns.c {
-				out = append(out, s)
-			}
-		}
-		return out
+		return handOverCoverage(viable, dns.c, d)
 	}
 	return viable
+}
+
+// handOverCoverage gives the clients the cluster DNS covers to d and
+// drops the cluster DNS from the candidates.
+func handOverCoverage(viable []scored, dns, d *candidate) []scored {
+	for effect, how := range dns.covers {
+		if _, covered := d.covers[effect]; !covered {
+			d.setCover(effect, how)
+		}
+	}
+	out := viable[:0:0]
+	for _, s := range viable {
+		if s.c != dns {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // coversDNSServer reports a candidate, other than the cluster DNS, that

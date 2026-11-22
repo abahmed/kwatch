@@ -132,6 +132,21 @@ func (v *view) oomedElsewhere(node inventory.EntityID, name string) bool {
 func (v *view) workloadRunning(
 	process string,
 ) (top inventory.EntityID, ok bool) {
+	top, ok, unique := v.runningByContainer(process)
+	if !unique {
+		return inventory.EntityID{}, false
+	}
+	if ok {
+		return top, true
+	}
+	return v.runningByName(process)
+}
+
+// runningByContainer is the one workload whose containers run the
+// process; unique is false when two workloads do.
+func (v *view) runningByContainer(
+	process string,
+) (top inventory.EntityID, ok, unique bool) {
 	for _, c := range v.s.Model.Entities(kube.KindContainer) {
 		e, found := v.s.Model.Entity(c)
 		if !found || !runsProcess(c, e, process) {
@@ -143,13 +158,17 @@ func (v *view) workloadRunning(
 		}
 		owner := rootcause.TopOwner(v.s.Model, pods[0])
 		if ok && top != owner {
-			return inventory.EntityID{}, false
+			return inventory.EntityID{}, false, false
 		}
 		top, ok = owner, true
 	}
-	if ok {
-		return top, true
-	}
+	return top, ok, true
+}
+
+// runningByName is the one workload named for the process.
+func (v *view) runningByName(
+	process string,
+) (top inventory.EntityID, ok bool) {
 	for _, kind := range []inventory.Kind{kube.KindDeployment,
 		kube.KindStatefulSet, kube.KindDaemonSet} {
 		for _, id := range v.s.Model.Entities(kind) {

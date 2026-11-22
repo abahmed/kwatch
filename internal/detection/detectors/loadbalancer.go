@@ -51,8 +51,8 @@ func loadBalancerEvents(
 		// +1ns: the window is inclusive, so the note is gone just after it.
 		ctx.RecheckAfter(note.At.Add(EventWindow).Sub(ctx.Now) +
 			time.Nanosecond)
-		if loadBalancerFailures[reason] > f.Severity {
-			f.Severity = loadBalancerFailures[reason]
+		if sev := loadBalancerSeverity(ctx, reason); sev > f.Severity {
+			f.Severity = sev
 		}
 		if f.Since.IsZero() || note.At.Before(f.Since) {
 			f.Since = note.At
@@ -62,6 +62,45 @@ func loadBalancerEvents(
 	}
 	return []detection.Finding{f}
 }
+
+// loadBalancerSeverity is the severity of a failure reason. With no
+// node left to register, the Service has no way to serve traffic, so
+// UnAvailableLoadBalancer is a Warning then and Info while some node
+// can still take it.
+func loadBalancerSeverity(
+	ctx detection.Context, reason string,
+) detection.Severity {
+	if reason == "UnAvailableLoadBalancer" && noEligibleNodes(ctx) {
+		return detection.Warning
+	}
+	return loadBalancerFailures[reason]
+}
+
+// noEligibleNodes reports a synced cluster whose every node is excluded
+// from external load balancers.
+func noEligibleNodes(ctx detection.Context) bool {
+	if !ctx.Synced(kube.KindNode) {
+		return false
+	}
+	nodes := ctx.Model.Entities(kube.KindNode)
+	for _, id := range nodes {
+		node, ok := ctx.Model.Entity(id)
+		if !ok {
+			continue
+		}
+		labels := kube.ParseLabels(text(node, kube.AttrNodeLabels))
+		if _, out := labels[excludeFromLoadBalancers]; !out ||
+			flag(node, kube.AttrNodeLabelsCut) {
+			return false
+		}
+	}
+	return len(nodes) > 0
+}
+
+// excludeFromLoadBalancers is the node label that keeps a node out of
+// external load balancers.
+const excludeFromLoadBalancers = "node.kubernetes.io/" +
+	"exclude-from-external-load-balancers"
 
 // dropSettledNotes forgets failures older than the Service's address: a
 // balancer that has an address works now, so only a newer failure counts.

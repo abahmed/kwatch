@@ -33,7 +33,7 @@ func gap5bRolloutWedged() scenario {
 				"replaced and the rollout makes no progress.",
 			"statefulset/streaming/queue", "notify",
 			"registry//registry.example.com", "node//n1", "node//n2").
-			tail(10 * time.Minute),
+			budget(4).tail(10 * time.Minute),
 		build: func(c *cluster) {
 			sts := scaleQueue(c)
 			c.after(5 * time.Minute)

@@ -272,6 +272,7 @@ func gap5bEtcdWALCorrupt() scenario {
 			c.list(c.node("n1", "zone-a"))
 			etcd := c.deployment("kube-system", "etcd",
 				"registry.k8s.io/etcd:3.5.12", 1)
+			controlPlaneLabels(etcd, "etcd")
 			api := c.deployment("kube-system", "kube-apiserver",
 				"registry.k8s.io/kube-apiserver:v1.30.2", 1)
 			for _, w := range []*workload{etcd, api} {

@@ -16,8 +16,8 @@ import (
 // API server that reach many namespaces.
 func gap4bPlaneAScenarios() []scenario {
 	return []scenario{
-		gap4bSelectorLabelRemoved(), gap4bCoreDNSOOM(),
-		gap4bFinalizerPodsHoldIPs(), gap4bWebhookBackendEvicted(),
+		gap4bSelectorLabelRemoved(), gap4bCoreDNSOOM(), gap4bFinalizerPodsHoldIPs(),
+		gap4bWebhookBackendEvicted(),
 		gap4bAgentRolloutLoadsAPI(), gap4bCRDGrowth(), gap4bEtcdProbeLoop(),
 	}
 }
@@ -127,53 +127,6 @@ func gap4bCoreDNSOOM() scenario {
 						restarts-1)
 				}
 				c.after(30 * time.Second)
-			}
-		},
-	}
-}
-
-// gap4bFinalizerPodsHoldIPs: an operator was removed and left eight pods
-// Terminating on its finalizer; their addresses are still allocated and
-// new pods of another namespace cannot get one.
-func gap4bFinalizerPodsHoldIPs() scenario {
-	finalizer := "jobs.example.com/cleanup"
-	return scenario{
-		expect: g2Exp("terminating-pods-hold-addresses",
-			"Eight pods held by a finalizer whose operator is gone stay "+
-				"Terminating for hours; the address pool is used up and "+
-				"new pods elsewhere cannot get an address.",
-			"finalizer/jobs/"+finalizer, "notify", "node//n1",
-			"deployment/shop/web").budget(3).tail(10 * time.Minute),
-		build: func(c *cluster) {
-			c.list(c.node("n1", "zone-a"))
-			runner := c.deployment("jobs", "runner",
-				"registry.example.com/runner:2", 8)
-			c.list(runner.objects())
-			for i := range 8 {
-				pod := runner.pod(i, "n1")
-				deleting(&pod.ObjectMeta, c.now.Add(-3*time.Hour),
-					finalizer)
-				c.list(pod)
-			}
-			web := c.deployment("shop", "web", "registry.example.com/web:7", 1)
-			c.list(web.objects())
-			c.list(web.pod(0, "n1"))
-			c.after(10 * time.Minute)
-			*web.deployment.Spec.Replicas = 3
-			web.setReady(1)
-			c.update(web.objects())
-			message := "Failed to create pod sandbox: rpc error: code = " +
-				"Unknown desc = failed to setup network for sandbox: " +
-				"failed to assign an IP address to container"
-			for round := int32(1); round <= 5; round++ {
-				for i := 1; i <= 2; i++ {
-					pod := web.pod(i, "n1", startedNow,
-						gapPending(waiting("ContainerCreating", "")))
-					c.update(pod)
-					gapKubelet(c, pod, "FailedCreatePodSandBox", message,
-						round)
-				}
-				c.after(time.Minute)
 			}
 		},
 	}
@@ -348,6 +301,7 @@ func gap4bEtcdProbeLoop() scenario {
 			c.list(c.node("n1", "zone-a"))
 			etcd := c.deployment("kube-system", "etcd",
 				"registry.k8s.io/etcd:3.5.12", 1)
+			controlPlaneLabels(etcd, "etcd")
 			c.list(etcd.objects())
 			c.list(etcd.pod(0, "n1"))
 			c.probe(kube.Etcd, "")
@@ -364,6 +318,53 @@ func gap4bEtcdProbeLoop() scenario {
 				c.after(40 * time.Second)
 				c.probe(kube.Etcd, "")
 				c.after(80 * time.Second)
+			}
+		},
+	}
+}
+
+// gap4bFinalizerPodsHoldIPs: an operator was removed and left eight pods
+// Terminating on its finalizer; their addresses are still allocated and
+// new pods of another namespace cannot get one.
+func gap4bFinalizerPodsHoldIPs() scenario {
+	finalizer := "jobs.example.com/cleanup"
+	return scenario{
+		expect: g2Exp("terminating-pods-hold-addresses",
+			"Eight pods held by a finalizer whose operator is gone stay "+
+				"Terminating for hours; the address pool is used up and "+
+				"new pods elsewhere cannot get an address.",
+			"finalizer/jobs/"+finalizer, "notify", "node//n1",
+			"deployment/shop/web").budget(3).tail(10 * time.Minute),
+		build: func(c *cluster) {
+			c.list(c.node("n1", "zone-a"))
+			runner := c.deployment("jobs", "runner",
+				"registry.example.com/runner:2", 8)
+			c.list(runner.objects())
+			for i := range 8 {
+				pod := runner.pod(i, "n1")
+				deleting(&pod.ObjectMeta, c.now.Add(-3*time.Hour),
+					finalizer)
+				c.list(pod)
+			}
+			web := c.deployment("shop", "web", "registry.example.com/web:7", 1)
+			c.list(web.objects())
+			c.list(web.pod(0, "n1"))
+			c.after(10 * time.Minute)
+			*web.deployment.Spec.Replicas = 3
+			web.setReady(1)
+			c.update(web.objects())
+			message := "Failed to create pod sandbox: rpc error: code = " +
+				"Unknown desc = failed to setup network for sandbox: " +
+				"failed to assign an IP address to container"
+			for round := int32(1); round <= 5; round++ {
+				for i := 1; i <= 2; i++ {
+					pod := web.pod(i, "n1", startedNow,
+						gapPending(waiting("ContainerCreating", "")))
+					c.update(pod)
+					gapKubelet(c, pod, "FailedCreatePodSandBox", message,
+						round)
+				}
+				c.after(time.Minute)
 			}
 		},
 	}

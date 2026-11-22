@@ -129,19 +129,18 @@ func (v *view) containerModes(pod inventory.EntityID) []modeHealth {
 	return out
 }
 
-// pluginAbsent lists the DaemonSets named by a pod's network or storage
-// plugin error that have no pod on any node although the cluster has
-// nodes: a selector or a taint left them with nowhere to run, so every
-// new pod finds its node without the agent.
+// pluginAbsent lists the DaemonSets that changed in the window and have
+// no pod on any node, when a pod's error says the node's network or
+// storage plugin is not ready: a selector or a taint left the agent
+// with nowhere to run, so every new pod finds its node without it.
 func (v *view) pluginAbsent(pod inventory.EntityID) []inventory.EntityID {
-	text := strings.ToLower(v.errorText(pod))
-	if !hasSignal(SignalNodeAgent, text) {
+	if !hasSignal(SignalNodeAgent, strings.ToLower(v.errorText(pod))) {
 		return nil
 	}
 	var out []inventory.EntityID
 	for _, ds := range v.s.Model.Entities(kube.KindDaemonSet) {
-		if !strings.Contains(text, ds.Name) ||
-			len(rootcause.OwnedPods(v.s.Model, ds)) > 0 {
+		if len(rootcause.OwnedPods(v.s.Model, ds)) > 0 ||
+			len(v.changesOf(ds)) == 0 {
 			continue
 		}
 		v.gate(pod, ds)

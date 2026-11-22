@@ -39,7 +39,7 @@ var storageRowCases = []rowCase{
 				"failed to get secret reference: not found")
 			return claim
 		}},
-	{row: "storage-class-rejects-pending", want: "storageclass//fast",
+	{row: "storage-class-rejects", want: "storageclass//fast",
 		build: func(f *fixture) inventory.EntityID {
 			claim := inventory.CoreID(kube.KindPVC, "shop", "data")
 			f.add(claim)

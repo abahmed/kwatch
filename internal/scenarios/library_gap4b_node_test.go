@@ -256,9 +256,10 @@ func gap4bDataplaneSaturated() scenario {
 			"The CNI agent of one node is saturated by a pod's connection "+
 				"churn and fails its probes; pods of three namespaces on "+
 				"that node time out while other nodes are fine.",
-			"node//n2", "notify", "deployment/shop/web",
-			"deployment/billing/invoices", "deployment/media/transcode",
-			"cluster-dns//cluster-dns").budget(3).tail(10 * time.Minute),
+			"daemonset/kube-system/cni-agent", "notify", "node//n2",
+			"deployment/shop/web", "deployment/billing/invoices",
+			"deployment/media/transcode", "cluster-dns//cluster-dns").
+			budget(3).tail(10 * time.Minute),
 		build: func(c *cluster) {
 			nodes := []string{"n1", "n2", "n3"}
 			c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"),

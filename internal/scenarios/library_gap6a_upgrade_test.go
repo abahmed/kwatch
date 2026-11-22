@@ -243,6 +243,7 @@ func gap6aControllerManagerProbe() scenario {
 			c.list(c.node("n1", "zone-a"))
 			cm := c.deployment("kube-system", "kube-controller-manager",
 				"registry.k8s.io/kube-controller-manager:v1.30.2", 1)
+			controlPlaneLabels(cm, "kube-controller-manager")
 			c.list(cm.objects())
 			c.list(cm.pod(0, "n1"))
 			c.probe(kube.ControllerManager, "")
@@ -280,6 +281,7 @@ func gap6aSchedulerConfigPlugin() scenario {
 			fleet := controlPlaneFleet(c)
 			sched := c.deployment("kube-system", "kube-scheduler",
 				"registry.k8s.io/kube-scheduler:v1.32.0", 1)
+			controlPlaneLabels(sched, "kube-scheduler")
 			c.list(sched.objects())
 			c.list(sched.pod(0, "n1"))
 			c.probe(kube.Scheduler, "")

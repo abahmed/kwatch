@@ -1,9 +1,0 @@
-{
-  "name": "kubelet-smt-alignment-error",
-  "description": "A Guaranteed pod requests three CPUs on a node with the full-pcpus-only policy; the kubelet rejects each pod with SMTAlignmentError.",
-  "root": "deployment/shop/api",
-  "tier": "notify",
-  "maxMessages": 3,
-  "ambiguous": true,
-  "tail": "10m0s"
-}

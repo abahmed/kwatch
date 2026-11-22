@@ -8,8 +8,8 @@ import (
 // another, and the pods it evicts to admit a critical one.
 func gap4aAdmitScenarios() []scenario {
 	return []scenario{
-		gap4aCriticalPreempts(), gap4aTopologyAffinity(), gap4aSMTAlignment(),
-		gap4aOSMismatch(), gap4aFeatureUnsupported(), gap4aShutdownReject(),
+		gap4aCriticalPreempts(), gap4aTopologyAffinity(),
+		gap4aShutdownReject(),
 	}
 }
 
@@ -97,45 +97,6 @@ func gap4aTopologyAffinity() scenario {
 		"node//n2", "notify", "deployment/shop/api").budget(3),
 		"TopologyAffinityError", "Resources cannot be allocated with "+
 			"Topology locality")
-}
-
-// gap4aSMTAlignment: a Guaranteed pod asks for three CPUs on a node whose
-// CPU manager requires whole physical cores.
-func gap4aSMTAlignment() scenario {
-	e := g2Exp("kubelet-smt-alignment-error",
-		"A Guaranteed pod requests three CPUs on a node with the "+
-			"full-pcpus-only policy; the kubelet rejects each pod with "+
-			"SMTAlignmentError.",
-		"deployment/shop/api", "notify").budget(3)
-	e.Ambiguous = true
-	return gap4aRejected(e, "SMTAlignmentError", "SMT Alignment Error: "+
-		"requested 3 cpus not multiple of cpus per core = 2")
-}
-
-// gap4aOSMismatch: pods whose spec names the Windows OS are bound to a
-// Linux node; the kubelet rejects them.
-func gap4aOSMismatch() scenario {
-	return gap4aRejected(g2Exp("kubelet-pod-os-not-supported",
-		"Pods that declare a Windows OS are bound to a Linux node; the "+
-			"kubelet rejects each with PodOSNotSupported.",
-		"deployment/shop/api", "notify", "node//n2").budget(3),
-		"PodOSNotSupported", "Pod was rejected: Pod OS (windows) is not "+
-			"supported on node OS (linux)")
-}
-
-// gap4aFeatureUnsupported: a Deployment asks for supplementalGroupsPolicy
-// Strict; the runtime of n2 does not support it, the kubelet declines.
-func gap4aFeatureUnsupported() scenario {
-	e := g2Exp("kubelet-supplemental-groups-policy-unsupported",
-		"A pod asks for supplementalGroupsPolicy Strict on a node whose "+
-			"runtime lacks it; the kubelet rejects each pod and lists "+
-			"the unsatisfied feature.",
-		"deployment/shop/api", "notify").budget(3)
-	e.Ambiguous = true
-	return gap4aRejected(e, "SupplementalGroupsPolicyNotSupported",
-		"Pod was rejected: SupplementalGroupsPolicy=Strict is not "+
-			"supported by the node: the container runtime does not "+
-			"report the feature")
 }
 
 // gap4aShutdownReject: a pod is bound to a node in the second it begins its

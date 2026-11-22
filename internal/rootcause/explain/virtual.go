@@ -37,26 +37,7 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 	if id.Kind == kube.KindPod && v.dnsServer(id) {
 		out = append(out, hop{link: LinkContains, to: kube.ClusterDNS})
 	} else if id.Kind == kube.KindPod {
-		out = append(out, hop{link: LinkResolvesVia, to: kube.ClusterDNS})
-		out = append(out, v.resolverWorkloadHops(id)...)
-		out = append(out, v.dnsServingHops(id)...)
-		out = append(out, v.policyCallHops(id)...)
-		out = append(out, v.policyHops(id)...)
-		out = append(out, v.schedulingHops(id)...)
-		out = append(out, v.claimHops(id)...)
-		out = append(out, v.holdHops(id)...)
-		out = append(out, v.addressHolderHops(id)...)
-		out = append(out, v.dnsConfigHops(id)...)
-		out = append(out, v.accessHops(id)...)
-		out = append(out, v.roleHops(id)...)
-		out = append(out, v.unauthorizedHops(id)...)
-		out = append(out, v.removedNodeHops(id)...)
-		out = append(out, v.helperHops(id)...)
-		out = append(out, v.calledHops(id)...)
-		out = append(out, v.serviceCallHops(id)...)
-		out = append(out, v.serviceNameHops(id)...)
-		out = append(out, v.agentHops(id)...)
-		out = append(out, v.preemptionHops(id)...)
+		out = append(out, v.clientHops(id)...)
 	}
 	out = append(out, v.errorNamedHops(id)...)
 	if id.Kind == kube.KindContainer {

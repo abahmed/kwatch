@@ -170,16 +170,25 @@ func (v *view) affinityTargets(
 	spec := kube.ParseSchedulingSpec(entity)
 	var out []inventory.EntityID
 	for _, term := range spec.Affinity {
-		for _, kind := range workloadKinds {
-			for _, id := range v.s.Model.EntitiesIn(kind, pod.Namespace) {
-				w, found := v.s.Model.Entity(id)
-				if !found || !v.selectsLabels(term.Selector, w) {
-					continue
-				}
-				ready, _ := attrNumber(w, kube.AttrReadyReplicas)
-				if ready == 0 {
-					out = append(out, id)
-				}
+		out = append(out, v.unreadyTargets(pod.Namespace, term.Selector)...)
+	}
+	return out
+}
+
+// unreadyTargets are the workloads of the namespace that the selector
+// matches and that have no ready replica.
+func (v *view) unreadyTargets(
+	namespace string, selector []kube.Requirement,
+) []inventory.EntityID {
+	var out []inventory.EntityID
+	for _, kind := range workloadKinds {
+		for _, id := range v.s.Model.EntitiesIn(kind, namespace) {
+			w, found := v.s.Model.Entity(id)
+			if !found || !v.selectsLabels(selector, w) {
+				continue
+			}
+			if ready, _ := attrNumber(w, kube.AttrReadyReplicas); ready == 0 {
+				out = append(out, id)
 			}
 		}
 	}

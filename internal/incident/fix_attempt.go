@@ -56,8 +56,15 @@ func findAttempt(
 			since = known.At
 		}
 	}
+	return newestAttempt(model.ChangeSets(p.Root, since), since, now)
+}
+
+// newestAttempt is the newest attempt among the change sets, or nil.
+func newestAttempt(
+	sets []inventory.ChangeSet, since, now time.Time,
+) *inventory.Change {
 	var latest *inventory.Change
-	for _, set := range model.ChangeSets(p.Root, since) {
+	for _, set := range sets {
 		for _, change := range set.Changes {
 			if !isAttempt(change, since, now) {
 				continue

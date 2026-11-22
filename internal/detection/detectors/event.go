@@ -42,7 +42,7 @@ func (Event) Detect(
 			recoveredBefore(e, note) || jobCreateOvercome(ctx, e, note) ||
 			bootNoise(ctx, e, note) ||
 			daemonNodeNoise(ctx, e, note) || staleNodeNote(e, note) ||
-			conflictNamesPod(ctx, e, note) {
+			conflictNamesPod(ctx, note) {
 			continue
 		}
 		// A note exactly as old as its life still counts, so the

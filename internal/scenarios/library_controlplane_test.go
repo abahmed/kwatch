@@ -153,3 +153,14 @@ func notScheduled(c *cluster, pod *corev1.Pod) {
 		Phase: corev1.PodPending, QOSClass: corev1.PodQOSBurstable,
 	}
 }
+
+// controlPlaneLabels gives the pods of a control-plane component the
+// labels the kubelet's static pods carry.
+func controlPlaneLabels(w *workload, component string) {
+	for _, labels := range []map[string]string{
+		w.deployment.Spec.Template.Labels,
+		w.replicaSet.Spec.Template.Labels,
+	} {
+		labels["component"], labels["tier"] = component, "control-plane"
+	}
+}
