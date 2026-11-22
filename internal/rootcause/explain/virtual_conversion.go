@@ -75,6 +75,7 @@ func (v *view) errorNamedHops(id inventory.EntityID) []hop {
 	out = append(out, v.restoringHops(id)...)
 	if id.Kind == kube.KindContainer || id.Kind == kube.KindPod {
 		out = append(out, v.conversionHops(id)...)
+		out = append(out, v.namedConfigHops(id)...)
 	}
 	return out
 }
