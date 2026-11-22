@@ -1,0 +1,8 @@
+{
+  "name": "clock-skew-node-events-predate-the-edit",
+  "description": "A ConfigMap edit breaks new pods on a node whose clock is 90 seconds behind; their events are stamped before the edit.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 1,
+  "tail": "10m0s"
+}

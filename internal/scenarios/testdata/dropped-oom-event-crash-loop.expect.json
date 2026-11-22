@@ -1,0 +1,11 @@
+{
+  "name": "dropped-oom-event-crash-loop",
+  "description": "Five OOM kills in twelve minutes with every Killing and BackOff event dropped by the event rate limiter; only pod status and restart counts remain.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "tenant-default-deny-breaks-dns",
+  "description": "A new default-deny NetworkPolicy (ingress and egress, no DNS rule) in tenant-b; its nine pods fail \"lookup db\" timeouts and go unready; tenant-a and tenant-c are fine.",
+  "root": "networkpolicy/tenant-b/default-deny-all",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/tenant-b/shop"
+  ],
+  "tail": "10m0s"
+}

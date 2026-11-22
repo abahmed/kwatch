@@ -1,0 +1,11 @@
+{
+  "name": "event-ttl-expired-before-kwatch-start",
+  "description": "A typo in an image tag, 75 minutes old; kwatch starts after the one-hour event TTL erased the events and sees only ImagePullBackOff and the image string.",
+  "root": "deployment/billing/worker",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

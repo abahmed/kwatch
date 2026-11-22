@@ -1,0 +1,12 @@
+{
+  "name": "some-replicas-old-config-subpath",
+  "description": "A shared ConfigMap is edited; pods mounting it as a whole volume see the change, the legacy Deployment that mounts one file through subPath keeps the old content and fails.",
+  "root": "deployment/shop/api-legacy",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "configmap/shop/api-config",
+    "deployment/shop/api"
+  ],
+  "tail": "10m0s"
+}

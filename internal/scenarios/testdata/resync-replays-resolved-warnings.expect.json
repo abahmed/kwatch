@@ -1,0 +1,7 @@
+{
+  "name": "resync-replays-resolved-warnings",
+  "description": "A crash loop ended 40 minutes ago; a resync re-delivers its old BackOff and Unhealthy events with unchanged timestamps. Nothing is wrong.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "10m0s"
+}

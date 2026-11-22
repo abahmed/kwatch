@@ -1,0 +1,9 @@
+{
+  "name": "watch-gap-hides-rollout-start",
+  "description": "kwatch relists after a six-minute gap and finds revision 12 with every new pod in CrashLoopBackOff and the old ReplicaSet at zero; the edit itself was not seen.",
+  "root": "deployment/shop/api",
+  "tier": "page",
+  "maxMessages": 1,
+  "syncAfter": "30s",
+  "tail": "10m0s"
+}

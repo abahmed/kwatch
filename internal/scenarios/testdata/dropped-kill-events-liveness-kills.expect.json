@@ -1,0 +1,11 @@
+{
+  "name": "dropped-kill-events-liveness-kills",
+  "description": "A container is killed by its liveness probe every 90 seconds (exit 137, 20 restarts); Killing and Unhealthy events are dropped, a BackOff survives now and then.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

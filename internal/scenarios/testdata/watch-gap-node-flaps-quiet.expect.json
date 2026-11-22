@@ -1,0 +1,7 @@
+{
+  "name": "watch-gap-node-flaps-quiet",
+  "description": "During a four-minute watch gap a node goes NotReady for 90 seconds and returns; after the relist it is Ready and its pods are Ready again.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "10m0s"
+}

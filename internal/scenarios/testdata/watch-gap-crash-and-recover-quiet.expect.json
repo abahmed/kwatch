@@ -1,0 +1,7 @@
+{
+  "name": "watch-gap-crash-and-recover-quiet",
+  "description": "The watch drops for five minutes; a pod crashed twice and recovered in the gap. After the relist it is Ready with restartCount 2.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "10m0s"
+}

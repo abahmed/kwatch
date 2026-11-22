@@ -1,0 +1,11 @@
+{
+  "name": "canary-five-percent-bad-image",
+  "description": "A single-replica canary Deployment crash-loops on image v4 behind the same Service as twenty healthy stable replicas; about 5% of requests fail.",
+  "root": "deployment/shop/api-canary",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "deployment/shop/api"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "statefulset-one-ordinal-data-corrupt",
+  "description": "db-2 of a three-replica StatefulSet crash-loops (exit 1) after a reboot; db-0 and db-1 are Ready and quorum holds.",
+  "root": "statefulset/data/db",
+  "tier": "notify",
+  "maxMessages": 1,
+  "tail": "10m0s"
+}

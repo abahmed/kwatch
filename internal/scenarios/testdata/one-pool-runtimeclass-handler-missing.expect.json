@@ -1,0 +1,8 @@
+{
+  "name": "one-pool-runtimeclass-handler-missing",
+  "description": "A Deployment with runtimeClassName gvisor: pods on pool-a run, pods that land on pool-b fail to create a sandbox because no runsc handler is configured there.",
+  "root": "runtimeclass//gvisor",
+  "tier": "notify",
+  "maxMessages": 1,
+  "tail": "10m0s"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "intermittent-resets-from-terminating-endpoint",
+  "description": "A rolling update of a Deployment resets connections for eight seconds per replaced pod: old pods exit 143 at once while the EndpointSlice still lists them as terminating and serving.",
+  "root": "deployment/shop/backend",
+  "tier": "digest",
+  "maxMessages": 1,
+  "tail": "10m0s"
+}

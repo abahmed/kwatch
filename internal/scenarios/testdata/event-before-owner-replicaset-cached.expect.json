@@ -1,0 +1,8 @@
+{
+  "name": "event-before-owner-replicaset-cached",
+  "description": "A pod hits ErrImagePull; the Deployments watch lags by twenty seconds, so its owners arrive after the pod and its events.",
+  "root": "deployment/reports/gen",
+  "tier": "notify",
+  "maxMessages": 1,
+  "tail": "10m0s"
+}

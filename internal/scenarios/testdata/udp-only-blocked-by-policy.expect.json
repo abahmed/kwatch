@@ -1,0 +1,8 @@
+{
+  "name": "udp-only-blocked-by-policy",
+  "description": "A Service exposes TCP and UDP 53; the NetworkPolicy allow-tcp-only admits TCP 53 only, so UDP queries time out. All pods are Ready.",
+  "root": "networkpolicy/infra/allow-tcp-only",
+  "tier": "notify",
+  "maxMessages": 1,
+  "tail": "10m0s"
+}

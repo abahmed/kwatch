@@ -1,0 +1,7 @@
+{
+  "name": "local-traffic-policy-unhealthy-nodes-quiet",
+  "description": "A Service with externalTrafficPolicy Local: the cloud load balancer marks the four nodes without a pod unhealthy. Designed behaviour; no warnings.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "10m0s"
+}

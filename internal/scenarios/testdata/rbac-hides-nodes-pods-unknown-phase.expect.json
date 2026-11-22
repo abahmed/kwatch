@@ -1,0 +1,11 @@
+{
+  "name": "rbac-hides-nodes-pods-unknown-phase",
+  "description": "kwatch cannot list nodes; pods of a StatefulSet and a Deployment on worker-3 show NodeLost. worker-3 is the common node but unconfirmed.",
+  "root": "unknown",
+  "tier": "notify",
+  "maxMessages": 1,
+  "hidden": [
+    "node"
+  ],
+  "tail": "10m0s"
+}

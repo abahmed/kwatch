@@ -1,0 +1,8 @@
+{
+  "name": "one-pool-disk-pressure-evictions",
+  "description": "All three nodes of pool-logs raise DiskPressure; kubelets evict seven pods of a Deployment on ephemeral storage. Other pools are healthy.",
+  "root": "node//pool-logs-1",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}
