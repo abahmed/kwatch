@@ -119,7 +119,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | CSRFailed | varies | `CertificateSigningRequestFailure` | `custom` |
 | Cert.Expired | degraded | `TLSCertExpired` | `config` |
 | Certificate.Denied | degraded | `CertificateSigningRequestDenied` | `custom_kinds` |
-| Certificate.NotIssued | degraded | `CertificateSigningRequestNotIssued` | `custom_kinds` |
+| Certificate.NotIssued | varies | `CertificateSigningRequestNotIssued` | `custom_kinds` |
 | ClaimFailed | varies | `PersistentVolumeClaimFailure`, `ResourceClaimFailure` | `condition_rules`, `custom`, `storage` |
 | Cluster.VersionSkew | degraded | `ClusterVersionSkew` | `version_skew` |
 | Completed | varies | `Completed`, `PodCompleted` | - |
