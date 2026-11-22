@@ -37,6 +37,7 @@ var workloadConfigRows = []Row{
 		Prior: 0.7, Inside: true,
 	},
 	ephemeralConfigRow,
+	memoryOverRequestRow,
 	{
 		Name: "probe-port-mismatch",
 		Cause: Side{Group: AnyGroup, Kind: AnyKind,

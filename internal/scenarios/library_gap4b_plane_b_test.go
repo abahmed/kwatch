@@ -217,9 +217,13 @@ func gap4bCronFlood() scenario {
 		expect: g2Exp("cronjob-every-minute-fills-api-server-memory",
 			"A CronJob that runs every minute and keeps every Job "+
 				"piles up objects until the API server is OOMKilled "+
-				"and its health probe fails.",
-			"cronjob/reports/minutely-sync", "page", "node//n1",
-			"apiserver//kube-apiserver").budget(3).tail(10 * time.Minute),
+				"and its health probe fails. Nothing links the Job "+
+				"count to the API server's memory, so the OOMKilled "+
+				"pod with a memory limit is the root, as for any "+
+				"limit that is too low.",
+			"pod/kube-system/kube-apiserver-n1", "notify", "node//n1",
+			"cronjob/reports/minutely-sync").budget(4).
+			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
 			c.list(staticPod(c, "kube-apiserver", "n1",

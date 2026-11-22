@@ -106,6 +106,8 @@ var causeWords = map[string]causeWording{
 		words: "it cannot connect to a service it depends on"},
 	"liveness-kills-before-ready": {own: true,
 		words: "its containers are not ready when liveness gives up"},
+	"memory-over-request": {own: true,
+		words: "its memory use is above what it requests"},
 	"memory-limit-too-low": {own: true,
 		words: "its memory limit is too low for normal use"},
 	"metrics-api-down": {words: "is not serving metrics"},

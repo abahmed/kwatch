@@ -108,6 +108,7 @@ var causeCategories = map[string]string{
 	"log-names-dependency":                  categoryDependency,
 	"liveness-shorter-than-start":           categoryProbe,
 	"memory-limit-too-low":                  categoryMemoryLimit,
+	"memory-over-request":                   categoryMemoryLimit,
 	"metrics-api-down":                      categoryControlPlane,
 	"missing-service-called":                categoryMissingDep,
 	"missing-service-configured":            categoryMissingDep,
