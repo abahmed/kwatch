@@ -133,7 +133,7 @@ func blamedChange(f caseFacts) *inventory.Change {
 	}
 	if cause.Rule == explain.RuleAccountMissingAtCreate ||
 		cause.Rule == explain.RowNodePullsThrottled ||
-		cause.Rule == "node-agent-absent" ||
+		cause.Rule == explain.RuleNodeAgentAbsent ||
 		cause.Rule == explain.RuleClaimSelectedNodeGone {
 		// "service account api does not exist" says more than the
 		// deletion that made it so, and a kubelet holding pulls back
