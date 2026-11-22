@@ -44,9 +44,10 @@ func gap2KubeProxySyncFails() scenario {
 			message := "Readiness probe failed: HTTP probe failed with " +
 				"statuscode: 503"
 			timeout := "dial tcp 10.96.14.7:5432: i/o timeout"
+			since := c.now
 			for round := int32(1); round <= 6; round++ {
 				setAgentCounts(ds, 3, 2)
-				pod := agentPod(c, ds, "n3", notReady)
+				pod := agentPod(c, ds, "n3", notReadySince(since))
 				c.update(ds, pod)
 				gapKubelet(c, pod, "Unhealthy", message, round)
 				if round >= 2 {

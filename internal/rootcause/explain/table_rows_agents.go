@@ -85,7 +85,7 @@ func (v *view) agentHops(pod inventory.EntityID) []hop {
 		for _, other := range v.s.Model.Related(node, inventory.RunsOn,
 			inventory.Incoming) {
 			if other == pod || !v.nodeAgent(other, own) ||
-				!v.unitFailing(other) {
+				!v.agentDown(other) {
 				continue
 			}
 			out = append(out, hop{link: LinkNodeAgent, to: other})

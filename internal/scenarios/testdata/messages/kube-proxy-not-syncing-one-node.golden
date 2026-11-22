@@ -9,17 +9,12 @@
 | ```
 | kubectl describe node n3
 | ```
-10:08:15 settled
-🟠 kube-proxy in kube-system (prod-eu-1) has only 2 of 3 replicas ready. Cause not found yet: nothing outside it points to one. To see the object's state and events, run kubectl describe daemonset kube-proxy -n kube-system
-🟠 kube-proxy in kube-system (prod-eu-1) has only 2 of 3 replicas ready.
-| 🟠 **kube-proxy** in **kube-system** (**prod-eu-1**) has only 2 of 3 replicas ready.
-| Cause not found yet: nothing outside it points to one.
-| To see the object's state and events, run
-| ```
-| kubectl describe daemonset kube-proxy -n kube-system
-| ```
-10:10:00 material change
-🟠 kube-proxy in kube-system (prod-eu-1) is getting worse: invoices in billing; transcode in media; web in shop now crash-loop. The last run of container app in pod invoices-bcf7f095-c in billing lasted ten seconds; five restarts since the pod was created about one hour ago.
-🟠 kube-proxy in kube-system (prod-eu-1) is getting worse: invoices in billing; transcode in media; web in shop now crash-loop.
-| 🟠 **kube-proxy** in **kube-system** (**prod-eu-1**) is getting worse: **invoices** in **billing**; **transcode** in **media**; **web** in **shop** now crash-loop.
-| The last run of container app in pod **invoices-bcf7f095-c** in **billing** lasted ten seconds; five restarts since the pod was created about one hour ago.
+10:08:30 cause revised
+🟠 Cause changed (earlier: node n3): kube-proxy in kube-system (prod-eu-1) is failing, affecting three workloads. It fails with "dial tcp 10.96.14.7:5432: i/o timeout".
+🟠 Cause changed (earlier: node n3): kube-proxy in kube-system (prod-eu-1) is failing, affecting three workloads.
+| 🟠 Cause changed (earlier: node n3): **kube-proxy** in **kube-system** (**prod-eu-1**) is failing, affecting three workloads.
+| It fails with `dial tcp 10.96.14.7:5432: i/o timeout`.
+10:10:30 material change
+🟠 kube-proxy in kube-system (prod-eu-1) is now also affecting invoices in billing; transcode in media; web in shop: they have not been ready for three minutes.
+🟠 kube-proxy in kube-system (prod-eu-1) is now also affecting invoices in billing; transcode in media; web in shop: they have not been ready for three minutes.
+| 🟠 **kube-proxy** in **kube-system** (**prod-eu-1**) is now also affecting **invoices** in **billing**; **transcode** in **media**; **web** in shop: they have not been ready for three minutes.

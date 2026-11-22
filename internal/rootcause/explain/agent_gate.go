@@ -1,6 +1,8 @@
 package explain
 
 import (
+	"time"
+
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/rootcause"
@@ -139,4 +141,35 @@ func (v *view) mostWorkloadPodsFail(node inventory.EntityID) bool {
 	}
 	failing, total := shareOf(pods, v.unitFailing)
 	return float64(failing)/float64(total) >= SharedFactorMinShare
+}
+
+// AgentUnreadyGrace is how long a node agent's pod must have been not
+// ready before it counts as down without a finding: the pods it serves
+// fail within minutes, before the not-ready finding is raised.
+const AgentUnreadyGrace = time.Minute
+
+// agentDown reports a node agent pod that fails by finding or has been
+// not ready for AgentUnreadyGrace.
+func (v *view) agentDown(pod inventory.EntityID) bool {
+	return v.unitFailing(pod) || v.agentUnready(pod)
+}
+
+// agentUnready reports a running pod that has been not ready for
+// AgentUnreadyGrace while the rest of its DaemonSet is ready: the
+// agent's own fault, not the cluster's.
+func (v *view) agentUnready(pod inventory.EntityID) bool {
+	e, ok := v.s.Model.Entity(pod)
+	if !ok {
+		return false
+	}
+	ready, known := e.Attribute(kube.AttrReady)
+	if up, _ := ready.Value.AsBool(); !known || up {
+		return false
+	}
+	since, ok := e.Attribute(kube.AttrReadySince)
+	if !ok {
+		return false
+	}
+	at := since.Value.AsTime()
+	return !at.IsZero() && v.s.Now.Sub(at) >= AgentUnreadyGrace
 }

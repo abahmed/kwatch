@@ -317,6 +317,9 @@ func (v *view) causeState(
 		return state{id: id}
 	}
 	modes := findingModes(v.s.Findings[id])
+	if link == LinkNodeAgent && len(modes) == 0 && v.agentUnready(id) {
+		modes = pseudoFailing(detection.ModeNotReady)
+	}
 	modes = append(modes, v.changeModes(id, effect, link)...)
 	if link == LinkSelf {
 		// A workload's own faults are read from the failing container.

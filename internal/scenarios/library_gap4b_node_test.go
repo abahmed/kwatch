@@ -269,9 +269,10 @@ func gap4bDataplaneSaturated() scenario {
 				"media/transcode"}, nodes)
 			c.after(5 * time.Minute)
 			lookup := "dial tcp 10.96.14.7:5432: i/o timeout"
+			since := c.now
 			for round := int32(1); round <= 6; round++ {
 				setAgentCounts(ds, 3, 2)
-				pod := agentPod(c, ds, "n2", notReady)
+				pod := agentPod(c, ds, "n2", notReadySince(since))
 				c.update(ds, pod)
 				gapKubelet(c, pod, "Unhealthy", "Liveness probe failed: "+
 					"Get \"http://127.0.0.1:9099/liveness\": context "+
