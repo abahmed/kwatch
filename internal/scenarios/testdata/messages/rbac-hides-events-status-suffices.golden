@@ -1,8 +1,11 @@
-10:06:15 settled
-🟠 api in shop (prod-eu-1) cannot pull its image because registry registry.example.com refuses the image pulls. To see why the container cannot start, run kubectl describe pods api- -n shop
+10:06:45 settled
+🟠 api is failing in shop (prod-eu-1) after the 10:05 UTC release of ghcr.io/acme/api:v9. The previous image was registry.example.com/api:1.0. Its image cannot be pulled. Fix: change the image of container app in deployment/api. To see why the container cannot start, run kubectl describe pods api- -n shop
 Proof: all 3 replicas fail, on 3 nodes.
-🟠 api in shop (prod-eu-1) cannot pull its image because registry registry.example.com refuses the image pulls.
-| 🟠 **api** in **shop** (**prod-eu-1**) cannot pull its image because registry **registry.example.com** refuses the image pulls.
+🟠 api is failing in shop (prod-eu-1) after the 10:05 UTC release of ghcr.io/acme/api:v9.
+| 🟠 **api** is failing in **shop** (**prod-eu-1**) after the 10:05 UTC release of ghcr.io/acme/api:v9.
+| The previous image was registry.example.com/api:1.0.
+| Its image cannot be pulled.
+| Fix: change the image of container app in deployment/api.
 | To see why the container cannot start, run
 | ```
 | kubectl describe pods api- -n shop

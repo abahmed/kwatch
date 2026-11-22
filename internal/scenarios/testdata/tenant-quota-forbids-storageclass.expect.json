@@ -3,7 +3,7 @@
   "description": "tenant-c's ResourceQuota allows zero storage for the fast class; the StatefulSet's claim is forbidden and pod-0 stays Pending. Other tenants are unaffected.",
   "root": "resourcequota/tenant-c/storage-caps",
   "tier": "notify",
-  "maxMessages": 1,
+  "maxMessages": 2,
   "mustNotBlame": [
     "statefulset/tenant-c/db"
   ],

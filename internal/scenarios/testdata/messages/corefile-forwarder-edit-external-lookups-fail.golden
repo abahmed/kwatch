@@ -1,11 +1,11 @@
 10:16:15 settled
-🟠 coredns in kube-system (prod-eu-1) is failing, likely because it is not resolving names. It fails with "lookup api.partner.example: i/o timeout". Both failing apps use it. Service sync in billing; service checkout in shop can't serve traffic. To read the output of the last crash, run kubectl logs deploy/sync -c app -n billing --previous
-🟠 coredns in kube-system (prod-eu-1) is failing, likely because it is not resolving names.
-| 🟠 **coredns** in **kube-system** (**prod-eu-1**) is failing, likely because it is not resolving names.
+🟠 sync is failing in billing (prod-eu-1) after the 10:10 UTC change to config map coredns in kube-system. Key Corefile changed. It fails with "lookup api.partner.example: i/o timeout". Service sync in billing; service checkout in shop can't serve traffic. To check the object the pods depend on, run kubectl get configmap coredns -n kube-system -o yaml
+🟠 sync is failing in billing (prod-eu-1) after the 10:10 UTC change to config map coredns in kube-system.
+| 🟠 **sync** is failing in **billing** (**prod-eu-1**) after the 10:10 UTC change to config map **coredns** in **kube-system**.
+| Key Corefile changed.
 | It fails with `lookup api.partner.example: i/o timeout`.
-| Both failing apps use it.
 | Service **sync** in **billing**; service **checkout** in **shop** can't serve traffic.
-| To read the output of the last crash, run
+| To check the object the pods depend on, run
 | ```
-| kubectl logs deploy/sync -c app -n billing --previous
+| kubectl get configmap coredns -n kube-system -o yaml
 | ```

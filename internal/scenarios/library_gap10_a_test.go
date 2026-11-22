@@ -3,8 +3,10 @@ package scenarios
 import (
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var gap10Nodes = []string{"n1", "n2", "n3"}
@@ -59,14 +61,28 @@ func gap10EventTTL() scenario {
 		build: func(c *cluster) {
 			since := c.now.Add(-75 * time.Minute)
 			c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"))
+			ledger := c.deployment("billing", "ledger",
+				"registry.example/ledger:3.0", 2)
+			c.list(ledger.objects())
+			c.list(ledger.pod(0, "n1"), ledger.pod(1, "n2"))
 			w := c.deployment("billing", "worker",
-				"registry.example/worker:v2.1O", 2)
+				"registry.example/worker:v2.0", 2)
+			image := "registry.example/worker:v2.1O"
+			old := w.replicaSet
+			old.Spec.Replicas, old.Status = new(int32), appsv1.ReplicaSetStatus{}
+			w.rollout(func(spec *corev1.PodSpec) {
+				spec.Containers[0].Image = image
+			})
 			w.setReady(0)
+			w.replicaSet.CreationTimestamp = metav1.NewTime(since)
 			c.list(w.objects())
+			c.list(old)
+			message := "failed to pull and unpack image \"" + image +
+				"\": failed to resolve reference \"" + image +
+				"\": not found"
 			for i := range 2 {
 				c.list(w.pod(i, "n"+itoa(i+1), createdAt(since),
-					waiting("ImagePullBackOff", "Back-off pulling image "+
-						"\"registry.example/worker:v2.1O\""),
+					waiting("ErrImagePull", message),
 					notReadySince(since)))
 			}
 		},
@@ -106,7 +122,7 @@ func gap10RestartMidIncident() scenario {
 			Description: "Revision 8 of a Deployment crash-loops on a " +
 				"missing config key; kwatch restarts nine minutes in and " +
 				"relists everything. One page for the incident.",
-			Root: "deployment/shop/api", Tier: "page", MaxMessages: 1,
+			Root: "deployment/shop/api", Tier: "notify", MaxMessages: 2,
 			SyncAfter: duration(30 * time.Second),
 			Tail:      duration(10 * time.Minute)},
 		build: func(c *cluster) {
@@ -166,7 +182,7 @@ func gap10SkewBehind() scenario {
 			"A ConfigMap edit breaks new pods on a node whose clock is "+
 				"90 seconds behind; their events are stamped before the "+
 				"edit.",
-			"deployment/shop/api", "notify").budget(1).
+			"configmap/shop/api-config", "notify").budget(1).
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			cm := configMap(c, "shop", "api-config",
@@ -205,7 +221,7 @@ func gap10SkewAhead() scenario {
 		expect: g2Exp("clock-skew-future-events-secret-missing",
 			"A pod's FailedMount event is stamped six minutes in the "+
 				"future by a fast node clock; the Secret does not exist.",
-			"statefulset/media/encoder", "notify").budget(1).
+			"secret/media/encoder-creds", "notify").budget(1).
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
@@ -229,7 +245,7 @@ func gap10EventBeforePod() scenario {
 		expect: g2Exp("event-before-pod-object-missing-secret",
 			"A new Deployment's pod fails to mount a missing Secret; its "+
 				"event arrives 400 ms before the Pod and before the "+
-				"ReplicaSet.", "deployment/shop/checkout", "notify").
+				"ReplicaSet.", "secret/shop/checkout-creds", "notify").
 			budget(1).tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
@@ -295,11 +311,17 @@ func gap10RBACNoEvents() scenario {
 		build: func(c *cluster) {
 			w := g10Fleet(c, "shop", "api", 3, gap10Nodes, nil)
 			c.after(5 * time.Minute)
+			rs := w.rollout(func(spec *corev1.PodSpec) {
+				spec.Containers[0].Image = "ghcr.io/acme/api:v9"
+			})
+			w.setReady(0)
+			c.update(w.deployment)
+			c.create(rs)
+			c.after(30 * time.Second)
 			for i, node := range gap10Nodes {
-				c.update(w.pod(i, node, waiting("ImagePullBackOff",
+				c.create(w.pod(i, node, waiting("ImagePullBackOff",
 					"Back-off pulling image \"ghcr.io/acme/api:v9\"")))
 			}
-			g10Settle(c, w, 0)
 		},
 	}
 }

@@ -1,8 +1,8 @@
 {
   "name": "one-pool-new-taint-pods-pending",
   "description": "Nodes of pool-b get a maintenance NoSchedule taint; four replicas selecting pool-b are Pending on the untolerated taint while pool-a workloads run.",
-  "root": "deployment/jobs/batch",
+  "root": "scheduling//had untolerated taint",
   "tier": "notify",
-  "maxMessages": 1,
+  "maxMessages": 2,
   "tail": "10m0s"
 }

@@ -102,7 +102,7 @@ var nodeLocalMarkers = []string{
 	"topology locality", "failed to reserve container name",
 	"invalid cni configuration", "invalid network config",
 	"no networks found in", "cni plugin not initialized",
-	"no runtime for", "runtimehandler",
+	"no runtime for", "runtimehandler", "failed to resolve rootfs",
 }
 
 // nodeLocalErrors reports whether some effect's own error text carries a

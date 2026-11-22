@@ -1,7 +1,7 @@
 {
   "name": "late-unschedulable-event-after-pending-seen",
   "description": "A pod is Pending four minutes on an untolerated taint, visible in its condition; the FailedScheduling event arrives four minutes late.",
-  "root": "deployment/jobs/batch",
+  "root": "scheduling//had untolerated taint",
   "tier": "notify",
   "maxMessages": 1,
   "tail": "10m0s"

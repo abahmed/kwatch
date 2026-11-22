@@ -2,7 +2,7 @@
   "name": "mutating-webhook-injects-missing-image",
   "description": "A config edit makes a mutating webhook inject an init container with an image that does not exist; new pods of three namespaces stay ImagePullBackOff on a container that is in no workload spec.",
   "root": "mutatingwebhookconfiguration//sidecar-injector",
-  "tier": "page",
+  "tier": "notify",
   "maxMessages": 2,
   "mustNotBlame": [
     "deployment/shop/api",

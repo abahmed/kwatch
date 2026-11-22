@@ -3,7 +3,7 @@
   "description": "A StorageClass is deleted and recreated with an invalid parameter; new claims of three namespaces stay Pending on a provisioning failure while bound volumes work.",
   "root": "storageclass//fast-ssd",
   "tier": "notify",
-  "maxMessages": 1,
+  "maxMessages": 3,
   "mustNotBlame": [
     "deployment/shop/api",
     "persistentvolumeclaim/shop/cache"

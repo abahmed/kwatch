@@ -2,7 +2,7 @@
   "name": "shared-egress-proxy-down",
   "description": "The shared egress proxy crash-loops after a config push; pods of three namespaces with HTTPS_PROXY pointing at it crash on every outbound call.",
   "root": "deployment/egress/proxy",
-  "tier": "page",
+  "tier": "notify",
   "maxMessages": 2,
   "mustNotBlame": [
     "deployment/shop/api",

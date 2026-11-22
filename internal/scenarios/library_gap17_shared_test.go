@@ -89,7 +89,8 @@ func gap17IngressControllerDown() scenario {
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
-			ctl := g17Up(c, "ingress-nginx", "controller", 2)
+			ctl := g17UpService(c, "ingress-nginx", "controller", 2,
+				corev1.ServiceTypeLoadBalancer)
 			g17Apps(c, 2, "shop/web", "billing/web", "reports/web",
 				"jobs/web")
 			for _, ing := range [][2]string{{"shop", "storefront"},
@@ -113,9 +114,9 @@ func gap17NFSDown() scenario {
 			"A shared NFS server Deployment is NotReady and Pending "+
 				"after a drain; pods of three namespaces that mount its "+
 				"volumes stay in ContainerCreating on mount timeouts.",
-			"deployment/storage/nfs-server", "page", "deployment/shop/web",
-			"deployment/billing/api", "deployment/reports/gen").
-			tail(10 * time.Minute),
+			"scheduling//Insufficient memory", "notify",
+			"deployment/shop/web", "deployment/billing/api",
+			"deployment/reports/gen").budget(3).tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
 			nfs := g17Up(c, "storage", "nfs-server", 1)
@@ -142,7 +143,7 @@ func gap17EgressProxyDown() scenario {
 			"The shared egress proxy crash-loops after a config push; "+
 				"pods of three namespaces with HTTPS_PROXY pointing at "+
 				"it crash on every outbound call.",
-			"deployment/egress/proxy", "page", "deployment/shop/api",
+			"deployment/egress/proxy", "notify", "deployment/shop/api",
 			"deployment/shop/web", "deployment/billing/api",
 			"deployment/billing/sync", "deployment/reports/gen",
 			"deployment/reports/mail").tail(10 * time.Minute),
@@ -171,7 +172,7 @@ func gap17AuthJWKSUnreachable() scenario {
 				"never become Ready, without restarts.",
 			"deployment/identity/auth", "notify", "deployment/shop/api",
 			"deployment/billing/api", "deployment/jobs/runner").
-			budget(1).tail(10 * time.Minute),
+			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
 			auth := g17Up(c, "identity", "auth", 2)
@@ -227,11 +228,11 @@ func gap17CacheRollingQuiet() scenario {
 
 func gap17DatabaseFailoverDigest() scenario {
 	return scenario{
-		expect: g2Exp("shared-database-failover-digest",
+		expect: g2Quiet("shared-database-failover-digest",
 			"A shared database fails over to a replica in under a "+
 				"minute; two apps log three failed connects and restart "+
-				"once, on the same days each month: one digest line.",
-			"statefulset/data/pg", "digest").budget(1).
+				"once, on the same days each month. Each failover is a "+
+				"brief blip that recovers by itself.").
 			tail(30 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))

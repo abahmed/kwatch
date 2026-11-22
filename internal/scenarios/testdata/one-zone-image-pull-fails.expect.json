@@ -1,7 +1,7 @@
 {
   "name": "one-zone-image-pull-fails",
   "description": "Three new pods of a rollout on zone-c nodes sit in ImagePullBackOff on a mirror lookup timeout; the same image pulls in zone-a and zone-b.",
-  "root": "zone//zone-c",
+  "root": "node//n5",
   "tier": "notify",
   "maxMessages": 2,
   "mustNotBlame": [

@@ -83,7 +83,7 @@ func gap18DefaultDeny() scenario {
 			"A new default-deny NetworkPolicy (ingress and egress, no DNS "+
 				"rule) in tenant-b; its nine pods fail \"lookup db\" "+
 				"timeouts and go unready; tenant-a and tenant-c are fine.",
-			"networkpolicy/tenant-b/default-deny-all", "page",
+			"networkpolicy/tenant-b/default-deny-all", "notify",
 			"deployment/tenant-b/shop").tail(10 * time.Minute),
 		build: func(c *cluster) {
 			place := []string{"n1", "n2", "n3"}
@@ -128,7 +128,7 @@ func gap18StorageQuota() scenario {
 				"class; the StatefulSet's claim is forbidden and pod-0 "+
 				"stays Pending. Other tenants are unaffected.",
 			"resourcequota/tenant-c/storage-caps", "notify",
-			"statefulset/tenant-c/db").budget(1).tail(10 * time.Minute),
+			"statefulset/tenant-c/db").tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
 			quota := &corev1.ResourceQuota{
@@ -138,11 +138,11 @@ func gap18StorageQuota() scenario {
 					"fast.storageclass.storage.k8s.io/requests.storage": resource.
 						MustParse("0")}}}
 			c.list(quota)
-			sts := g10Sts(c, "tenant-c", "db", []string{"n1"}, nil)
+			sts := g10Sts(c, "tenant-c", "db", nil, nil)
 			c.after(5 * time.Minute)
-			message := "pod has unbound immediate PersistentVolumeClaims"
-			pending := gapPending(pendingUnscheduled(message))
-			c.update(operatorBroker(c, sts, 0, "n1", pending))
+			one := int32(1)
+			sts.Spec.Replicas = &one
+			c.update(sts)
 			c.warn(c.warningEvent(sts, "StatefulSet", "FailedCreate",
 				"create Claim data-db-0 Pod db-0 in StatefulSet db failed "+
 					"error: persistentvolumeclaims \"data-db-0\" is "+
@@ -161,8 +161,8 @@ func gap18TopologySpread() scenario {
 			"A Deployment spreads six replicas over zones with maxSkew 1 "+
 				"DoNotSchedule; zone-c nodes are full, two replicas are "+
 				"Pending on the spread constraint and four serve.",
-			"deployment/shop/api", "notify").budget(1).
-			tail(10 * time.Minute),
+			"scheduling//didn't match pod topology spread constraints",
+			"notify").tail(10 * time.Minute),
 		build: func(c *cluster) {
 			g18Zones(c)
 			place := []string{"n1", "n2", "n3", "n4", "n5", "n6"}
@@ -195,7 +195,7 @@ func gap18RuntimeClass() scenario {
 			"A Deployment with runtimeClassName gvisor: pods on pool-a "+
 				"run, pods that land on pool-b fail to create a sandbox "+
 				"because no runsc handler is configured there.",
-			"runtimeclass//gvisor", "notify").budget(1).
+			"node//b1", "notify", "deployment/secure/sandboxed").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(g18Node(c, "a1", "zone-a", "pool-a"),

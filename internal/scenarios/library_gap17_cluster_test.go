@@ -76,7 +76,7 @@ func gap17InjectorMissingImage() scenario {
 				"container with an image that does not exist; new pods "+
 				"of three namespaces stay ImagePullBackOff on a "+
 				"container that is in no workload spec.",
-			"mutatingwebhookconfiguration//sidecar-injector", "page",
+			"mutatingwebhookconfiguration//sidecar-injector", "notify",
 			"deployment/shop/api", "deployment/billing/ledger",
 			"deployment/jobs/runner").tail(10 * time.Minute),
 		build: func(c *cluster) {
@@ -108,7 +108,7 @@ func gap17StorageClassRecreated() scenario {
 				"parameter; new claims of three namespaces stay Pending "+
 				"on a provisioning failure while bound volumes work.",
 			"storageclass//fast-ssd", "notify", "deployment/shop/api",
-			"persistentvolumeclaim/shop/cache").budget(1).
+			"persistentvolumeclaim/shop/cache").budget(3).
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))

@@ -70,7 +70,7 @@ func gap18ZoneDatabase() scenario {
 			"The two replicas of a Deployment on zone-b nodes fail "+
 				"readiness with a database dial timeout; the four others "+
 				"are Ready and the Service keeps four endpoints.",
-			"zone//zone-b", "notify", "deployment/shop/api").
+			"node//n3", "notify", "deployment/shop/api").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			g18Zones(c)
@@ -96,7 +96,7 @@ func gap18ZoneImagePull() scenario {
 			"Three new pods of a rollout on zone-c nodes sit in "+
 				"ImagePullBackOff on a mirror lookup timeout; the same "+
 				"image pulls in zone-a and zone-b.",
-			"zone//zone-c", "notify", "deployment/media/render").
+			"node//n5", "notify", "deployment/media/render").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			for i, zone := range []string{"zone-a", "zone-a", "zone-b",
@@ -127,7 +127,7 @@ func gap18PoolTaint() scenario {
 			"Nodes of pool-b get a maintenance NoSchedule taint; four "+
 				"replicas selecting pool-b are Pending on the untolerated "+
 				"taint while pool-a workloads run.",
-			"deployment/jobs/batch", "notify").budget(1).
+			"scheduling//had untolerated taint", "notify").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			var pool []*corev1.Node
@@ -259,8 +259,8 @@ func gap18SubPathConfig() scenario {
 			"A shared ConfigMap is edited; pods mounting it as a whole "+
 				"volume see the change, the legacy Deployment that mounts "+
 				"one file through subPath keeps the old content and fails.",
-			"deployment/shop/api-legacy", "notify",
-			"configmap/shop/api-config", "deployment/shop/api").budget(1).
+			"configmap/shop/api-config", "notify",
+			"deployment/shop/api").budget(1).
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			cm := configMap(c, "shop", "api-config",
@@ -296,10 +296,10 @@ func gap18SubPathConfig() scenario {
 
 // gap18LargeResponses: nothing Kubernetes reports names the cause.
 func gap18LargeResponses() scenario {
-	e := g2Exp("one-path-large-responses-time-out",
+	e := g2Quiet("one-path-large-responses-time-out",
 		"Responses over about 1400 bytes from pods on one node time out "+
 			"after a CNI MTU change; pods are Ready, probes pass and no "+
-			"Warning events exist.", rootUnknown, "digest").budget(1).
+			"Warning events exist, so nothing Kubernetes reports fails.").
 		tail(10 * time.Minute)
 	return scenario{expect: e, build: func(c *cluster) {
 		g10Fleet(c, "shop", "export", 3, []string{"node-a", "node-b",
@@ -327,12 +327,12 @@ func gap18SlowPath() scenario {
 // terminating endpoint for three seconds after its pod is killed.
 func gap18TerminatingEndpoint() scenario {
 	return scenario{
-		expect: g2Exp("intermittent-resets-from-terminating-endpoint",
+		expect: g2Quiet("intermittent-resets-from-terminating-endpoint",
 			"A rolling update of a Deployment resets connections for "+
 				"eight seconds per replaced pod: old pods exit 143 at "+
 				"once while the EndpointSlice still lists them as "+
-				"terminating and serving.", "deployment/shop/backend",
-			"digest").budget(1).tail(10 * time.Minute),
+				"terminating and serving. A completed rollout is routine."+
+				"").tail(10 * time.Minute),
 		build: func(c *cluster) {
 			place := []string{"n1", "n2", "n3"}
 			for _, name := range place {

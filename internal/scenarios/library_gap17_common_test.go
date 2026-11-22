@@ -38,6 +38,13 @@ func g17FQDN(c *cluster, service, namespace string) string {
 
 // g17Up lists a healthy Deployment of n pods on n1 and its Service.
 func g17Up(c *cluster, namespace, name string, n int) *workload {
+	return g17UpService(c, namespace, name, n, corev1.ServiceTypeClusterIP)
+}
+
+// g17UpService is g17Up whose Service has the given type.
+func g17UpService(
+	c *cluster, namespace, name string, n int, kind corev1.ServiceType,
+) *workload {
 	w := c.deployment(namespace, name,
 		"registry.example.com/"+name+":1", int32(n))
 	c.list(w.objects())
@@ -46,8 +53,11 @@ func g17Up(c *cluster, namespace, name string, n int) *workload {
 		pods[i] = w.pod(i, "n1")
 		c.list(pods[i])
 	}
-	c.list(clusterService(c, namespace, name, 8080),
-		clusterSlice(c, namespace, name, pods...))
+	svc := clusterService(c, namespace, name, 8080)
+	if kind != corev1.ServiceTypeClusterIP {
+		svc.Spec.Type = kind
+	}
+	c.list(svc, clusterSlice(c, namespace, name, pods...))
 	return w
 }
 

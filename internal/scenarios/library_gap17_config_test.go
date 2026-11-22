@@ -85,8 +85,8 @@ func gap17IssuerSecretDeleted() scenario {
 			"clusterissuer.certs.example.com//internal-ca", "notify",
 			"certificate.certs.example.com/shop/web-tls",
 			"certificate.certs.example.com/billing/web-tls",
-			"certificate.certs.example.com/reports/web-tls").
-			budget(1).tail(10 * time.Minute),
+			"certificate.certs.example.com/reports/web-tls").budget(3).
+			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			g17CAStory(c, []string{"shop", "billing", "reports"},
 				func(*corev1.Secret) (string, string, bool) {
@@ -100,20 +100,19 @@ func gap17IssuerSecretDeleted() scenario {
 func gap17IssuerSecretExpired() scenario {
 	return scenario{
 		expect: g2Exp("clusterissuer-ca-secret-annotation-expired",
-			"The CA key pair Secret of an issuer carries an expiry "+
-				"annotation that has passed and the issuer reports an "+
-				"expired certificate; Certificates of four namespaces "+
-				"are not Ready. Read from metadata only.",
-			"secret/cert-system/internal-ca-keypair", "notify",
-			"clusterissuer.certs.example.com//internal-ca",
+			"The certificate in the CA key pair Secret of an issuer "+
+				"expired a day ago and the issuer reports an expired "+
+				"certificate; Certificates of four namespaces are not "+
+				"Ready. Read from the public certificate only.",
+			"clusterissuer.certs.example.com//internal-ca", "notify",
 			"certificate.certs.example.com/shop/web-tls",
-			"certificate.certs.example.com/billing/web-tls").
-			budget(1).tail(10 * time.Minute),
+			"certificate.certs.example.com/billing/web-tls").budget(3).
+			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			g17CAStory(c, []string{"shop", "billing", "reports", "jobs"},
 				func(secret *corev1.Secret) (string, string, bool) {
 					secret.Annotations = map[string]string{
-						"certs.example.com/not-after": c.now.Add(
+						"kwatch.dev/tls-not-after": c.now.Add(
 							-24 * time.Hour).UTC().Format(time.RFC3339)}
 					return "ErrInvalidKeyPair", "x509: certificate has " +
 						"expired", true
@@ -173,7 +172,13 @@ func gap17CorefileForwarder() scenario {
 				Data: map[string]string{
 					"Corefile": ".:53 {\n  forward . /etc/resolv.conf\n}"}}
 			c.list(corefile)
-			g17Up(c, "kube-system", "coredns", 2)
+			g17UpSpec(c, "kube-system", "coredns", 2,
+				func(spec *corev1.PodSpec) {
+					spec.Volumes = []corev1.Volume{{Name: "config",
+						VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.
+							ConfigMapVolumeSource{LocalObjectReference: corev1.
+							LocalObjectReference{Name: corefile.Name}}}}}
+				})
 			apps := g17Apps(c, 2, "shop/checkout", "billing/sync")
 			c.after(10 * time.Minute)
 			corefile = last(c, corefile)
@@ -233,10 +238,10 @@ func gap17SecretStoreCredential() scenario {
 				"Secret that was deleted; ExternalSecrets of three "+
 				"namespaces fail to sync and their pods wait on an app "+
 				"Secret two hops downstream.",
-			"secretstore.secrets.example.com//platform-store", "notify",
+			"secret/platform/store-token", "notify",
 			"externalsecret.secrets.example.com/shop/db-creds",
 			"externalsecret.secrets.example.com/billing/db-creds",
-			"deployment/shop/api").budget(1).tail(10 * time.Minute),
+			"deployment/shop/api").tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
 			token := configSecret(c, "platform", "store-token")

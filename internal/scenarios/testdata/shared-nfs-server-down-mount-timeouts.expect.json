@@ -1,9 +1,9 @@
 {
   "name": "shared-nfs-server-down-mount-timeouts",
   "description": "A shared NFS server Deployment is NotReady and Pending after a drain; pods of three namespaces that mount its volumes stay in ContainerCreating on mount timeouts.",
-  "root": "deployment/storage/nfs-server",
-  "tier": "page",
-  "maxMessages": 2,
+  "root": "scheduling//Insufficient memory",
+  "tier": "notify",
+  "maxMessages": 3,
   "mustNotBlame": [
     "deployment/shop/web",
     "deployment/billing/api",

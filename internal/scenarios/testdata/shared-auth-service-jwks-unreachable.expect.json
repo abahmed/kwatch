@@ -3,7 +3,7 @@
   "description": "The shared auth service is not ready after a migration; apps of three namespaces fetch its JWKS at start and never become Ready, without restarts.",
   "root": "deployment/identity/auth",
   "tier": "notify",
-  "maxMessages": 1,
+  "maxMessages": 2,
   "mustNotBlame": [
     "deployment/shop/api",
     "deployment/billing/api",

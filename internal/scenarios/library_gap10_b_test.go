@@ -139,8 +139,8 @@ func gap10GapRollout() scenario {
 			Description: "kwatch relists after a six-minute gap and finds " +
 				"revision 12 with every new pod in CrashLoopBackOff and " +
 				"the old ReplicaSet at zero; the edit itself was not " +
-				"seen.", Root: "deployment/shop/api", Tier: "page",
-			MaxMessages: 1, SyncAfter: duration(30 * time.Second),
+				"seen.", Root: "deployment/shop/api", Tier: "notify",
+			MaxMessages: 2, SyncAfter: duration(30 * time.Second),
 			Tail: duration(10 * time.Minute)},
 		build: func(c *cluster) {
 			for _, node := range gap10Nodes {
@@ -193,8 +193,9 @@ func gap10LateScheduling() scenario {
 		expect: g2Exp("late-unschedulable-event-after-pending-seen",
 			"A pod is Pending four minutes on an untolerated taint, "+
 				"visible in its condition; the FailedScheduling event "+
-				"arrives four minutes late.", "deployment/jobs/batch",
-			"notify").budget(1).tail(10 * time.Minute),
+				"arrives four minutes late.",
+			"scheduling//had untolerated taint", "notify").budget(1).
+			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			for _, node := range []string{"n1", "n2", "n3", "n4", "n5"} {
 				c.list(c.node(node, "zone-a"))

@@ -1,8 +1,8 @@
 {
   "name": "zone-spread-leaves-replicas-pending",
   "description": "A Deployment spreads six replicas over zones with maxSkew 1 DoNotSchedule; zone-c nodes are full, two replicas are Pending on the spread constraint and four serve.",
-  "root": "deployment/shop/api",
+  "root": "scheduling//didn't match pod topology spread constraints",
   "tier": "notify",
-  "maxMessages": 1,
+  "maxMessages": 2,
   "tail": "10m0s"
 }

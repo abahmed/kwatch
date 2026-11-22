@@ -13,11 +13,12 @@ func TestParseSchedulerMessageIgnoresPreemptionVerdict(t *testing.T) {
 	if total != 5 || len(blockers) != 2 {
 		t.Fatalf("total=%d blockers=%+v", total, blockers)
 	}
-	if blockers[0].Reason != "didn't match Pod's node affinity/selector" ||
-		blockers[0].Nodes != 3 {
+	// Nodes the pod's own selector excludes rank last, however many.
+	if blockers[0].Reason != "Insufficient cpu" || blockers[0].Nodes != 2 {
 		t.Errorf("top = %+v", blockers[0])
 	}
-	if blockers[1].Reason != "Insufficient cpu" || blockers[1].Nodes != 2 {
+	if blockers[1].Reason != "didn't match Pod's node affinity/selector" ||
+		blockers[1].Nodes != 3 {
 		t.Errorf("second = %+v", blockers[1])
 	}
 }
