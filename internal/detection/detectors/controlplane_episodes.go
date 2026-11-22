@@ -75,7 +75,7 @@ func recurringOutage(
 		Summary: what + " has been down " + strconv.Itoa(outageEpisodes) +
 			" times in the last " +
 			strconv.Itoa(int(outageWindow.Minutes())) +
-			" minutes",
+			" min",
 		Evidence: errorEvidence(e),
 	}}
 }

@@ -10,9 +10,9 @@ func init() {
 			words: "is an external name set to an IP address, which does " +
 				"not resolve"},
 		"service-family-mismatch": {
-			words: "has an IP family its pods have no address of"},
+			words: "uses an IP family its pods have no address in"},
 		"finalizer-holds-addresses": {
-			words: "holds pods Terminating that keep the node's addresses"},
+			words: "holds Terminating pods that keep their addresses in use"},
 		"policy-isolates-backend": {
 			words: "cuts off every pod of the service the API server calls"},
 	} {

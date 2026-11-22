@@ -113,7 +113,7 @@ var levelTexts = map[string]string{
 	levelAdvisory: "No alert: throttling or a full quota that has " +
 		"not broken anything yet.",
 	levelUnaffected: "Low: kwatch lists it in the daily summary and " +
-		"sends no alert. Nothing that runs there is failing.",
+		"sends no alert. No workload is affected.",
 	levelDrain: "Planned maintenance: a node is being drained on " +
 		"purpose, so its pods are expected to move.",
 	levelIdle: "Low: kwatch lists it in the daily summary and sends " +

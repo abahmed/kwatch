@@ -13,6 +13,7 @@ var modalRows = map[string]bool{
 	explain.RuleConfigMapMissingOrChanged:    true,
 	explain.RuleRunConfigMapMissingOrChanged: true,
 	explain.RuleRunSecretMissingOrChanged:    true,
+	"registry-refuses":                       true,
 }
 
 // modalWords say what is wrong with the object a modal row blames. A
@@ -25,6 +26,11 @@ func modalWords(cause *rootcause.CauseRecord) (string, bool) {
 		return "", false
 	}
 	switch {
+	case cause.Rule == "registry-refuses" &&
+		cause.Mode.Within(explain.ModeImageRemoved):
+		return "no longer serves the image these pods pull", true
+	case cause.Rule == "registry-refuses":
+		return "", false
 	case cause.Mode.Within(explain.ModeMissing),
 		cause.Mode.Within(explain.ModeDeleted):
 		return "does not exist", true

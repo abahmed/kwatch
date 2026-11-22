@@ -1,9 +1,9 @@
 10:11:00 material change
-🟠 web in shop (prod-eu-1) is failing because finalizer jobs.example.com/cleanup in jobs holds pods Terminating that keep the node's addresses. Both failing apps use it. Affected: runner in jobs.
+🟠 web in shop (prod-eu-1) is failing because finalizer jobs.example.com/cleanup in jobs holds Terminating pods that keep their addresses in use. Both failing apps use it. Affected: runner in jobs.
 Related alerts: 8 stuck deleting alerts
 To see the pods' state and events, run kubectl describe pods web- -n shop
-🟠 web in shop (prod-eu-1) is failing because finalizer jobs.example.com/cleanup in jobs holds pods Terminating that keep the node's addresses.
-| 🟠 **web** in **shop** (**prod-eu-1**) is failing because finalizer **jobs.example.com/cleanup** in **jobs** holds pods Terminating that keep the node's addresses.
+🟠 web in shop (prod-eu-1) is failing because finalizer jobs.example.com/cleanup in jobs holds Terminating pods that keep their addresses in use.
+| 🟠 **web** in **shop** (**prod-eu-1**) is failing because finalizer **jobs.example.com/cleanup** in **jobs** holds Terminating pods that keep their addresses in use.
 | Both failing apps use it.
 | Affected: **runner** in **jobs**.
 | Related alerts: 8 stuck deleting alerts

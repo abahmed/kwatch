@@ -42,7 +42,7 @@ var causeWords = map[string]causeWording{
 	"autoscaler-flaps-replicas": {
 		words: "keeps changing the replica count"},
 	"scheduler-names-priority-class": {
-		words: "never preempts, so its pods wait for room"},
+		words: "never preempts, which leaves its pods waiting for room"},
 	"scheduler-names-owner": {
 		words: "has an old pod that still holds its single-pod volume claim"},
 	"scheduler-names-claim": {
@@ -59,7 +59,7 @@ var causeWords = map[string]causeWording{
 	"certificate-expired": {words: "holds an expired certificate"},
 	"claim-not-usable":    {words: "cannot be used"},
 	"conversion-webhook-down": {
-		words: "cannot convert its resources: its webhook backend is gone"},
+		words: "cannot convert its resources: its webhook backend does not exist"},
 	"volume-bound-elsewhere": {
 		words: "is already bound to a different claim"},
 	"claim-pins-pod": {
@@ -125,7 +125,7 @@ var causeWords = map[string]causeWording{
 		words: "serves every pod on that node and is failing"},
 	"node-agent-named-by-error": {
 		words: "serves every pod on that node and is failing"},
-	"node-agent-absent":  {words: "has no pod on that node"},
+	"node-agent-absent":  {words: "has no pod on the node the failing pods run on"},
 	"node-not-ready":     {words: "is not ready"},
 	"node-overcommitted": {words: "is overcommitted on memory"},
 	"node-pid-pressure":  {words: "is short of process IDs"},
@@ -150,17 +150,17 @@ var causeWords = map[string]causeWording{
 		words: "fills the disks of the nodes it runs on, so pods on " +
 			"those nodes are evicted"},
 	"resolver-workload-failing": {
-		words: "holds the resolver address their lookups time out on"},
+		words: "holds the resolver address that lookups time out on"},
 	"workload-exhausts-memory": {
-		words: "runs the nodes it is placed on out of memory, so " +
-			"they stop reporting"},
+		words: "exhausts the memory of the nodes it runs on, which stop " +
+			"reporting"},
 	"account-has-no-grant": {
 		words: "is named by no role binding, so nothing is granted to it"},
 	"role-lacks-grant": {
 		words: "does not grant the access its account is refused"},
 	"account-replaced": {
-		words: "was deleted and created again, so the tokens of " +
-			"running pods are no longer accepted"},
+		words: "was deleted and created again, which invalidates the " +
+			"tokens of running pods"},
 	"quota-exhausted": {words: "is used up"},
 	"resource-claim-unallocated": {
 		words: "has no device allocated, so its pod cannot start"},

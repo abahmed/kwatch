@@ -14,6 +14,9 @@ import (
 // of its own; several is the registry having dropped it.
 const pullRemoved detection.Mode = "Removed"
 
+// ModeImageRemoved is pullRemoved, for words that follow the mode.
+const ModeImageRemoved = pullRemoved
+
 // RemovedImageWorkloads is how many workloads must fail to pull the
 // same image for the registry to be blamed for dropping it.
 const RemovedImageWorkloads = 3

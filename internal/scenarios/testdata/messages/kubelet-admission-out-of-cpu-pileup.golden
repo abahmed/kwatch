@@ -1,8 +1,8 @@
 10:03:15 settled
-🟠 render in batch (prod-eu-1) is failing because node n2 has no room for the pod by its own kubelet's count. It fails with "Pod was rejected: Node didn't have enough resource: cpu, requested: 2000, used: 3100, capacity: 4000". Every app that uses it is failing. To check the node's conditions and recent events, run kubectl describe node n2
+🟠 render in batch (prod-eu-1) is failing because node n2 has no room for the pod, by its kubelet's count. It fails with "Pod was rejected: Node didn't have enough resource: cpu, requested: 2000, used: 3100, capacity: 4000". Every app that uses it is failing. To check the node's conditions and recent events, run kubectl describe node n2
 Proof: 2 failing replicas share node n2 while 3 run healthy on other nodes.
-🟠 render in batch (prod-eu-1) is failing because node n2 has no room for the pod by its own kubelet's count.
-| 🟠 **render** in **batch** (**prod-eu-1**) is failing because node n2 has no room for the pod by its own kubelet's count.
+🟠 render in batch (prod-eu-1) is failing because node n2 has no room for the pod, by its kubelet's count.
+| 🟠 **render** in **batch** (**prod-eu-1**) is failing because node n2 has no room for the pod, by its kubelet's count.
 | It fails with
 | ```
 | Pod was rejected: Node didn't have enough resource: cpu, requested: 2000, used: 3100, capacity: 4000

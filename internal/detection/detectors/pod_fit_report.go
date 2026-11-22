@@ -242,7 +242,13 @@ func groupText(g groupBest) string {
 	for _, b := range g.blocked {
 		texts = append(texts, b.text)
 	}
-	return label + ": the closest node, " + node + ", " +
+	if g.group == "" {
+		// "No node fits: the closest node, n1, ..." names no pool.
+		label = ""
+	} else {
+		label += ": "
+	}
+	return label + "the closest node, " + node + ", " +
 		strings.Join(texts, " and ")
 }
 

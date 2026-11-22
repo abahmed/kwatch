@@ -14,7 +14,7 @@ To check the node's conditions and recent events, run kubectl describe node n1
 🔴 Node n1 (prod-eu-1) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
 | 🔴 Node n1 (**prod-eu-1**) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
 10:08:00 cause revised
-🔴 Cause changed (earlier: node n1): ingest in batch (prod-eu-1) is down because it runs the nodes it is placed on out of memory, so they stop reporting. Replicas that do not depend on it are healthy.
-🔴 Cause changed (earlier: node n1): ingest in batch (prod-eu-1) is down because it runs the nodes it is placed on out of memory, so they stop reporting.
-| 🔴 Cause changed (earlier: node n1): **ingest** in **batch** (**prod-eu-1**) is down because it runs the nodes it is placed on out of memory, so they stop reporting.
+🔴 Cause changed (earlier: node n1): ingest in batch (prod-eu-1) is down because it exhausts the memory of the nodes it runs on, which stop reporting. Replicas that do not depend on it are healthy.
+🔴 Cause changed (earlier: node n1): ingest in batch (prod-eu-1) is down because it exhausts the memory of the nodes it runs on, which stop reporting.
+| 🔴 Cause changed (earlier: node n1): **ingest** in **batch** (**prod-eu-1**) is down because it exhausts the memory of the nodes it runs on, which stop reporting.
 | Replicas that do not depend on it are healthy.
