@@ -1,17 +1,33 @@
 10:11:10 settled
-🟠 postgres in shop (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use. It was killed within 10 seconds of starting. Services api, gateway and postgres can't serve traffic. Its containers have no memory limit, so nothing caps their memory use. It runs a single replica.
-Related alerts: 3 services without endpoints
-To read the output of the last crash, run kubectl logs deploy/postgres -c app -n shop --previous
-🟠 postgres in shop (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use.
-| 🟠 **postgres** in **shop** (**prod-eu-1**) keeps running out of memory because its memory limit is too low for normal use.
+🟠 postgres in shop (prod-eu-1) keeps running out of memory. It was killed within 10 seconds of starting. Nothing it depends on is failing. Service postgres can't serve traffic. Its containers have no memory limit, so nothing caps their memory use. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/postgres -c app -n shop --previous
+🟠 postgres in shop (prod-eu-1) keeps running out of memory.
+| 🟠 **postgres** in **shop** (**prod-eu-1**) keeps running out of memory.
 | It was killed within 10 seconds of starting.
-| Services **api**, **gateway** and **postgres** can't serve traffic.
+| Nothing it depends on is failing.
+| Service **postgres** can't serve traffic.
 | Its containers have no memory limit, so nothing caps their memory use.
 | It runs a single replica.
-| Related alerts: 3 services without endpoints
 | To read the output of the last crash, run
 | ```
 | kubectl logs deploy/postgres -c app -n shop --previous
+| ```
+10:12:15 settled
+🟠 Service api in shop (prod-eu-1) has no ready backends. Cause not found yet: its node and registry are healthy and unchanged. To see the object's state and events, run kubectl describe service api -n shop
+🟠 Service api in shop (prod-eu-1) has no ready backends.
+| 🟠 Service **api** in **shop** (**prod-eu-1**) has no ready backends.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| To see the object's state and events, run
+| ```
+| kubectl describe service api -n shop
+| ```
+10:12:20 settled
+🟠 Service gateway in shop (prod-eu-1) has no ready backends. Cause not found yet: its node and registry are healthy and unchanged. To see the object's state and events, run kubectl describe service gateway -n shop
+🟠 Service gateway in shop (prod-eu-1) has no ready backends.
+| 🟠 Service **gateway** in **shop** (**prod-eu-1**) has no ready backends.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| To see the object's state and events, run
+| ```
+| kubectl describe service gateway -n shop
 | ```
 10:12:25 settled
 🟠 Service web in shop (prod-eu-1) has no ready backends. Cause not found yet: its node and registry are healthy and unchanged. To see the object's state and events, run kubectl describe service web -n shop
@@ -31,11 +47,24 @@ To read the output of the last crash, run kubectl logs deploy/postgres -c app -n
 | ```
 | kubectl describe service edge -n shop
 | ```
-10:13:00 material change
-🟠 postgres in shop (prod-eu-1) is now also affecting api: it has not been ready for three minutes.
-🟠 postgres in shop (prod-eu-1) is now also affecting api: it has not been ready for three minutes.
-| 🟠 **postgres** in **shop** (**prod-eu-1**) is now also affecting api: it has not been ready for three minutes.
+10:12:55 material change
+🟠 postgres in shop (prod-eu-1) is now also affecting services api and gateway: they have no ready backends.
+🟠 postgres in shop (prod-eu-1) is now also affecting services api and gateway: they have no ready backends.
+| 🟠 **postgres** in **shop** (**prod-eu-1**) is now also affecting services **api** and gateway: they have no ready backends.
+10:12:55 superseded by revised cause
+🟠 Moved: this is now part of the postgres failure in shop (prod-eu-1).
+🟠 Moved: this is now part of the postgres failure in shop (prod-eu-1).
+| 🟠 Moved: this is now part of the postgres failure in **shop** (**prod-eu-1**).
+10:12:55 superseded by revised cause
+🟠 Moved: this is now part of the postgres failure in shop (prod-eu-1).
+🟠 Moved: this is now part of the postgres failure in shop (prod-eu-1).
+| 🟠 Moved: this is now part of the postgres failure in **shop** (**prod-eu-1**).
 10:13:15 material change
 🟠 Service web in shop (prod-eu-1) is now also affecting edge: it has not been ready for three minutes.
 🟠 Service web in shop (prod-eu-1) is now also affecting edge: it has not been ready for three minutes.
 | 🟠 Service **web** in **shop** (**prod-eu-1**) is now also affecting edge: it has not been ready for three minutes.
+10:22:55 material change
+🟠 postgres in shop (prod-eu-1) now has no ready replicas (0 of 1). It is now also affecting api, gateway and web: they have not been ready for three minutes and have pods that run without restarting but are not ready.
+🟠 postgres in shop (prod-eu-1) now has no ready replicas (0 of 1).
+| 🟠 **postgres** in **shop** (**prod-eu-1**) now has no ready replicas (0 of 1).
+| It is now also affecting **api**, **gateway** and web: they have not been ready for three minutes and have pods that run without restarting but are not ready.

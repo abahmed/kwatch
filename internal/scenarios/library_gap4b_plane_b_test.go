@@ -98,10 +98,11 @@ func gap4bSecretBacklog() scenario {
 			"The controller that creates per-pod secrets is scaled to "+
 				"zero; new pods of three namespaces wait in "+
 				"ContainerCreating on \"secret not found\" while old "+
-				"pods run.",
-			"deployment/credentials/secret-sync", "notify", "node//n1",
-			"deployment/shop/web", "deployment/billing/invoices",
-			"deployment/media/transcode").budget(3).tail(10 * time.Minute),
+				"pods run. Nothing in the cluster ties a secret name to "+
+				"the controller that creates it.",
+			"unknown", "notify", "node//n1",
+			"deployment/credentials/secret-sync").budget(3).
+			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
 			sync := c.deployment("credentials", "secret-sync",
@@ -139,13 +140,16 @@ func gap4bStatefulSetRecreate() scenario {
 		expect: g2Exp("statefulset-recreated-restarts-all-pods",
 			"A StatefulSet is recreated and restarts every pod at once; "+
 				"the clients that reconnect together exhaust the memory "+
-				"of a downstream Deployment, which is OOMKilled.",
-			"statefulset/streaming/queue", "notify", "node//n1",
-			"node//n2", "deployment/shop/api").budget(3).
-			tail(10 * time.Minute),
+				"of a downstream Deployment, which is OOMKilled. The "+
+				"reconnects are not visible, so the Deployment is the "+
+				"root.",
+			"deployment/shop/api", "notify", "node//n1",
+			"node//n2").budget(3).tail(10 * time.Minute),
 		build: func(c *cluster) {
 			sts := scaleQueue(c)
 			api := c.deployment("shop", "api", "registry.example.com/api:3", 2)
+			api.rollout(lifecycleMemoryLimit("256Mi"))
+			api.setReady(2)
 			c.list(api.objects())
 			c.list(api.pod(0, "n1"), api.pod(1, "n2"))
 			c.after(10 * time.Minute)

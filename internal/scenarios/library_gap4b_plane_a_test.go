@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
+	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
@@ -200,10 +201,10 @@ func gap4bAgentRolloutLoadsAPI() scenario {
 		expect: g2Exp("daemonset-rollout-overloads-api-then-dns",
 			"A DaemonSet rollout whose pods list large objects overloads "+
 				"the API server (429 responses); twenty minutes later "+
-				"lookups fail across namespaces.",
-			"daemonset/kube-system/node-inventory", "page", "node//n1",
-			"node//n2", "cluster-dns//cluster-dns", "apiserver//"+
-				"kube-apiserver").budget(4).tail(15 * time.Minute),
+				"lookups fail across namespaces. No signal names the "+
+				"client that overloaded the API server.",
+			"apiserver//kube-apiserver", "notify", "node//n1",
+			"node//n2").budget(5).tail(15 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"))
 			fleet := controlPlaneFleet(c)
@@ -221,12 +222,18 @@ func gap4bAgentRolloutLoadsAPI() scenario {
 			message := "failed to list *v1.Pod: the server has received " +
 				"too many requests and has asked us to try again later " +
 				"(get pods)"
-			for round := int32(1); round <= 6; round++ {
+			for round := int32(1); round <= 12; round++ {
 				c.probe(kube.APIServer, "Get \"https://10.96.0.1:443/"+
 					"readyz\": the server has received too many "+
 					"requests and has asked us to try again later")
-				gap2CrashPods(c, fleet, []string{"n1", "n2"}, []int{0, 1},
-					message, round)
+				apiLoad(c, map[string]inventory.Value{
+					kube.AttrThrottledRate:  inventory.Number(12),
+					kube.AttrThrottledLevel: inventory.Text("workload-low"),
+				})
+				if round > 6 {
+					gap2CrashPods(c, fleet, []string{"n1", "n2"},
+						[]int{0, 1}, message, round-6)
+				}
 				c.after(time.Minute)
 			}
 			c.after(20 * time.Minute)

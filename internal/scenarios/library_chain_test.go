@@ -40,6 +40,7 @@ func chainTierOf(c *cluster, name string, replicas int32, callee string,
 			}}
 		})
 	}
+	configTemplate(w, lifecycleMemoryLimit("512Mi"))
 	c.list(w.objects())
 	tier := &chainTier{w: w}
 	for i := range int(replicas) {

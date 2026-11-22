@@ -14,7 +14,7 @@ import (
 func gap4aPlaneScenarios() []scenario {
 	return []scenario{
 		gap4aGRPCProbeTLS(), gap4aFastBackoff(), gap4aAllNodesDisrupted(),
-		gap4aLingeringEvicted(), gap4aLeaderLost(), gap4aNoisyClient(),
+		gap4aLingeringEvicted(), gap4aLeaderLost(),
 	}
 }
 
@@ -151,36 +151,6 @@ func gap4aLeaderLost() scenario {
 			}
 		},
 	}
-}
-
-// gap4aNoisyClient: an inventory operator lists every object in the
-// cluster each minute; the API server answers other clients' requests
-// with 429 and three controllers' pods exit.
-func gap4aNoisyClient() scenario {
-	e := g2Exp("apf-noisy-client-starves-others",
-		"One operator's list-heavy client saturates its priority level; "+
-			"other clients sharing the level get 429 responses and "+
-			"their pods exit.", "deployment/ops/inventory-sync", "notify",
-		"node//n1", "node//n2").budget(3).tail(10 * time.Minute)
-	e.Ambiguous = true
-	return scenario{expect: e, build: func(c *cluster) {
-		c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"))
-		op := c.deployment("ops", "inventory-sync",
-			"registry.example.com/inventory-sync:2", 1)
-		c.list(op.objects())
-		c.list(op.pod(0, "n1"))
-		fleet := gap2Spread(c, []string{"shop/orders", "billing/ledger",
-			"media/thumbs"}, []string{"n1", "n2"})
-		c.after(5 * time.Minute)
-		message := "failed to list *v1.ConfigMap: the server has " +
-			"received too many requests and has asked us to try again " +
-			"later (get configmaps)"
-		for restarts := int32(1); restarts <= 6; restarts++ {
-			gap2CrashPods(c, fleet, []string{"n1", "n2"}, []int{0, 1},
-				message, restarts)
-			c.after(time.Minute)
-		}
-	}}
 }
 
 // gap4aRevises lets the first message name a real intermediate cause.

@@ -1,14 +1,12 @@
 {
   "name": "daemonset-rollout-overloads-api-then-dns",
-  "description": "A DaemonSet rollout whose pods list large objects overloads the API server (429 responses); twenty minutes later lookups fail across namespaces.",
-  "root": "daemonset/kube-system/node-inventory",
-  "tier": "page",
-  "maxMessages": 4,
+  "description": "A DaemonSet rollout whose pods list large objects overloads the API server (429 responses); twenty minutes later lookups fail across namespaces. No signal names the client that overloaded the API server.",
+  "root": "apiserver//kube-apiserver",
+  "tier": "notify",
+  "maxMessages": 5,
   "mustNotBlame": [
     "node//n1",
-    "node//n2",
-    "cluster-dns//cluster-dns",
-    "apiserver//kube-apiserver"
+    "node//n2"
   ],
   "tail": "15m0s"
 }

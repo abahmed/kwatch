@@ -293,7 +293,10 @@ func gap2DNSStorm() scenario {
 	e := g2Exp("dns-storm-from-looping-workload",
 		"A crawler crash-loops on a failing lookup and floods CoreDNS; "+
 			"CoreDNS is OOM-killed and lookups of other namespaces time "+
-			"out.", "deployment/batch/crawler", "notify").budget(3).
+			"out. Query rates are not visible, so the crawler is only "+
+			"the first to fail.", "deployment/kube-system/coredns",
+		"page", "deployment/shop/web", "deployment/billing/invoices").
+		budget(4).
 		tail(10 * time.Minute)
 	e.Ambiguous = true
 	return scenario{
@@ -302,6 +305,8 @@ func gap2DNSStorm() scenario {
 			c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"))
 			dns := c.deployment("kube-system", "coredns",
 				"registry.k8s.io/coredns/coredns:v1.11.1", 2)
+			dns.rollout(lifecycleMemoryLimit("170Mi"))
+			dns.setReady(2)
 			crawler := c.deployment("batch", "crawler",
 				"registry.example.com/crawler:5", 3)
 			c.list(dns.objects())

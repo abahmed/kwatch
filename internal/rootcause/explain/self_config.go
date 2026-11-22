@@ -101,7 +101,7 @@ func (v *view) containerConfigModes(
 	var out []detection.Mode
 	if v.hasMode(failing, []detection.Mode{detection.ModeOOMKilled}) &&
 		!v.hasMode(failing, []detection.Mode{detection.ModeOOMKilledNode}) &&
-		shortLastRun(container) {
+		hasMemoryLimit(container) && shortLastRun(container) {
 		out = append(out, ModeMemoryTooLow)
 	}
 	if probeMissesPorts(container) && v.probeRefused(id, failing) {
@@ -120,6 +120,13 @@ func (v *view) containerConfigModes(
 		out = append(out, mode)
 	}
 	return out
+}
+
+// hasMemoryLimit reports a container with a memory limit: without one
+// nothing it set can be too low.
+func hasMemoryLimit(container inventory.Entity) bool {
+	limit, ok := attrNumber(container, kube.AttrMemoryLimit)
+	return ok && limit > 0
 }
 
 // shortLastRun reports a last run that ended within OOMSteadyRun of
