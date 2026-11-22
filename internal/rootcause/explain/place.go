@@ -22,10 +22,19 @@ func (s Snapshot) placeOf(c Cause, change *inventory.Change) *detection.Place {
 			return rule.place(s, c)
 		}
 	}
-	if change != nil {
+	if change != nil && !changeIsTrigger[c.Row] {
 		return placeOfChange(c.Root, *change)
 	}
 	return nil
+}
+
+// changeIsTrigger lists the rows whose change only set the failure off:
+// the field it touched is not what to fix. A rollout that cannot place
+// its surge pod fails on the spread rule, not on the image it changed;
+// a node agent without a pod fails on the node, not on its template.
+var changeIsTrigger = map[string]bool{
+	"rollout-unschedulable": true,
+	"node-agent-absent":     true,
 }
 
 // placeRule builds the place of one kind of row.

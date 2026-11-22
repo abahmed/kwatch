@@ -1,9 +1,9 @@
 10:12:15 settled
-🟠 net-agent is failing in kube-system (prod-eu-1) after the 10:00 UTC release. The release changed the template. Replicas that do not depend on it are healthy. Affected: invoices in billing; web in shop. To see the rollout state, run kubectl rollout status daemonset/net-agent -n kube-system
-🟠 net-agent is failing in kube-system (prod-eu-1) after the 10:00 UTC release.
-| 🟠 **net-agent** is failing in **kube-system** (**prod-eu-1**) after the 10:00 UTC release.
-| The release changed the template.
+🟠 net-agent in kube-system (prod-eu-1) is failing because it has no pod on the node the failing pods run on. Replicas that do not depend on it are healthy. Both failing apps use it. Affected: invoices in billing; web in shop. To see the rollout state, run kubectl rollout status daemonset/net-agent -n kube-system
+🟠 net-agent in kube-system (prod-eu-1) is failing because it has no pod on the node the failing pods run on.
+| 🟠 **net-agent** in **kube-system** (**prod-eu-1**) is failing because it has no pod on the node the failing pods run on.
 | Replicas that do not depend on it are healthy.
+| Both failing apps use it.
 | Affected: **invoices** in **billing**; **web** in **shop**.
 | To see the rollout state, run
 | ```

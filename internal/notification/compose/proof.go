@@ -37,6 +37,8 @@ func changeSentences(f caseFacts) []sentence {
 	if f.p.Cause == nil || f.p.Cause.Change == nil ||
 		systemChange(*f.p.Cause.Change) || hasRevisionEdits(f) ||
 		causeRuleIs(f, heldVolumeRules...) ||
+		causeRuleIs(f, "node-agent-absent",
+			explain.RuleClaimSelectedNodeGone) ||
 		hasConfigVersion(f) ||
 		policyBlocksCall(f.p.Cause) {
 		return nil
