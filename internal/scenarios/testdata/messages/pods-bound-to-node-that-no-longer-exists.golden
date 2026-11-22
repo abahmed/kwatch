@@ -1,10 +1,13 @@
-10:10:00 roll-up
-🟠 kwatch (prod-eu-1) found two new problems at the same time. orders and payments in shop have been terminating for 30 minutes. Each one alerts on its own when it changes or resolves.
-🟠 kwatch (prod-eu-1) found two new problems at the same time.
-| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
-|
-| **Problems**
-| - **orders** in **shop** has been terminating for 30 minutes
-| - **payments** in **shop** has been terminating for 30 minutes
-|
-| *Each one alerts on its own when it changes or resolves.*
+10:10:00 material change
+🟠 orders in shop (prod-eu-1) has been terminating for 30 minutes because node n9 was removed. Both failing apps use it. Affected: payments.
+Related alerts: 2 unavailable workloads
+To check the node's conditions and recent events, run kubectl describe node n9
+🟠 orders in shop (prod-eu-1) has been terminating for 30 minutes because node n9 was removed.
+| 🟠 **orders** in **shop** (**prod-eu-1**) has been terminating for 30 minutes because node n9 was removed.
+| Both failing apps use it.
+| Affected: **payments**.
+| Related alerts: 2 unavailable workloads
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n9
+| ```

@@ -1,8 +1,9 @@
-10:03:15 settled
-🟠 sandboxed in shop (prod-eu-1) is failing, likely because runtime class gvisor does not exist. To see the object's state and events, run kubectl describe deployment sandboxed -n shop
-🟠 sandboxed in shop (prod-eu-1) is failing, likely because runtime class gvisor does not exist.
-| 🟠 **sandboxed** in **shop** (**prod-eu-1**) is failing, likely because runtime class **gvisor** does not exist.
-| To see the object's state and events, run
+10:12:15 settled
+🟠 sandboxed in shop (prod-eu-1) is failing because node n3 is what the failing workloads have in common, though it looks healthy. Replicas that do not depend on it are healthy. To check the node's conditions and recent events, run kubectl describe node n3
+🟠 sandboxed in shop (prod-eu-1) is failing because node n3 is what the failing workloads have in common, though it looks healthy.
+| 🟠 **sandboxed** in **shop** (**prod-eu-1**) is failing because node n3 is what the failing workloads have in common, though it looks healthy.
+| Replicas that do not depend on it are healthy.
+| To check the node's conditions and recent events, run
 | ```
-| kubectl describe deployment sandboxed -n shop
+| kubectl describe node n3
 | ```

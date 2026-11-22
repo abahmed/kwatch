@@ -37,6 +37,8 @@ func gap4aRuntimeClassMissing() scenario {
 			configTemplate(w, func(spec *corev1.PodSpec) {
 				spec.RuntimeClassName = &class
 			})
+			c.list(builtinObject(c, "node.k8s.io/v1", "RuntimeClass", "",
+				class, map[string]any{}, nil))
 			c.list(w.objects())
 			c.list(w.pod(0, "n1"), w.pod(1, "n2"))
 			c.after(10 * time.Minute)

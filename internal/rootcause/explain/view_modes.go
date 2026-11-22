@@ -127,6 +127,9 @@ func (v *view) virtualModes(
 	if modes := v.dnsServingModes(id, effect, link); len(modes) > 0 {
 		return modes
 	}
+	if modes := v.nodeGoneModes(id, effect, link); len(modes) > 0 {
+		return modes
+	}
 	switch id.Kind {
 	case kube.KindZone, kube.KindNodePool:
 		return v.groupModes(id)
