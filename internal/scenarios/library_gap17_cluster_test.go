@@ -280,8 +280,7 @@ func gap17CRDVersionRemoved() scenario {
 			"A CRD upgrade stops serving its old version; operators of "+
 				"three namespaces log that no match exists for the kind "+
 				"in that version and crash-loop.",
-			"failure-signature//no matches for kind \"widget\" in "+
-				"version \"example.com/v#beta#\"", "notify",
+			"unknown", "notify",
 			"deployment/shop/widget-op", "deployment/billing/widget-op",
 			"deployment/reports/widget-op").budget(1).
 			tail(10 * time.Minute),

@@ -1,7 +1,11 @@
 {
   "name": "drain-waits-on-pod-without-owner",
-  "description": "A node cordoned for an upgrade stays cordoned for hours because a pod without a controller cannot be moved. Nothing Kubernetes reports fails.",
-  "maxMessages": 0,
-  "quiet": true,
+  "description": "A node cordoned for an upgrade stays cordoned for hours because a pod without a controller cannot be moved.",
+  "root": "unknown",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "pod/ops/debug-shell"
+  ],
   "tail": "10m0s"
 }

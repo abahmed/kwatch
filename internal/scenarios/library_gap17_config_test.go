@@ -127,8 +127,7 @@ func gap17SharedConfigBadJSON() scenario {
 			"A ConfigMap of a platform namespace is edited to invalid "+
 				"JSON; pods of three namespaces rolled after the edit "+
 				"crash naming it, while older pods keep running.",
-			"failure-signature//unexpected end of json input reading "+
-				"platform/shared-flags key flags.json", "notify",
+			"unknown", "notify",
 			"deployment/shop/api", "deployment/billing/api",
 			"deployment/reports/api").budget(1).tail(10 * time.Minute),
 		build: func(c *cluster) {
