@@ -1,0 +1,8 @@
+{
+  "name": "shared-database-failover-digest",
+  "description": "A shared database fails over to a replica in under a minute; two apps log three failed connects and restart once, on the same days each month: one digest line.",
+  "root": "statefulset/data/pg",
+  "tier": "digest",
+  "maxMessages": 1,
+  "tail": "30m0s"
+}

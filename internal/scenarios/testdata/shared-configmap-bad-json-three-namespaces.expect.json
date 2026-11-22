@@ -1,0 +1,13 @@
+{
+  "name": "shared-configmap-bad-json-three-namespaces",
+  "description": "A ConfigMap of a platform namespace is edited to invalid JSON; pods of three namespaces rolled after the edit crash naming it, while older pods keep running.",
+  "root": "configmap/platform/shared-flags",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "deployment/shop/api",
+    "deployment/billing/api",
+    "deployment/reports/api"
+  ],
+  "tail": "10m0s"
+}

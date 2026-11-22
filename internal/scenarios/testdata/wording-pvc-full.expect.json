@@ -1,0 +1,12 @@
+{
+  "name": "wording-pvc-full",
+  "description": "A 10Gi claim is full; the database crash-loops with no space left. The message names the claim and its size and guesses nothing about what filled it.",
+  "root": "persistentvolumeclaim/data/pg-data",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/data/pg"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "wording-image-typo",
+  "description": "A rollout names an image tag with a letter O for a zero; the registry answers manifest unknown. The message quotes the exact image.",
+  "root": "deployment/billing/worker",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "registry//registry.example"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "wording-bad-rollout-config-key",
+  "description": "A new revision stops at start on a missing config key while the previous one still serves; the message says which version is safe and quotes the failure.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

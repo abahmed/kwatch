@@ -1,0 +1,6 @@
+{
+  "name": "shared-cache-rolling-restart-brief-errors-quiet",
+  "description": "A shared cache rolls with one pod at a time; apps of three namespaces log a refused connection once and restart at most once, and its Service always has an endpoint.",
+  "maxMessages": 0,
+  "quiet": true
+}

@@ -1,0 +1,12 @@
+{
+  "name": "wording-ingress-backend-missing",
+  "description": "An Ingress still routes to a Service that was renamed; the message names the missing Service and the new name, and guesses nothing about user-visible errors.",
+  "root": "ingress/shop/shop",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "service/shop/web",
+    "deployment/shop/web"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "wording-registry-rate-limited",
+  "description": "A new node pool's pulls from docker.io are all answered with a pull rate limit; six pods of two namespaces fail. One registry is the root.",
+  "root": "registry//docker.io",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "node//n3"
+  ],
+  "tail": "10m0s"
+}

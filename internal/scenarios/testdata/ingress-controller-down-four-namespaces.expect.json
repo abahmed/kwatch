@@ -1,0 +1,16 @@
+{
+  "name": "ingress-controller-down-four-namespaces",
+  "description": "The shared ingress controller crash-loops after a node upgrade while every backend is Ready; the six Ingresses of four namespaces are victims, not separate incidents.",
+  "root": "deployment/ingress-nginx/controller",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "ingress/shop/storefront",
+    "ingress/shop/admin",
+    "ingress/billing/portal",
+    "ingress/reports/site",
+    "ingress/reports/api",
+    "ingress/jobs/ui"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "wording-first-message-ongoing-chronic",
+  "description": "A Deployment crash-loops for twenty-two hours, its first page acknowledged; the reminder states the duration as a count and keeps the one action.",
+  "root": "deployment/shop/api",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "2h0m0s"
+}

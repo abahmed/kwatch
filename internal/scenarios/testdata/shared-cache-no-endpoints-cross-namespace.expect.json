@@ -1,0 +1,12 @@
+{
+  "name": "shared-cache-no-endpoints-cross-namespace",
+  "description": "A shared cache Deployment is scaled to zero by a values edit; web pods of two other namespaces time out on its Service and go NotReady. The edit is named.",
+  "root": "deployment/platform/memcached",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "deployment/jobs/render"
+  ],
+  "tail": "10m0s"
+}

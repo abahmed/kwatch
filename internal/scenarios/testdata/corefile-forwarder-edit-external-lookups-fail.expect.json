@@ -1,0 +1,14 @@
+{
+  "name": "corefile-forwarder-edit-external-lookups-fail",
+  "description": "The CoreDNS ConfigMap is edited to forward to a dead resolver while CoreDNS pods stay Ready; in-cluster names resolve and external lookups of two namespaces time out.",
+  "root": "configmap/kube-system/coredns",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "deployment/kube-system/coredns",
+    "cluster-dns//cluster-dns",
+    "deployment/shop/checkout",
+    "deployment/billing/sync"
+  ],
+  "tail": "10m0s"
+}
