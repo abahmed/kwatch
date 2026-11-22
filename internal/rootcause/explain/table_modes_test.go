@@ -22,7 +22,7 @@ var pseudoModes = []detection.Mode{
 	ModeHoldsVolume, ModeProvisionerDown, ModeHidesNotReady, ModeRefusesPods,
 	ModeProtocolMismatch, ModeNameIsAddress, ModeFamilyMismatch, ModeIsolatesBackend,
 	ModeNoStorageClass, modeFailedMount, modeFailedAttach,
-	ModeAgentAbsent, ModeNoPullSecret, ModeDiskHog, ModeMemoryHog, ModeNoGrant, ModeRoleShort,
+	ModeAgentAbsent, ModeNoPullSecret, ModeDiskHog, ModeMemoryHog, ModeResolverDown, ModeNoGrant, ModeRoleShort,
 	ModeDependencyUnreachable, ModeBackendsNotReady, ModeKeyMissing,
 	ModePullThrottled, ModeWrongType, ModeBoundElsewhere,
 	ModeNamedByScheduler, ModeNamedByScheduler + ".PriorityClass",

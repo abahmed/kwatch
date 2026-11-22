@@ -38,6 +38,7 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 		out = append(out, hop{link: LinkContains, to: kube.ClusterDNS})
 	} else if id.Kind == kube.KindPod {
 		out = append(out, hop{link: LinkResolvesVia, to: kube.ClusterDNS})
+		out = append(out, v.resolverWorkloadHops(id)...)
 		out = append(out, v.dnsServingHops(id)...)
 		out = append(out, v.policyCallHops(id)...)
 		out = append(out, v.policyHops(id)...)

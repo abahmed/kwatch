@@ -128,6 +128,9 @@ func (v *view) failingUnitModes(
 	if modes := v.hogModes(id, effect, link); len(modes) > 0 {
 		return modes
 	}
+	if modes := v.resolverWorkloadModes(id, effect, link); len(modes) > 0 {
+		return modes
+	}
 	if modes := v.memoryHogModes(id, effect, link); len(modes) > 0 {
 		return modes
 	}

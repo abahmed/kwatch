@@ -149,6 +149,8 @@ var causeWords = map[string]causeWording{
 	"workload-fills-disks": {
 		words: "fills the disks of the nodes it runs on, so pods on " +
 			"those nodes are evicted"},
+	"resolver-workload-failing": {
+		words: "holds the resolver address their lookups time out on"},
 	"workload-exhausts-memory": {
 		words: "runs the nodes it is placed on out of memory, so " +
 			"they stop reporting"},

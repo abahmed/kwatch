@@ -8,7 +8,7 @@ import (
 // Rows for shared cluster services.
 
 // clusterRows cover shared services every workload depends on.
-var clusterRows = concatRows(schedulerNamesRows(), memoryHogRows, []Row{
+var clusterRows = concatRows(schedulerNamesRows(), memoryHogRows, resolverWorkloadRows, []Row{
 	pullWithoutSecretRow, diskHogRow, accountNoGrantRow, roleShortRow,
 	accountReplacedRow,
 	{

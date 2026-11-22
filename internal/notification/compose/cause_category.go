@@ -173,6 +173,7 @@ var causeCategories = map[string]string{
 	"webhook-slows-api":                     categoryControlPlane,
 	"workload-fills-disks":                  categoryShortage,
 	"workload-exhausts-memory":              categoryShortage,
+	"resolver-workload-failing":             categoryDependency,
 	"zone-failing":                          categoryNode,
 
 	// The longest rule name stands apart so the table keeps its layout.
