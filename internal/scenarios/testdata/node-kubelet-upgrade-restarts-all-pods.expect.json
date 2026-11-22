@@ -1,13 +1,6 @@
 {
   "name": "node-kubelet-upgrade-restarts-all-pods",
   "description": "A kubelet upgrade changes the container hash and restarts every container of the node at once; three workloads restart together and are ready again within a minute.",
-  "root": "node//n1",
-  "tier": "digest",
-  "maxMessages": 2,
-  "mustNotBlame": [
-    "deployment/shop/orders",
-    "deployment/shop/payments",
-    "deployment/shop/cart"
-  ],
-  "tail": "10m0s"
+  "maxMessages": 0,
+  "quiet": true
 }

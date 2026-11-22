@@ -18,6 +18,15 @@ func failed(ctx detection.Context, e inventory.Entity) []detection.Finding {
 	if evicted && evictionOver(ctx, since) {
 		return nil
 	}
+	if endedUnreplaced(ctx, e) {
+		return []detection.Finding{{
+			Reason: reasons.PodFailed, Severity: failedPodSeverity(ctx, since),
+			Since: since, Summary: "Pod was ended by its node shutting " +
+				"down and no controller restarts it",
+			Evidence: []detection.Evidence{{
+				Label: "message", Value: text(e, kube.AttrMessage)}},
+		}}
+	}
 	if disrupted(e) && !(evicted && nodePressureEviction(e)) ||
 		daemonPodOnLeavingNode(ctx, e) {
 		return nil
@@ -133,4 +142,16 @@ func daemonPodOnLeavingNode(
 		}
 	}
 	return true
+}
+
+// endedUnreplaced reports a pod the kubelet ended when its node shut
+// down (DisruptionTarget TerminationByKubelet, not a pressure eviction)
+// that no controller owns: nothing creates it again, so the loss stays.
+func endedUnreplaced(ctx detection.Context, pod inventory.Entity) bool {
+	if ctx.Model == nil || !nodePressureEviction(pod) ||
+		text(pod, kube.AttrReason) == reasons.Evicted {
+		return false
+	}
+	return len(ctx.Model.Related(pod.ID, inventory.OwnedBy,
+		inventory.Outgoing)) == 0
 }

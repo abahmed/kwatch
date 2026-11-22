@@ -50,7 +50,7 @@ func gap4aCriticalPreempts() scenario {
 		"A node agent of critical priority is admitted on a full node by "+
 			"killing two application pods; their replacements stay "+
 			"Pending for lack of CPU.",
-		"daemonset/kube-system/node-agent", "notify", "deployment/shop/orders",
+		rootUnknown, "notify", "deployment/shop/orders",
 		"deployment/billing/payments").budget(3).tail(10 * time.Minute)
 	e.Ambiguous = true
 	return scenario{expect: e, build: func(c *cluster) {

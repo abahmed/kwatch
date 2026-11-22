@@ -25,6 +25,12 @@ func (v *view) suspectState(id, effect inventory.EntityID) state {
 	if s := v.refusalState(id, effect); len(s.modes) > 0 {
 		return s
 	}
+	if s := v.shutdownState(id, effect); len(s.modes) > 0 {
+		return s
+	}
+	if s := v.silentState(id, effect); len(s.modes) > 0 {
+		return s
+	}
 	return v.sharedFactorState(id)
 }
 

@@ -50,7 +50,35 @@ var (
 	sharedNode = inventory.CoreID(kube.KindNode, "", "n1")
 )
 
+// endedPodCase is a pod of a healthy node whose own condition says the
+// kubelet ended it at shutdown.
+func endedPodCase(f *fixture) inventory.EntityID {
+	nodes := f.nodes("zone-a", "n1")
+	pod := f.workload("shop", "tools", 1, nodes[0])[0]
+	key := kube.ConditionKey("DisruptionTarget")
+	f.attrs(pod, map[string]inventory.Value{
+		key:                            inventory.Text("True"),
+		key + kube.AttrConditionReason: inventory.Text("TerminationByKubelet"),
+	})
+	f.fail(pod, detection.ModeFailed, failingH, 2, "ended at shutdown")
+	return pod
+}
+
+// silentPodsCase is two pods bound to a node without a start time.
+func silentPodsCase(f *fixture) inventory.EntityID {
+	nodes := f.nodes("zone-a", "n1")
+	pods := f.workload("ci", "runner", 2, nodes[0])
+	for _, pod := range pods {
+		f.attrs(pod, map[string]inventory.Value{
+			kube.AttrPhase: inventory.Text("Pending")})
+		f.fail(pod, detection.ModePending, failingH, 5, "")
+	}
+	return pods[0]
+}
+
 var sharedRowCases = []rowCase{
+	{row: RuleNodeKubeletSilent, want: "node//n1", build: silentPodsCase},
+	{row: RuleNodeEndedPod, want: "node//n1", build: endedPodCase},
 	{row: "shared-node", want: "node//n1",
 		build: sharedCase(sharedNode, "", 3, 1)},
 }

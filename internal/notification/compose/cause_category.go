@@ -172,6 +172,10 @@ var causeCategories = map[string]string{
 	"workload-exhausts-memory":              categoryShortage,
 	"resolver-workload-failing":             categoryDependency,
 	"zone-failing":                          categoryNode,
+	"node-kubelet-silent":                   categoryNode,
+	"node-ended-pod":                        categoryNode,
+	"shared-zone":                           categoryNode,
+	"shared-nodepool":                       categoryNode,
 
 	// The longest rule name stands apart so the table keeps its layout.
 	"called-service-backends-not-ready": categoryDependency,

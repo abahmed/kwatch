@@ -2,7 +2,7 @@
   "name": "node-shutdown-terminates-bare-pod",
   "description": "A node is rebooted for patching; its pods end Failed with \"terminated in response to imminent node shutdown\"; Deployments replace theirs but a bare pod is not restarted.",
   "root": "node//n1",
-  "tier": "digest",
+  "tier": "notify",
   "maxMessages": 2,
   "mustNotBlame": [
     "pod/shop/tools-shell",

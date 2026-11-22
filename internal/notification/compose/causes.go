@@ -215,6 +215,13 @@ var causeWords = map[string]causeWording{
 	"webhook-rejects":         {words: "is rejecting requests"},
 	"webhook-slows-api":       {words: "is slowing the API server"},
 	"zone-failing":            {words: "is failing as a whole"},
+	"node-kubelet-silent": {
+		words: "has reported nothing on the pods bound to it"},
+	"node-ended-pod": {words: "shut down and its kubelet ended the pod"},
+	"shared-zone": {
+		words: "has pods on its nodes failing the same way"},
+	"shared-nodepool": {
+		words: "has pods on its nodes failing the same way"},
 
 	// Rows that blame a workload whose pods run but are not ready.
 	"backends-not-ready": {

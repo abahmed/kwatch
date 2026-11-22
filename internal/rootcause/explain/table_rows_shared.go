@@ -40,6 +40,28 @@ var sharedRows = []Row{
 		Effect: anything, Prior: 0.4,
 	},
 	{
+		// Pods are bound to a node whose kubelet has reported nothing
+		// on them: the node's kubelet is behind, not the workload.
+		Name: RuleNodeKubeletSilent,
+		Cause: Side{Kind: kube.KindNode,
+			Modes: []detection.Mode{ModeKubeletSilent}},
+		Link: LinkRunsOn,
+		Effect: Side{Kind: kube.KindPod,
+			Modes: []detection.Mode{detection.ModePending}},
+		Prior: 0.9,
+	},
+	{
+		// The kubelet of a node ended the pod when the node shut down:
+		// the pod's own condition says so, so one pod is enough.
+		Name: RuleNodeEndedPod,
+		Cause: Side{Kind: kube.KindNode,
+			Modes: []detection.Mode{ModeEndedPods}},
+		Link: LinkRunsOn,
+		Effect: Side{Kind: kube.KindPod,
+			Modes: []detection.Mode{detection.ModeFailed}},
+		Prior: 0.8,
+	},
+	{
 		// The kubelet of a node refuses a pod by its own accounting
 		// (OutOfcpu, OutOfmemory): the refusal is about that node, so
 		// one workload is enough.

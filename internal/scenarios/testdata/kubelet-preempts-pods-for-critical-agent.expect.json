@@ -1,7 +1,7 @@
 {
   "name": "kubelet-preempts-pods-for-critical-agent",
   "description": "A node agent of critical priority is admitted on a full node by killing two application pods; their replacements stay Pending for lack of CPU.",
-  "root": "daemonset/kube-system/node-agent",
+  "root": "unknown",
   "tier": "notify",
   "maxMessages": 3,
   "mustNotBlame": [

@@ -289,7 +289,7 @@ func gap3NodeShutdown() scenario {
 			"A node is rebooted for patching; its pods end Failed with "+
 				"\"terminated in response to imminent node shutdown\"; "+
 				"Deployments replace theirs but a bare pod is not "+
-				"restarted.", "node//n1", "digest", "pod/shop/tools-shell",
+				"restarted.", "node//n1", "notify", "pod/shop/tools-shell",
 			"deployment/shop/orders"),
 		build: func(c *cluster) { gap3Shutdown(c, true) },
 	}

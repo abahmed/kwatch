@@ -324,7 +324,8 @@ func gap6aCloudProviderRemoved() scenario {
 				"uninitialized taint and the pods that need them stay "+
 				"Pending; the taint explains it, not the scheduling "+
 				"reason alone.",
-			"node//n3", "notify", "deployment/shop/web", "node//n1",
+			"scheduling//had untolerated taint", "notify", "deployment/shop/web",
+			"node//n1",
 			"service/shop/web").budget(3).tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"))

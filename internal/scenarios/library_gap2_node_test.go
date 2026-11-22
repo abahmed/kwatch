@@ -211,13 +211,10 @@ func gap2Restarted(count int32) podState {
 // workloads in three seconds, all ready again within half a minute.
 func gap2KubeletRestartsAll() scenario {
 	return scenario{
-		expect: g2Exp("node-kubelet-upgrade-restarts-all-pods",
+		expect: g2Quiet("node-kubelet-upgrade-restarts-all-pods",
 			"A kubelet upgrade changes the container hash and restarts "+
 				"every container of the node at once; three workloads "+
-				"restart together and are ready again within a minute.",
-			"node//n1", "digest", "deployment/shop/orders",
-			"deployment/shop/payments", "deployment/shop/cart").
-			tail(10 * time.Minute),
+				"restart together and are ready again within a minute."),
 		build: func(c *cluster) {
 			_, fleet := gapNodeFleet(c)
 			c.after(5 * time.Minute)

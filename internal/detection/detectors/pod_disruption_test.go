@@ -30,12 +30,9 @@ func failedPod(reason, disruption string) inventory.Entity {
 func TestPodDisruptionTargetIsNotAFailure(t *testing.T) {
 	for _, disruption := range []string{
 		"PreemptionByScheduler", "DeletionByTaintManager",
-		"EvictionByEvictionAPI", "TerminationByKubelet",
+		"EvictionByEvictionAPI",
 	} {
 		reason := ""
-		if disruption == "TerminationByKubelet" {
-			reason = "Terminated" // graceful node shutdown
-		}
 		got := NewPod(PodThresholds{}).Detect(
 			testDetectorContext(newTestModel(), time.Now()),
 			failedPod(reason, disruption))
@@ -58,4 +55,24 @@ func TestPodFailedWithoutDisruptionIsReported(t *testing.T) {
 		testDetectorContext(newTestModel(), time.Now()), failedPod("", ""))
 	require.Len(t, got, 1)
 	assert.Equal(t, reasons.PodFailed, got[0].Reason)
+}
+
+// A pod the kubelet ended at node shutdown is replaced when a
+// controller owns it, and gone for good when none does.
+func TestPodEndedByShutdownReportsOnlyWithoutOwner(t *testing.T) {
+	pod := failedPod("Terminated", "TerminationByKubelet")
+	bare := NewPod(PodThresholds{}).Detect(
+		testDetectorContext(newTestModel(), time.Now()), pod)
+	require.Len(t, bare, 1)
+	assert.Equal(t, reasons.PodFailed, bare[0].Reason)
+
+	model := newTestModel()
+	owner := inventory.EntityID{Kind: kube.KindReplicaSet,
+		Namespace: "ns", Name: "rs"}
+	model.Apply(inventory.Observation{Kind: inventory.Observed,
+		Source: "test", At: time.Now(), Entity: owner})
+	link(model, pod.ID, inventory.OwnedBy, owner)
+	got := NewPod(PodThresholds{}).Detect(
+		testDetectorContext(model, time.Now()), pod)
+	assert.Empty(t, got)
 }

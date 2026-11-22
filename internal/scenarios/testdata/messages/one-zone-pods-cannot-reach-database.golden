@@ -1,7 +1,7 @@
 10:09:15 settled
-🟠 Zone zone-b (prod-eu-1) is failing. Replicas that do not depend on it are healthy. Affected: api in shop. To see the pods' state and events, run kubectl describe pods api- -n shop
-🟠 Zone zone-b (prod-eu-1) is failing.
-| 🟠 Zone **zone-b** (**prod-eu-1**) is failing.
+🟠 Zone zone-b (prod-eu-1) has pods on its nodes failing the same way. Replicas that do not depend on it are healthy. Affected: api in shop. To see the pods' state and events, run kubectl describe pods api- -n shop
+🟠 Zone zone-b (prod-eu-1) has pods on its nodes failing the same way.
+| 🟠 Zone **zone-b** (**prod-eu-1**) has pods on its nodes failing the same way.
 | Replicas that do not depend on it are healthy.
 | Affected: **api** in **shop**.
 | To see the pods' state and events, run
