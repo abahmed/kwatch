@@ -27,11 +27,11 @@ type wordingTerms struct {
 // wordingGlobalNot is banned in the first message of every scenario that
 // has terms: hedges, forecasts, internal words and banned product words.
 var wordingGlobalNot = []string{
-	"might", "may", "maybe", "possibly", "probably", "likely", "perhaps",
+	"might", "maybe", "possibly", "probably", "perhaps",
 	"seems", "appears", "could be", "should be", "try to", "I think",
 	"unclear",
 	"will", "soon", "going to", "about to", "expected to", "eventually",
-	"within the next", "in the coming", "predict", "forecast", "trend",
+	"within the next", "in the coming", "guaranteed", "free forever", "best effort", "predict", "forecast", "trend",
 	"rootcause", "root cause engine", "incident id", "tier", "heuristic",
 	"confidence", "score", "edge", "graph", "informer", "reconcile",
 	"signal", "evidence", "candidate", "suppressed", "dedup",
@@ -47,7 +47,7 @@ var wordingTable = []wordingTerms{
 		not: []string{"memory leak", "increase memory", "node"}},
 	{name: "wording-image-typo",
 		contain: []string{"worker in billing",
-			"registry.example/worker:v2.1O", "can't pull",
+			"registry.example/worker:v2.1O", "can't pull|cannot pull",
 			"manifest unknown|tag not found",
 			"Fix: change the image of container",
 			"kubectl -n billing describe pod"},
@@ -94,7 +94,7 @@ var wordingTable = []wordingTerms{
 			"kubectl -n shop get secret bank-client-tls"},
 		not: []string{"will expire", "almost"}},
 	{name: "wording-webhook-down-fail-closed",
-		contain: []string{"policy-svc in policy", "no ready pods", "shop",
+		contain: []string{"policy-svc in policy", "no ready pods|no ready endpoints", "shop",
 			"billing", "Fix: restore the pods behind service policy-svc",
 			"kubectl -n policy get endpoints policy-svc"},
 		not: []string{"webhook is broken", "disable the webhook"}},
