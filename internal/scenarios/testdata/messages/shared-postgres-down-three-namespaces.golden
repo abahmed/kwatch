@@ -1,0 +1,24 @@
+10:11:15 roll-up
+🟠 kwatch (prod-eu-1) found two new problems at the same time. ledger in billing and two other workloads keep crashing with the same error. pg in data keeps running out of memory because its memory limit is too low for normal use. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - **ledger** in **billing** and two other workloads keep crashing with the same error
+| - pg (**data**) keeps running out of memory because its memory limit — too low for normal use
+|
+| *Each one alerts on its own when it changes or resolves.*
+10:18:00 material change
+🟠 ledger in billing (prod-eu-1) and two other workloads keep crashing with the same error. It fails with "dial tcp: lookup pg.data.svc.cluster.local: no endpoints". Its last run lasted ten seconds; six restarts since its pod was created about one hour ago. Service ledger in billing; service gen in reports; service api in shop can't serve traffic.
+Related alerts: 9 not-ready pods, 3 unavailable workloads
+To read the output of the last crash, run kubectl logs deploy/ledger -c app -n billing --previous
+🟠 ledger in billing (prod-eu-1) and two other workloads keep crashing with the same error.
+| 🟠 **ledger** in **billing** (**prod-eu-1**) and two other workloads keep crashing with the same error.
+| It fails with `dial tcp: lookup pg.data.svc.cluster.local: no endpoints`.
+| Its last run lasted ten seconds; six restarts since its pod was created about one hour ago.
+| Service **ledger** in **billing**; service **gen** in **reports**; service **api** in **shop** can't serve traffic.
+| Related alerts: 9 not-ready pods, 3 unavailable workloads
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/ledger -c app -n billing --previous
+| ```

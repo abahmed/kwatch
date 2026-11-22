@@ -1,0 +1,14 @@
+10:11:15 settled
+🟠 proxy in egress (prod-eu-1) keeps crashing. api fails calling service proxy with "proxyconnect tcp: dial tcp proxy.egress.svc.cluster.local:3128: connect: connection refused". It fails with "invalid acl". Every error mentions it. Services api and sync in billing; service gen in reports; and three others can't serve traffic. To read the output of the last crash, run kubectl logs deploy/proxy -c app -n egress --previous
+🟠 proxy in egress (prod-eu-1) keeps crashing.
+| 🟠 **proxy** in **egress** (**prod-eu-1**) keeps crashing.
+| **api** fails calling service **proxy** with
+| ```
+| proxyconnect tcp: dial tcp proxy.egress.svc.cluster.local:3128: connect: connection refused
+| ```
+| It fails with `invalid acl`. Every error mentions it.
+| Services **api** and **sync** in **billing**; service **gen** in **reports**; and three others can't serve traffic.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/proxy -c app -n egress --previous
+| ```

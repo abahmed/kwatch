@@ -1,0 +1,11 @@
+10:04:15 settled
+🟠 api in shop (prod-eu-1) cannot start: its configuration references something missing. Cause not found yet: its node and registry are healthy and unchanged. It fails with "configmap "api-flags" not found". kwatch can't see config maps in shop, so a changed config map can't be ruled out. To see why the container cannot start, run kubectl describe pods api- -n shop
+🟠 api in shop (prod-eu-1) cannot start: its configuration references something missing.
+| 🟠 **api** in **shop** (**prod-eu-1**) cannot start: its configuration references something missing.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| It fails with `configmap "api-flags" not found`.
+| kwatch can't see config maps in **shop**, so a changed config map can't be ruled out.
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods api- -n shop
+| ```

@@ -1,0 +1,9 @@
+10:09:15 settled
+🟠 coredns in kube-system (prod-eu-1) has not been ready for three minutes. Cause not found yet: its node and registry are healthy and unchanged. To see the pods' state and events, run kubectl describe pods coredns- -n kube-system
+🟠 coredns in kube-system (prod-eu-1) has not been ready for three minutes.
+| 🟠 **coredns** in **kube-system** (**prod-eu-1**) has not been ready for three minutes.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods coredns- -n kube-system
+| ```

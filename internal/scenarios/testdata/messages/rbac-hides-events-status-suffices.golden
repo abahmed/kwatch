@@ -1,0 +1,10 @@
+10:06:15 settled
+🟠 api in shop (prod-eu-1) cannot pull its image because registry registry.example.com refuses the image pulls. To see why the container cannot start, run kubectl describe pods api- -n shop
+Proof: all 3 replicas fail, on 3 nodes.
+🟠 api in shop (prod-eu-1) cannot pull its image because registry registry.example.com refuses the image pulls.
+| 🟠 **api** in **shop** (**prod-eu-1**) cannot pull its image because registry **registry.example.com** refuses the image pulls.
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods api- -n shop
+| ```
+| *Proof: all 3 replicas fail, on 3 nodes.*

@@ -1,0 +1,12 @@
+10:01:35 settled
+🟠 gen in reports (prod-eu-1) has never worked since it was created at 10:00 UTC. It fails with "rpc error: code = NotFound desc = failed to pull image "registry.example.com/gen:missing"". To see why the container cannot start, run kubectl describe pods gen- -n reports
+🟠 gen in reports (prod-eu-1) has never worked since it was created at 10:00 UTC.
+| 🟠 **gen** in **reports** (**prod-eu-1**) has never worked since it was created at 10:00 UTC.
+| It fails with
+| ```
+| rpc error: code = NotFound desc = failed to pull image "registry.example.com/gen:missing"
+| ```
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods gen- -n reports
+| ```

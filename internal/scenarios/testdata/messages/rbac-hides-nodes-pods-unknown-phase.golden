@@ -1,0 +1,13 @@
+10:11:15 settled
+🟠 api in shop (prod-eu-1) has only 1 of 2 replicas ready. Cause not found yet: nothing outside it points to one. To see the object's state and events, run kubectl describe deployment api -n shop
+🟠 api in shop (prod-eu-1) has only 1 of 2 replicas ready.
+| 🟠 **api** in **shop** (**prod-eu-1**) has only 1 of 2 replicas ready.
+| Cause not found yet: nothing outside it points to one.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment api -n shop
+| ```
+10:15:00 material change
+🟠 api in shop (prod-eu-1) has been terminating for ten minutes.
+🟠 api in shop (prod-eu-1) has been terminating for ten minutes.
+| 🟠 **api** in **shop** (**prod-eu-1**) has been terminating for ten minutes.

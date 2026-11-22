@@ -1,0 +1,23 @@
+10:06:15 settled
+🟠 Quota storage-caps in tenant-c (prod-eu-1) is failing: refuses the creates that name it. ResourceQuota storage-caps: fast.storageclass.storage.k8s.io/requests.storage  of  used; this pod asks 10Gi. Affected: db.
+Related alerts: 1 failed pod creation
+To see the object's state and events, run kubectl describe statefulset db -n tenant-c
+🟠 Quota storage-caps in tenant-c (prod-eu-1) is failing: refuses the creates that name it.
+| 🟠 Quota **storage-caps** in **tenant-c** (**prod-eu-1**) is failing: refuses the creates that name it.
+| ResourceQuota storage-caps: fast.storageclass.storage.k8s.io/requests.storage  of  used; this pod asks 10Gi.
+| Affected: db.
+| Related alerts: 1 failed pod creation
+| To see the object's state and events, run
+| ```
+| kubectl describe statefulset db -n tenant-c
+| ```
+10:08:15 settled
+🟠 db in tenant-c (prod-eu-1) has waited two minutes for a node. Cause not found yet: its registry is healthy and unchanged. The scheduler says "pod has unbound immediate PersistentVolumeClaims". To see the object's state and events, run kubectl describe pod db-0 -n tenant-c
+🟠 db in tenant-c (prod-eu-1) has waited two minutes for a node.
+| 🟠 db in **tenant-c** (**prod-eu-1**) has waited two minutes for a node.
+| Cause not found yet: its registry is healthy and unchanged.
+| The scheduler says `pod has unbound immediate PersistentVolumeClaims`.
+| To see the object's state and events, run
+| ```
+| kubectl describe pod db-0 -n tenant-c
+| ```

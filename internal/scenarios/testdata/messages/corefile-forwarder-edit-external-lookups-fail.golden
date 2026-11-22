@@ -1,0 +1,11 @@
+10:16:15 settled
+🟠 coredns in kube-system (prod-eu-1) is failing, likely because it is not resolving names. It fails with "lookup api.partner.example: i/o timeout". Both failing apps use it. Service sync in billing; service checkout in shop can't serve traffic. To read the output of the last crash, run kubectl logs deploy/sync -c app -n billing --previous
+🟠 coredns in kube-system (prod-eu-1) is failing, likely because it is not resolving names.
+| 🟠 **coredns** in **kube-system** (**prod-eu-1**) is failing, likely because it is not resolving names.
+| It fails with `lookup api.partner.example: i/o timeout`.
+| Both failing apps use it.
+| Service **sync** in **billing**; service **checkout** in **shop** can't serve traffic.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/sync -c app -n billing --previous
+| ```

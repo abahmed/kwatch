@@ -1,0 +1,24 @@
+10:11:15 roll-up
+🟠 kwatch (prod-eu-1) found three new problems at the same time. api in billing is failing: volume cannot be mounted. gen in reports is failing: volume cannot be mounted. web in shop is failing: volume cannot be mounted. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found three new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 3 new problems at the same time
+|
+| **Problems**
+| - **api** (**billing**) — volume cannot be mounted
+| - **gen** (**reports**) — volume cannot be mounted
+| - **web** (**shop**) — volume cannot be mounted
+|
+| *Each one alerts on its own when it changes or resolves.*
+10:13:15 settled
+🟠 nfs-server in storage (prod-eu-1) has waited two minutes for a node because no node has enough memory. The scheduler says "0/1 nodes are available: 1 Insufficient memory." To see the pods' state and events, run kubectl describe pods nfs-server- -n storage
+🟠 nfs-server in storage (prod-eu-1) has waited two minutes for a node because no node has enough memory.
+| 🟠 **nfs-server** in **storage** (**prod-eu-1**) has waited two minutes for a node because no node has enough memory.
+| The scheduler says `0/1 nodes are available: 1 Insufficient memory.`
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods nfs-server- -n storage
+| ```
+10:20:00 material change
+🟠 nfs-server in storage (prod-eu-1) is now also affecting service nfs-server: it has no ready backends.
+🟠 nfs-server in storage (prod-eu-1) is now also affecting service nfs-server: it has no ready backends.
+| 🟠 **nfs-server** in **storage** (**prod-eu-1**) is now also affecting service nfs-server: it has no ready backends.

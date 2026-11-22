@@ -1,0 +1,11 @@
+10:13:15 settled
+🟠 api is failing in billing (prod-eu-1) after the 10:10 UTC deletion of priority class team-high. All three failing apps use it. The apps that use it failed soon after it changed. Affected: runner in jobs; api in shop. To see the object's state and events, run kubectl describe deployment api -n billing
+🟠 api is failing in billing (prod-eu-1) after the 10:10 UTC deletion of priority class team-high.
+| 🟠 **api** is failing in **billing** (**prod-eu-1**) after the 10:10 UTC deletion of priority class **team-high**.
+| All three failing apps use it.
+| The apps that use it failed soon after it changed.
+| Affected: **runner** in **jobs**; **api** in **shop**.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment api -n billing
+| ```

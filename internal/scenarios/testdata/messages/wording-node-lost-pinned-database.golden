@@ -1,0 +1,31 @@
+10:11:30 settled
+🔴 Node worker-3 (prod-eu-1) has not reported for about two minutes. It reports "Kubelet stopped posting node status." kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable.
+Related alerts: 1 node problem
+To check the node's conditions and recent events, run kubectl describe node worker-3
+🔴 Node worker-3 (prod-eu-1) has not reported for about two minutes.
+| 🔴 Node **worker-3** (**prod-eu-1**) has not reported for about two minutes.
+| It reports `Kubelet stopped posting node status.`
+| kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable.
+| Related alerts: 1 node problem
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node worker-3
+| ```
+10:17:15 settled
+🟠 pg in data (prod-eu-1) has no ready replicas (0 of 1). Cause not found yet: nothing outside it points to one. It runs a single replica. To see the object's state and events, run kubectl describe statefulset pg -n data
+🟠 pg in data (prod-eu-1) has no ready replicas (0 of 1).
+| 🟠 pg in **data** (**prod-eu-1**) has no ready replicas (0 of 1).
+| Cause not found yet: nothing outside it points to one.
+| It runs a single replica.
+| To see the object's state and events, run
+| ```
+| kubectl describe statefulset pg -n data
+| ```
+10:21:00 material change
+🔴 Node worker-3 (prod-eu-1) is now also affecting pg in data: it has been terminating for ten minutes and has no ready replicas (0 of 1).
+🔴 Node worker-3 (prod-eu-1) is now also affecting pg in data: it has been terminating for ten minutes and has no ready replicas (0 of 1).
+| 🔴 Node **worker-3** (**prod-eu-1**) is now also affecting pg in data: it has been terminating for ten minutes and has no ready replicas (0 of 1).
+10:21:00 superseded by revised cause
+🟠 Moved: this is now part of the node worker-3 failure (prod-eu-1).
+🟠 Moved: this is now part of the node worker-3 failure (prod-eu-1).
+| 🟠 Moved: this is now part of the node worker-3 failure (**prod-eu-1**).

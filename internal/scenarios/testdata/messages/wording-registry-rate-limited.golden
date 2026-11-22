@@ -1,0 +1,10 @@
+10:02:15 settled
+🟠 api in billing (prod-eu-1) cannot pull its image because registry docker.io is rate limiting pulls. All six failing apps use it. Affected: ledger and sync in billing; api in shop; and two others. To see why the container cannot start, run kubectl describe pods api- -n billing
+🟠 api in billing (prod-eu-1) cannot pull its image because registry docker.io is rate limiting pulls.
+| 🟠 **api** in **billing** (**prod-eu-1**) cannot pull its image because registry **docker.io** is rate limiting pulls.
+| All six failing apps use it.
+| Affected: **ledger** and **sync** in **billing**; **api** in **shop**; and two others.
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods api- -n billing
+| ```

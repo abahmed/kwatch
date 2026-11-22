@@ -1,0 +1,14 @@
+10:06:15 settled
+🟠 batch in jobs (prod-eu-1) has no ready replicas (0 of 4). Cause not found yet: nothing outside it points to one. To see the object's state and events, run kubectl describe deployment batch -n jobs
+🟠 batch in jobs (prod-eu-1) has no ready replicas (0 of 4).
+| 🟠 **batch** in **jobs** (**prod-eu-1**) has no ready replicas (0 of 4).
+| Cause not found yet: nothing outside it points to one.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment batch -n jobs
+| ```
+10:07:30 cause revised
+🟠 Cause now known: batch in jobs (prod-eu-1) has no ready replicas (0 of 4) because no node matches its node affinity or node selector. No node fits: the closest node, a1, lacks the label pool=pool-b the pod selects; the closest node, a1, lacks the label pool=pool-b the pod selects; the closest node, a1, lacks the label pool=pool-b the pod selects; the closest node, a1, lacks the label pool=pool-b the pod selects. Dropping the selector pool=pool-b would fit it on a1. Dropping the selector pool=pool-b would fit it on a1. Dropping the selector pool=pool-b would fit it on a1. Dropping the selector pool=pool-b would fit it on a1.
+🟠 Cause now known: batch in jobs (prod-eu-1) has no ready replicas (0 of 4) because no node matches its node affinity or node selector.
+| 🟠 Cause now known: **batch** in **jobs** (**prod-eu-1**) has no ready replicas (0 of 4) because no node matches its node affinity or node selector.
+| No node fits: the closest node, a1, lacks the label pool=pool-b the pod selects; the closest node, a1, lacks the label pool=pool-b the pod selects; the closest node, a1, lacks the label pool=pool-b the pod selects; the closest node, a1, lacks the label pool=pool-b the pod selects. Dropping the selector pool=pool-b would fit it on a1. Dropping the selector pool=pool-b would fit it on a1. Dropping the selector pool=pool-b would fit it on a1. Dropping the selector pool=pool-b would fit it on a1.

@@ -1,0 +1,12 @@
+10:07:15 roll-up
+🟠 kwatch (prod-eu-1) found four new problems at the same time. shipper in logs is failing: exited with code 137. Node pool-logs-1 is low on disk space. Node pool-logs-2 is low on disk space. Node pool-logs-3 is low on disk space. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found four new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 4 new problems at the same time
+|
+| **Problems**
+| - **shipper** (**logs**) — exited with code 137
+| - Node **pool-logs-1** — low on disk space
+| - Node **pool-logs-2** — low on disk space
+| - Node **pool-logs-3** — low on disk space
+|
+| *Each one alerts on its own when it changes or resolves.*

@@ -1,0 +1,13 @@
+10:01:15 settled
+🟠 worker in billing (prod-eu-1) cannot pull its image because registry registry.example refuses the image pulls.
+Related alerts: 2 not-ready pods
+To see why the container cannot start, run kubectl describe pods worker- -n billing
+Proof: both replicas fail, on 2 nodes.
+🟠 worker in billing (prod-eu-1) cannot pull its image because registry registry.example refuses the image pulls.
+| 🟠 **worker** in **billing** (**prod-eu-1**) cannot pull its image because registry **registry.example** refuses the image pulls.
+| Related alerts: 2 not-ready pods
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods worker- -n billing
+| ```
+| *Proof: both replicas fail, on 2 nodes.*

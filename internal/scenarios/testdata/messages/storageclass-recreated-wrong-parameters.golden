@@ -1,0 +1,20 @@
+10:11:16 settled
+🟠 Storage class fast-ssd is failing (prod-eu-1) after the 10:10 UTC change. The provisioner says "failed to provision volume with StorageClass "fast-ssd": invalid parameter type". All four failing apps use it. To see the object's state and events, run kubectl describe persistentvolumeclaim pg -n data
+🟠 Storage class fast-ssd is failing (prod-eu-1) after the 10:10 UTC change.
+| 🟠 Storage class **fast-ssd** is failing (**prod-eu-1**) after the 10:10 UTC change.
+| The provisioner says `failed to provision volume with StorageClass "fast-ssd": invalid parameter type`.
+| All four failing apps use it.
+| To see the object's state and events, run
+| ```
+| kubectl describe persistentvolumeclaim pg -n data
+| ```
+10:16:16 settled
+🟠 api in shop (prod-eu-1) has only 1 of 2 replicas ready. Cause not found yet: nothing outside it points to one. In the last 30 minutes in shop: volume claim cache was created at 10:10 UTC; volume claim uploads was created at 10:10 UTC. To see the object's state and events, run kubectl describe deployment api -n shop
+🟠 api in shop (prod-eu-1) has only 1 of 2 replicas ready.
+| 🟠 **api** in **shop** (**prod-eu-1**) has only 1 of 2 replicas ready.
+| Cause not found yet: nothing outside it points to one.
+| In the last 30 minutes in shop: volume claim cache was created at 10:10 UTC; volume claim uploads was created at 10:10 UTC.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment api -n shop
+| ```

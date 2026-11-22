@@ -1,0 +1,14 @@
+10:01:30 settled
+🔴 Validating webhook policy-check (prod-eu-1) has no ready pods behind service policy-svc. Both failing apps use it. It fails closed (failurePolicy Fail) and the API server has rejected requests because of it. Affected: api in billing; api in shop.
+Related alerts: 2 failed pod creations, 2 replica failure alerts
+To check the webhook's backend and timeout, run kubectl get validatingwebhookconfiguration policy-check -o yaml
+🔴 Validating webhook policy-check (prod-eu-1) has no ready pods behind service policy-svc.
+| 🔴 Validating webhook **policy-check** (**prod-eu-1**) has no ready pods behind service policy-svc.
+| Both failing apps use it.
+| It fails closed (failurePolicy Fail) and the API server has rejected requests because of it.
+| Affected: **api** in **billing**; **api** in **shop**.
+| Related alerts: 2 failed pod creations, 2 replica failure alerts
+| To check the webhook's backend and timeout, run
+| ```
+| kubectl get validatingwebhookconfiguration policy-check -o yaml
+| ```
