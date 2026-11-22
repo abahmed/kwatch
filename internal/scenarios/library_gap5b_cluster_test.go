@@ -24,10 +24,13 @@ func gap5bClusterScenarios() []scenario {
 // rollout; two callers see a lookup time out once and are fine again.
 func gap5bCoreDNSPodRemoved() scenario {
 	return scenario{
-		expect: g2Quiet("coredns-pod-removed-lookups-stall-briefly",
+		expect: g2Exp("coredns-pod-removed-lookups-stall-briefly",
 			"One CoreDNS pod is replaced in a rollout; lookups of two "+
 				"workloads stall for the resolver timeout and recover "+
-				"within two minutes.").tail(10 * time.Minute),
+				"within two minutes.",
+			"deployment/kube-system/coredns", "notify", "node//n1",
+			"node//n2", "deployment/shop/cart",
+			"deployment/billing/invoices").tail(10 * time.Minute),
 		build: func(c *cluster) {
 			dns, fleet := gap5aDNS(c)
 			c.after(10 * time.Minute)

@@ -267,7 +267,7 @@ func gap7aNoPreStopDelay() scenario {
 				"on SIGTERM, its caller's connections to the pod being "+
 				"removed are refused and the caller restarts once per "+
 				"replaced pod.",
-			"unknown", "digest", "deployment/shop/web",
+			"unknown", "notify", "deployment/shop/web",
 			"node//n1", "node//n2", "deployment/shop/api").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {

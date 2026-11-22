@@ -12,12 +12,11 @@ import (
 // Deployment an operator created with it.
 func gap6aOwnerRefNamespace() scenario {
 	return scenario{
-		expect: g2Exp("upgrade-garbage-collects-cross-namespace-owner-ref",
+		expect: g2Quiet("upgrade-garbage-collects-cross-namespace-owner-ref",
 			"After an upgrade the garbage collector reports "+
 				"OwnerRefInvalidNamespace for a Deployment whose owner "+
-				"is in another namespace and deletes it and its pods.",
-			"unknown", "notify", "node//n1",
-			"deployment/ops/report-worker").
+				"is in another namespace and deletes it and its pods. "+
+				"Only a Warning event on a running Deployment shows it.").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))

@@ -246,12 +246,11 @@ func gap6bSnapshotCreationFailed() scenario {
 // zero; the VolumeSnapshots a backup tool creates never get a status.
 func gap6bSnapshotControllerAbsent() scenario {
 	return scenario{
-		expect: g2Exp("snapshot-controller-scaled-to-zero",
+		expect: g2Quiet("snapshot-controller-scaled-to-zero",
 			"The snapshot controller Deployment is scaled to zero; "+
 				"VolumeSnapshots created by a backup tool never get "+
-				"a status or an event.",
-			"unknown", "notify", "node//n1",
-			"deployment/kube-system/snapshot-controller").tail(10 * time.Minute),
+				"a status or an event. Nothing Kubernetes reports "+
+				"fails.").tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
 			ctl := c.deployment("kube-system", "snapshot-controller",

@@ -1,12 +1,7 @@
 {
   "name": "upgrade-garbage-collects-cross-namespace-owner-ref",
-  "description": "After an upgrade the garbage collector reports OwnerRefInvalidNamespace for a Deployment whose owner is in another namespace and deletes it and its pods.",
-  "root": "unknown",
-  "tier": "notify",
-  "maxMessages": 2,
-  "mustNotBlame": [
-    "node//n1",
-    "deployment/ops/report-worker"
-  ],
+  "description": "After an upgrade the garbage collector reports OwnerRefInvalidNamespace for a Deployment whose owner is in another namespace and deletes it and its pods. Only a Warning event on a running Deployment shows it.",
+  "maxMessages": 0,
+  "quiet": true,
   "tail": "10m0s"
 }
