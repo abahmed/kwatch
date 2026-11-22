@@ -299,7 +299,8 @@ func (v *view) unitErrorText(pod inventory.EntityID) string {
 
 // effectState is how a failing entity is matched as a row's effect.
 func (v *view) effectState(id inventory.EntityID) state {
-	return state{id: id, modes: findingModes(v.s.Findings[id]),
+	modes := append(findingModes(v.s.Findings[id]), v.evictedPodModes(id)...)
+	return state{id: id, modes: modes,
 		text: v.text(id), errText: v.errorText(id),
 		verdicts: v.containerVerdicts(id), ran: v.hasRun(id),
 		agent: v.daemonPod(id)}

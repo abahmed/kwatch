@@ -11,25 +11,15 @@
 | ```
 10:11:15 settled
 🟠 Node n1 (prod-eu-1) is low on disk space. Every app that uses it is failing. Replicas that do not depend on it are healthy. Affected: orders and payments in shop.
-Related alerts: 2 evictions
+Related alerts: 2 error alerts, 2 evictions
 To check the node's conditions and recent events, run kubectl describe node n1
 🟠 Node n1 (prod-eu-1) is low on disk space.
 | 🟠 Node n1 (**prod-eu-1**) is low on disk space.
 | Every app that uses it is failing.
 | Replicas that do not depend on it are healthy.
 | Affected: **orders** and **payments** in **shop**.
-| Related alerts: 2 evictions
+| Related alerts: 2 error alerts, 2 evictions
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n1
 | ```
-10:12:15 roll-up
-🟠 kwatch (prod-eu-1) found two new problems at the same time. orders and payments in shop are failing: exited with code 137. Each one alerts on its own when it changes or resolves.
-🟠 kwatch (prod-eu-1) found two new problems at the same time.
-| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
-|
-| **Problems**
-| - **orders** (**shop**) — exited with code 137
-| - **payments** (**shop**) — exited with code 137
-|
-| *Each one alerts on its own when it changes or resolves.*
