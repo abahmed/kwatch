@@ -5,6 +5,9 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
@@ -219,12 +222,13 @@ func gap4bCronFlood() scenario {
 			"apiserver//kube-apiserver").budget(3).tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
-			api := c.deployment("kube-system", "kube-apiserver",
-				"registry.k8s.io/kube-apiserver:v1.30.2", 1)
-			c.list(api.objects())
-			c.list(api.pod(0, "n1"))
+			c.list(staticPod(c, "kube-apiserver", "n1",
+				"registry.k8s.io/kube-apiserver:v1.30.2"))
 			cron := scheduleCronJob(c, "reports", "minutely-sync",
 				"* * * * *")
+			keep := int32(1000000)
+			cron.Spec.SuccessfulJobsHistoryLimit = &keep
+			cron.Spec.FailedJobsHistoryLimit = &keep
 			c.list(cron)
 			c.probe(kube.APIServer, "")
 			for i := range 30 {
@@ -232,12 +236,16 @@ func gap4bCronFlood() scenario {
 				job := finishedJob(c, cron, fmt.Sprintf("minutely-sync-%d",
 					2925000+i), c.now, 20*time.Second)
 				c.create(job)
+				ran := metav1.NewTime(c.now)
+				cron = cron.DeepCopy()
+				cron.Status.LastScheduleTime = &ran
+				cron.Status.LastSuccessfulTime = &ran
+				c.update(cron)
 			}
 			for restarts := int32(1); restarts <= 4; restarts++ {
-				c.update(api.pod(0, "n1", crashLoop(137, "OOMKilled", "",
-					restarts)))
-				api.setReady(0)
-				c.update(api.objects())
+				c.update(staticPod(c, "kube-apiserver", "n1",
+					"registry.k8s.io/kube-apiserver:v1.30.2",
+					crashLoop(137, "OOMKilled", "", restarts)))
 				c.probe(kube.APIServer, "Get \"https://10.96.0.1:443/"+
 					"readyz\": dial tcp 10.96.0.1:443: connect: "+
 					"connection refused")
@@ -274,4 +282,40 @@ func gap4bEtcdIntermittent() scenario {
 			}
 		},
 	}
+}
+
+// staticPod is a control-plane pod the kubelet of node runs from a
+// manifest: a mirror pod in kube-system owned by its node, with a 2Gi
+// memory limit.
+func staticPod(
+	c *cluster, component, node, image string, states ...podState,
+) *corev1.Pod {
+	yes := true
+	name := component + "-" + c.n(node)
+	meta := c.meta("kube-system", name)
+	meta.UID = types.UID(name)
+	meta.Labels = map[string]string{"component": component,
+		"tier": "control-plane"}
+	meta.Annotations = map[string]string{
+		"kubernetes.io/config.mirror": "0123456789abcdef"}
+	meta.CreationTimestamp = metav1.NewTime(c.start.Add(-time.Hour))
+	meta.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: "v1", Kind: "Node", Name: c.n(node),
+		UID: types.UID(c.n(node)), Controller: &yes}}
+	quantity := resource.MustParse("2Gi")
+	pod := &corev1.Pod{ObjectMeta: meta, Spec: corev1.PodSpec{
+		NodeName: c.n(node), Containers: []corev1.Container{{
+			Name: component, Image: image,
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: quantity},
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: quantity}},
+		}},
+	}}
+	running(c, pod)
+	for _, state := range states {
+		state(c, pod)
+	}
+	return pod
 }

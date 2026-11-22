@@ -69,6 +69,18 @@ func gap4bOldNodesLoseNetwork() scenario {
 	}
 }
 
+// boundNoStatus is a pod the scheduler bound whose kubelet has not
+// reported anything yet: Pending, PodScheduled only.
+func boundNoStatus(c *cluster, pod *corev1.Pod) {
+	pod.CreationTimestamp = metav1.NewTime(c.now)
+	pod.Status = corev1.PodStatus{
+		Phase: corev1.PodPending, QOSClass: corev1.PodQOSBurstable,
+		Conditions: []corev1.PodCondition{{Type: corev1.PodScheduled,
+			Status:             corev1.ConditionTrue,
+			LastTransitionTime: metav1.NewTime(c.now)}},
+	}
+}
+
 // gap4bKubeletStatusLag: a node that starts and stops many short-lived
 // pods hits the kubelet's client rate limit; the status of its pods lags
 // by minutes, so the pods read Pending although their containers run.
@@ -87,7 +99,7 @@ func gap4bKubeletStatusLag() scenario {
 			c.create(w.objects())
 			var pods []*corev1.Pod
 			for i := range 8 {
-				pod := w.pod(i, "n1", gap2NoScheduler)
+				pod := w.pod(i, "n1", boundNoStatus)
 				pods = append(pods, pod)
 				c.create(pod)
 			}

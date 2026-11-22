@@ -319,8 +319,13 @@ func gap5bNFSProviderRestarts() scenario {
 				"registry.example.com/nfs-server:2", 1)
 			c.list(nfs.objects())
 			c.list(nfs.pod(0, "n2"))
-			fleet := gap2Spread(c, []string{"shop/web", "billing/invoices",
-				"media/transcode"}, []string{"n1"})
+			c.list(scheduleClass(c, "nfs", "Immediate"))
+			c.list(clusterService(c, "storage", "nfs-server", 2049))
+			var fleet []*workload
+			for _, app := range [][2]string{{"shop", "web"},
+				{"billing", "invoices"}, {"media", "transcode"}} {
+				fleet = append(fleet, gap5bNFSConsumer(c, app[0], app[1]))
+			}
 			c.after(10 * time.Minute)
 			c.remove(nfs.pod(0, "n2"))
 			c.create(nfs.pod(1, "n2", startedNow))
@@ -343,4 +348,24 @@ func gap5bNFSProviderRestarts() scenario {
 			}
 		},
 	}
+}
+
+// gap5bNFSConsumer is a one-replica workload on n1 that mounts a claim
+// bound to a volume served by the nfs-server Service.
+func gap5bNFSConsumer(c *cluster, namespace, name string) *workload {
+	claim := storageBoundClaim(c, namespace, "shared", "nfs", "10Gi",
+		"nfs-"+namespace)
+	volume := storageVolume(c, claim, "nfs-"+namespace)
+	volume.Spec.PersistentVolumeSource = corev1.PersistentVolumeSource{
+		NFS: &corev1.NFSVolumeSource{
+			Server: "nfs-server.storage.svc.cluster.local",
+			Path:   "/exports"},
+	}
+	w := c.deployment(namespace, name,
+		"registry.example.com/"+name+":1.0", 1)
+	storageMount(w, claim.Name)
+	c.list(claim, volume)
+	c.list(w.objects())
+	c.list(w.pod(0, "n1"))
+	return w
 }

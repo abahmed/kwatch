@@ -6,6 +6,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
@@ -200,8 +201,13 @@ func gap6aSpreadSkewUpgrade() scenario {
 			"deployment/shop/api", "notify", "node//n1", "node//n2",
 			"node//n3").tail(10 * time.Minute),
 		build: func(c *cluster) {
-			c.list(c.node("n1", "zone-a"), c.node("n2", "zone-b"),
-				c.node("n3", "zone-c"))
+			var pool []runtime.Object
+			for i, zone := range []string{"zone-a", "zone-b", "zone-c"} {
+				node := c.node("n"+itoa(i+1), zone)
+				node.Labels["pool"] = "web"
+				pool = append(pool, node)
+			}
+			c.list(pool...)
 			w := c.deployment("shop", "api", "registry.example.com/api:3", 2)
 			configTemplate(w, func(spec *corev1.PodSpec) {
 				spec.NodeSelector = map[string]string{"pool": "web"}
@@ -216,11 +222,10 @@ func gap6aSpreadSkewUpgrade() scenario {
 			*w.deployment.Spec.Replicas = 4
 			w.setReady(2)
 			c.update(w.objects())
-			message := "0/3 nodes are available: 1 node(s) didn't match " +
-				"pod topology spread constraints, 2 node(s) didn't " +
-				"match Pod's node affinity/selector. preemption: 0/3 " +
-				"nodes are available: 3 Preemption is not helpful for " +
-				"scheduling."
+			message := "0/3 nodes are available: 3 node(s) didn't match " +
+				"pod topology spread constraints (missing required " +
+				"label). preemption: 0/3 nodes are available: 3 " +
+				"Preemption is not helpful for scheduling."
 			c.create(w.pod(2, "", pendingUnscheduled(message)),
 				w.pod(3, "", pendingUnscheduled(message)))
 			gap5aPending(c, w, []int{2, 3}, message, 8)

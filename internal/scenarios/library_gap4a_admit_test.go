@@ -65,9 +65,12 @@ func gap4aCriticalPreempts() scenario {
 		ds := g2Daemon(c, "kube-system", "node-agent", "n2")
 		c.after(10 * time.Minute)
 		message := "Preempted in order to admit critical pod"
+		c.list(g17Obj(c, "scheduling.k8s.io/v1", "PriorityClass", "",
+			"system-node-critical", map[string]any{"value": int64(2000001000)}))
+		ds.Spec.Template.Spec.PriorityClassName = "system-node-critical"
 		setAgentCounts(ds, 2, 2)
 		c.update(ds)
-		c.create(agentPod(c, ds, "n1"))
+		c.create(agentPod(c, ds, "n1", startedNow))
 		for _, w := range []*workload{orders, payments} {
 			pod := w.pod(0, "n1", g2Failed("Preempting", message))
 			c.update(pod)
