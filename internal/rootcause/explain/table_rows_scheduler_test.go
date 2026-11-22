@@ -55,6 +55,19 @@ var schedulerNamesRowCases = []rowCase{
 				"node affinity/selector.")
 			return pod
 		}},
+	{row: "scheduler-names-spread", want: "deployment/shop/api",
+		build: func(f *fixture) inventory.EntityID {
+			pod := f.workload("shop", "api", 1)[0]
+			spec, _ := json.Marshal(kube.SchedulingSpec{
+				Spread: []kube.Spread{{TopologyKey: "topology.kubernetes.io/zone",
+					MaxSkew: 1}}})
+			f.attrs(pod, map[string]inventory.Value{
+				kube.AttrSchedulingSpec: inventory.Text(string(spec))})
+			pendingWith(f, pod, "0/3 nodes are available: 3 node(s) "+
+				"didn't match pod topology spread constraints (missing "+
+				"required label).")
+			return pod
+		}},
 	{row: "scheduler-names-cordoned-node", want: "node//n3",
 		build: func(f *fixture) inventory.EntityID {
 			node := f.nodes("zone-a", "n3")[0]

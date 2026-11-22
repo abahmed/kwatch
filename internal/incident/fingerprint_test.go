@@ -209,3 +209,31 @@ func TestFingerprintIgnoresNeverReadyAfterNoEndpoints(t *testing.T) {
 		t.Fatal("never ready on its own must change the fingerprint")
 	}
 }
+
+// A gap that surfaces after the announcement (nodes kwatch may not
+// list) is not news of the failure.
+func TestFingerprintIgnoresLateUnverifiedGap(t *testing.T) {
+	p := incidentOf(entity(kube.KindDeployment, "web"), nil)
+	before := fingerprint(p)
+	p.Unverified = []string{"nodes"}
+	if fingerprint(p) != before {
+		t.Fatal("a newly known gap changed the fingerprint")
+	}
+}
+
+// A failing container counts its pod, so a roll-up that listed a crash
+// loop does not see the pod's own finding later as growth.
+func TestFailingPodsCountsThePodOfAFailingContainer(t *testing.T) {
+	pod := entity(kube.KindPod, "web-a")
+	box := inventory.EntityID{Kind: kube.KindContainer,
+		Namespace: pod.Namespace, Name: pod.Name + "/app"}
+	p := incidentOf(pod, nil)
+	p.Members = map[detection.Key]detection.Finding{}
+	for _, id := range []inventory.EntityID{box, pod} {
+		f := sig(id, reasons.CrashLoopBackOff, detection.Warning)
+		p.Members[f.Key()] = f
+	}
+	if got := failingPods(p); got != 1 {
+		t.Fatalf("failingPods = %d, want 1", got)
+	}
+}

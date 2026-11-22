@@ -67,6 +67,16 @@ var schedulerNamers = []schedulerNamer{
 			return strings.Contains(s, "pod affinity rules")
 		},
 		named: (*view).affinityTargets},
+	{ // The pod's topology spread key is a label no node has.
+		mode: ModeNamedByScheduler + ".Spread",
+		rule: "scheduler-names-spread",
+		match: func(s string) bool {
+			// Without the label the constraint's key names, no node
+			// can count: the spread setting, not capacity, is at fault.
+			return strings.Contains(s, "pod topology spread "+
+				"constraints (missing required label)")
+		},
+		named: (*view).spreadOwner},
 	{ // A node is cordoned and the rest have no room: the cordon is what
 		// left the pod without a place.
 		mode: ModeNamedByScheduler + ".CordonedNode",
@@ -298,4 +308,17 @@ func (v *view) cordonedNodes(
 		}
 	}
 	return out
+}
+
+// spreadOwner is the workload whose pod sets the topology spread
+// constraint the scheduler names: the constraint is in the pod's spec,
+// so the workload that owns the spec is what to read.
+func (v *view) spreadOwner(
+	pod inventory.EntityID, _ string,
+) []inventory.EntityID {
+	entity, ok := v.s.Model.Entity(pod)
+	if !ok || len(kube.ParseSchedulingSpec(entity).Spread) == 0 {
+		return nil
+	}
+	return []inventory.EntityID{rootcause.TopOwner(v.s.Model, pod)}
 }

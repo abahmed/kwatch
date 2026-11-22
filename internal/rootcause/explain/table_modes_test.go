@@ -29,6 +29,7 @@ var pseudoModes = []detection.Mode{
 	ModeNamedByScheduler, ModeNamedByScheduler + ".PriorityClass",
 	ModeNamedByScheduler + ".Owner", ModeNamedByScheduler + ".Claim",
 	ModeNamedByScheduler + ".AffinityTarget",
+	ModeNamedByScheduler + ".Spread",
 	ModeNamedByScheduler + ".PinnedNode",
 	ModeNamedByScheduler + ".ScarceNode", ModeNamedByScheduler + ".CordonedNode", ModeClassRejects, ModeClaimPinsVolume,
 	ModeSelectedNodeGone, ModeEndedPods, ModeKubeletSilent,
