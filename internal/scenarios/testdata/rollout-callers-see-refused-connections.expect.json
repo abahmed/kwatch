@@ -1,13 +1,14 @@
 {
   "name": "rollout-callers-see-refused-connections",
   "description": "During a healthy rollout of a backend that exits at once on SIGTERM, its caller's connections to the pod being removed are refused and the caller restarts once per replaced pod.",
-  "root": "deployment/shop/api",
+  "root": "unknown",
   "tier": "digest",
   "maxMessages": 2,
   "mustNotBlame": [
     "deployment/shop/web",
     "node//n1",
-    "node//n2"
+    "node//n2",
+    "deployment/shop/api"
   ],
   "tail": "10m0s"
 }

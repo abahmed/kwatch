@@ -257,8 +257,8 @@ func gap4bCRDGrowth() scenario {
 			"An operator crash-loops because listing the instances of "+
 				"a custom resource that grows without expiry times out "+
 				"at the API server.",
-			"customresourcedefinition//authrequests.auth.example",
-			"notify", "deployment/auth/dex-operator", "node//n1").
+			"unknown", "notify", "deployment/auth/dex-operator",
+			"node//n1").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))

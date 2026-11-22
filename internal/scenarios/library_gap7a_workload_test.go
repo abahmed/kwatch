@@ -267,8 +267,9 @@ func gap7aNoPreStopDelay() scenario {
 				"on SIGTERM, its caller's connections to the pod being "+
 				"removed are refused and the caller restarts once per "+
 				"replaced pod.",
-			"deployment/shop/api", "digest", "deployment/shop/web",
-			"node//n1", "node//n2").tail(10 * time.Minute),
+			"unknown", "digest", "deployment/shop/web",
+			"node//n1", "node//n2", "deployment/shop/api").
+			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			w := gapRelease(c, "api", func(spec *corev1.PodSpec) {
 				spec.Containers[0].Env = []corev1.EnvVar{{Name: "V",

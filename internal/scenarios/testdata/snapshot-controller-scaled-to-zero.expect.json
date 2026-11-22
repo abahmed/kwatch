@@ -1,11 +1,12 @@
 {
   "name": "snapshot-controller-scaled-to-zero",
   "description": "The snapshot controller Deployment is scaled to zero; VolumeSnapshots created by a backup tool never get a status or an event.",
-  "root": "deployment/kube-system/snapshot-controller",
+  "root": "unknown",
   "tier": "notify",
   "maxMessages": 2,
   "mustNotBlame": [
-    "node//n1"
+    "node//n1",
+    "deployment/kube-system/snapshot-controller"
   ],
   "tail": "10m0s"
 }

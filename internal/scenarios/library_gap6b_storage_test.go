@@ -250,8 +250,8 @@ func gap6bSnapshotControllerAbsent() scenario {
 			"The snapshot controller Deployment is scaled to zero; "+
 				"VolumeSnapshots created by a backup tool never get "+
 				"a status or an event.",
-			"deployment/kube-system/snapshot-controller", "notify",
-			"node//n1").tail(10 * time.Minute),
+			"unknown", "notify", "node//n1",
+			"deployment/kube-system/snapshot-controller").tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
 			ctl := c.deployment("kube-system", "snapshot-controller",

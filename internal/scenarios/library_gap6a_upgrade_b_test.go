@@ -16,7 +16,8 @@ func gap6aOwnerRefNamespace() scenario {
 			"After an upgrade the garbage collector reports "+
 				"OwnerRefInvalidNamespace for a Deployment whose owner "+
 				"is in another namespace and deletes it and its pods.",
-			"deployment/ops/report-worker", "notify", "node//n1").
+			"unknown", "notify", "node//n1",
+			"deployment/ops/report-worker").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
