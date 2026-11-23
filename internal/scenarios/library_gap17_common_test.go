@@ -96,10 +96,12 @@ func g17Victims(
 }
 
 // g17Unready runs the pods of w without readiness; the kubelet reports
-// the failed probe with message.
+// the failed probe with message. The pods went unready in round 1 and
+// the kubelet keeps that transition time while they stay unready.
 func g17Unready(c *cluster, w *workload, round int32, message string) {
 	n := int(*w.deployment.Spec.Replicas)
-	g17State(c, w, n, notReady)
+	onset := c.now.Add(-time.Duration(round-1) * time.Minute)
+	g17State(c, w, n, notReadySince(onset))
 	gapKubelet(c, w.pod(0, "n1"), "Unhealthy", message, round)
 }
 

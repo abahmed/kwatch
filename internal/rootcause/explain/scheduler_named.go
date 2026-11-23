@@ -1,6 +1,8 @@
 package explain
 
 import (
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -296,9 +298,13 @@ func schedulerNamesRows() []Row {
 	return rows
 }
 
-// cordonedNodes are the nodes marked unschedulable.
+// cordonedNodes are the nodes marked unschedulable. The scheduler
+// checks the cordon first, so it counts every cordoned node it saw. When
+// more nodes are cordoned than the verdict counts, it was given before
+// some of the cordons and cannot say which node left the pod without a
+// place: none is named.
 func (v *view) cordonedNodes(
-	_ inventory.EntityID, _ string,
+	_ inventory.EntityID, verdict string,
 ) []inventory.EntityID {
 	var out []inventory.EntityID
 	for _, id := range v.s.Model.Entities(kube.KindNode) {
@@ -307,8 +313,25 @@ func (v *view) cordonedNodes(
 			out = append(out, id)
 		}
 	}
+	if seen, ok := unschedulableCount(verdict); ok && len(out) > seen {
+		return nil
+	}
 	return out
 }
+
+// unschedulableCount is how many nodes the verdict says were
+// unschedulable.
+func unschedulableCount(verdict string) (int, bool) {
+	match := unschedulableNodes.FindStringSubmatch(verdict)
+	if match == nil {
+		return 0, false
+	}
+	n, err := strconv.Atoi(match[1])
+	return n, err == nil
+}
+
+var unschedulableNodes = regexp.MustCompile(
+	`(\d+) nodes?(?:\(s\))? (?:were|was|is|are) unschedulable`)
 
 // spreadOwner is the workload whose pod sets the topology spread
 // constraint the scheduler names: the constraint is in the pod's spec,

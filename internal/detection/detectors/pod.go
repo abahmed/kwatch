@@ -81,7 +81,14 @@ func (d Pod) detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	if flag(e, kube.AttrDeleting) {
-		return append(d.terminating(ctx, e), preemptionFindings(ctx, e)...)
+		out := append(d.terminating(ctx, e), preemptionFindings(ctx, e)...)
+		if text(e, kube.AttrReason) == nodeLostReason {
+			// The node controller marked the pod lost: its node
+			// stopped reporting. That is known now, not after the
+			// pod has outlived its grace period.
+			out = append(out, unknownState(valueSince(e, kube.AttrReason)))
+		}
+		return out
 	}
 	switch text(e, kube.AttrPhase) {
 	case "Pending":
@@ -94,14 +101,23 @@ func (d Pod) detect(
 	case "Running":
 		return append(d.notReady(ctx, e), conditionFindings(ctx, e)...)
 	case "Unknown":
-		return []detection.Finding{{
-			Reason:   reasons.PodStatusUnknown,
-			Severity: detection.Warning,
-			Since:    valueSince(e, kube.AttrPhase),
-			Summary:  "Pod state is unknown: its node stopped reporting",
-		}}
+		return []detection.Finding{unknownState(valueSince(e, kube.AttrPhase))}
 	default:
 		return nil
+	}
+}
+
+// nodeLostReason is the status reason the node controller gives a pod
+// whose node stopped reporting.
+const nodeLostReason = "NodeLost"
+
+// unknownState is the finding for a pod whose node stopped reporting.
+func unknownState(since time.Time) detection.Finding {
+	return detection.Finding{
+		Reason:   reasons.PodStatusUnknown,
+		Severity: detection.Warning,
+		Since:    since,
+		Summary:  "Pod state is unknown: its node stopped reporting",
 	}
 }
 
