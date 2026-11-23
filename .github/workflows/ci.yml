@@ -85,9 +85,17 @@ jobs:
   # The labelled scenario library and its alert-quality gates: the slowest
   # package, so it runs beside Verify instead of inside it.
   scenarios:
-    name: Scenarios
+    name: Scenarios (${{ matrix.shard }})
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - shard: gates
+          filter: -run '^TestScorecardGates$$'
+        - shard: replays
+          filter: -skip '^TestScorecardGates$$'
     permissions:
       contents: read
     steps:
@@ -102,7 +110,7 @@ jobs:
         go-version-file: go.mod
 
     - name: Run scenarios and alert-quality gates
-      run: make scenarios-gate
+      run: make scenarios-gate SCENARIOS_FILTER="${{ matrix.filter }}"
 
     - name: Publish alert-quality report
       if: always()
@@ -115,7 +123,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
-        name: alert-quality-report
+        name: alert-quality-report-${{ matrix.shard }}
         path: _output/alert-quality.md
         if-no-files-found: warn
 

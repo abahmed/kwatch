@@ -85,6 +85,9 @@ TEST_TIMEOUT ?= 30m
 # The scenario gate replays every labelled scenario under -race and grows
 # with the corpus, so it gets its own, longer limit.
 SCENARIOS_TIMEOUT ?= 50m
+# SCENARIOS_FILTER picks a shard, e.g. -run '^TestScorecardGates$$' or
+# -skip '^TestScorecardGates$$'; CI runs the two shards in parallel.
+SCENARIOS_FILTER ?=
 
 help:
 	@echo "kwatch Makefile"
@@ -181,7 +184,7 @@ scenarios-gate:
 	@mkdir -p $(dir $(ALERT_QUALITY_REPORT))
 	KWATCH_SCORECARD_GATE=1 $(ALERT_QUALITY_ENV) \
 		$(GOTEST) -race -count=1 -timeout $(SCENARIOS_TIMEOUT) \
-		./internal/scenarios/
+		$(SCENARIOS_FILTER) ./internal/scenarios/
 
 verify-core: build vet lint coverage-check verify-latency line-check \
 	diff-check architecture-check test-layout-check hygiene-check \
