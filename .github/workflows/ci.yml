@@ -87,7 +87,7 @@ jobs:
   scenarios:
     name: Scenarios
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:

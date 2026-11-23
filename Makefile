@@ -82,6 +82,9 @@ ALERT_QUALITY_ABLATION_TEST := $(GOTEST) -count=1 -timeout 600s \
 # Race tests are slower than the default per-package timeout allows for
 # the scenario replay.
 TEST_TIMEOUT ?= 30m
+# The scenario gate replays every labelled scenario under -race and grows
+# with the corpus, so it gets its own, longer limit.
+SCENARIOS_TIMEOUT ?= 50m
 
 help:
 	@echo "kwatch Makefile"
@@ -177,7 +180,7 @@ coverage-check: coverage
 scenarios-gate:
 	@mkdir -p $(dir $(ALERT_QUALITY_REPORT))
 	KWATCH_SCORECARD_GATE=1 $(ALERT_QUALITY_ENV) \
-		$(GOTEST) -race -count=1 -timeout $(TEST_TIMEOUT) \
+		$(GOTEST) -race -count=1 -timeout $(SCENARIOS_TIMEOUT) \
 		./internal/scenarios/
 
 verify-core: build vet lint coverage-check verify-latency line-check \
