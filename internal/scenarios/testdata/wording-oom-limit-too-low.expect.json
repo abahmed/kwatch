@@ -1,0 +1,12 @@
+{
+  "name": "wording-oom-limit-too-low",
+  "description": "Both replicas with a 256Mi limit are OOMKilled seven times in twenty minutes on healthy nodes; the message names the limit and one action.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

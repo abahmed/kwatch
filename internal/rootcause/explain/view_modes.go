@@ -115,10 +115,19 @@ func (v *view) virtualModes(
 	if modes := preemptionModes(link); len(modes) > 0 {
 		return modes
 	}
+	if modes := v.namedModes(id, effect, link); len(modes) > 0 {
+		return modes
+	}
 	if modes := v.failingUnitModes(id, effect, link); len(modes) > 0 {
 		return modes
 	}
 	if modes := v.sharedServiceModes(id, effect, link); len(modes) > 0 {
+		return modes
+	}
+	if modes := v.dnsServingModes(id, effect, link); len(modes) > 0 {
+		return modes
+	}
+	if modes := v.nodeGoneModes(id, effect, link); len(modes) > 0 {
 		return modes
 	}
 	switch id.Kind {
@@ -143,7 +152,7 @@ func (v *view) virtualModes(
 	if modes := v.callModes(id, effect, link); len(modes) > 0 {
 		return modes
 	}
-	if modes := v.missingModes(id, link); len(modes) > 0 {
+	if modes := v.missingModes(id, effect, link); len(modes) > 0 {
 		return modes
 	}
 	return v.keyMissingModes(id, effect, link)
@@ -165,7 +174,8 @@ func (v *view) sharedServiceModes(
 			return pseudoFailing(ModePullThrottled)
 		}
 	case kindClusterDNS:
-		if v.resolutionFailing(effect, link) {
+		if v.resolutionFailing(effect, link) &&
+			!(link == LinkResolvesVia && v.dnsServersReady()) {
 			return pseudoFailing(ModeResolution)
 		}
 	case kube.KindAPIService:
@@ -227,10 +237,12 @@ func isAdmissionKind(kind inventory.Kind) bool {
 // plane publishes into a namespace created moments ago is only late
 // (kube.BootstrapPending).
 func (v *view) missingModes(
-	id inventory.EntityID, link LinkType,
+	id, effect inventory.EntityID, link LinkType,
 ) []modeHealth {
 	if (link == LinkUses || link == LinkMounts || link == LinkRoutesTo) &&
-		!v.s.Model.Exists(id) && !v.namespaceTerminating(id.Namespace) &&
+		!v.s.Model.Exists(id) &&
+		!v.schedulerSaysOtherwise(id, effect) &&
+		!v.namespaceTerminating(id.Namespace) &&
 		kube.BootstrapPending(v.s.Model, id, v.s.Now) == 0 {
 		return pseudoFailing(ModeMissing)
 	}
@@ -259,6 +271,9 @@ func (v *view) objectModes(
 		return modes, true
 	}
 	if modes, ok := v.finalizerModes(id, effect, link); ok {
+		return modes, true
+	}
+	if modes, ok := v.addressHolderModes(id, effect, link); ok {
 		return modes, true
 	}
 	return v.storageModes(id, effect, link)

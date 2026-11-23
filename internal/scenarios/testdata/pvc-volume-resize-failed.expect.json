@@ -1,0 +1,12 @@
+{
+  "name": "pvc-volume-resize-failed",
+  "description": "A full claim is edited to a larger size; the CSI resizer reports VolumeResizeFailed on every try and the claim keeps its old capacity.",
+  "root": "persistentvolumeclaim/inventory/pgdata",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "storageclass//standard"
+  ],
+  "tail": "10m0s"
+}

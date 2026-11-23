@@ -1,0 +1,7 @@
+{
+  "name": "one-path-slow-dependency-health-ok",
+  "description": "Only /report on a Deployment exceeds the ingress timeout; /healthz passes, nothing restarts, no warnings.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "10m0s"
+}

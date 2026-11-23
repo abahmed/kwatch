@@ -1,0 +1,13 @@
+{
+  "name": "dns-storm-from-looping-workload",
+  "description": "A crawler crash-loops on a failing lookup and floods CoreDNS; CoreDNS is OOM-killed and lookups of other namespaces time out. Query rates are not visible, so the crawler is only the first to fail.",
+  "root": "deployment/kube-system/coredns",
+  "tier": "page",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "deployment/billing/invoices"
+  ],
+  "ambiguous": true,
+  "tail": "10m0s"
+}

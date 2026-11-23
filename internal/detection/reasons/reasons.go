@@ -81,10 +81,12 @@ const (
 const (
 	ProgressDeadlineExceeded = "ProgressDeadlineExceeded"
 	DeploymentUnavailable    = "DeploymentUnavailable"
+	DeploymentPausedEdit     = "DeploymentPausedEdit"
 	DeploymentReplicaFailure = "DeploymentReplicaFailure"
 	ReplicaSetFailure        = "ReplicaSetFailure"
 	DaemonSetUnavailable     = "DaemonSetUnavailable"
 	DaemonSetMisscheduled    = "DaemonSetMisscheduled"
+	PodNameTaken             = "PodNameTaken"
 	StsUnavailable           = "StsUnavailable"
 	ScalingDisabled          = "ScalingDisabled"
 	FailedGetResourceMetric  = "FailedGetResourceMetric"
@@ -295,7 +297,10 @@ const (
 	ReadinessProbeFailed = "ReadinessProbeFailed"
 	// ReadinessFlapping is a workload whose pods keep switching between
 	// ready and not ready, so the endpoints of its Service keep changing.
-	ReadinessFlapping      = "ReadinessFlapping"
+	ReadinessFlapping = "ReadinessFlapping"
+	// ReplicasFlapping is a workload whose replica count is set back and
+	// forth, by an autoscaler or by two writers that disagree.
+	ReplicasFlapping       = "ReplicasFlapping"
 	PodAdmissionRejected   = "PodAdmissionRejected"
 	ExitNotExecutable      = "ContainerExitNotExecutable"
 	ExitCommandNotFound    = "ContainerExitCommandNotFound"
@@ -313,6 +318,7 @@ const (
 	ContainerGCFailed      = "ContainerGCFailed"
 	NodePodIPExhausted     = "NodePodIPExhausted"
 	NodeCNINotReady        = "NodeCNINotReady"
+	NodePodNetworkConflict = "NodePodNetworkConflict"
 	NodeHeartbeatStale     = "NodeHeartbeatStale"
 	PodResizeInfeasible    = "PodResizeInfeasible"
 	PodResizeDeferred      = "PodResizeDeferred"
@@ -344,6 +350,7 @@ const (
 	PdbOverlap                    = "PdbOverlap"
 	PdbSyncFailed                 = "PdbSyncFailed"
 	PdbBlocksDrain                = "PdbBlocksDrain"
+	PodBlocksDrain                = "PodBlocksDrain"
 	ResourceClaimUnallocated      = "ResourceClaimUnallocated"
 	FailedPrepareDynamicResources = "FailedPrepareDynamicResources"
 	VolumeDetachFailure           = "VolumeDetachFailure"

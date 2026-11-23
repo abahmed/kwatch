@@ -102,6 +102,7 @@ const (
 	AttrGeneration       = "generation"
 	AttrObservedGen      = "generation.observed"
 	AttrTemplateHash     = "template.hash"
+	AttrTemplateImages   = "template.images"
 	AttrRevision         = "revision"
 	AttrProgressDeadline = "progress.deadline.exceeded"
 	AttrConditionPrefix  = "condition."

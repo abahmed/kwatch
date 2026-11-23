@@ -91,6 +91,9 @@ type Cause struct {
 	// or change, or for a zone or pool its first broken node. Zero when
 	// unknown.
 	Began time.Time
+	// Onset is when the earliest failure the cause explains began.
+	// Zero when unknown.
+	Onset time.Time
 	// Hops is the failure chain the cause was extended along, from the
 	// cause to the deepest failure it explains; empty when it explains
 	// only what it reaches directly. See chain.go.

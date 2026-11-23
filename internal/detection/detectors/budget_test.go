@@ -45,7 +45,7 @@ func TestBudgetReportsSelectingNothing(t *testing.T) {
 	eval := evaluate(Budget{}, m, t0.Add(11*time.Minute), id, nil)
 	require.Len(t, eval.Findings, 1)
 	assert.Equal(t, "Budget.SelectsNothing", string(eval.Findings[0].Mode))
-	assert.True(t, eval.Findings[0].Advisory)
+	assert.False(t, eval.Findings[0].Advisory)
 }
 
 func TestBudgetSelectingPodsIsFine(t *testing.T) {

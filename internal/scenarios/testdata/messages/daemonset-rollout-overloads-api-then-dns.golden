@@ -1,0 +1,54 @@
+10:14:15 settled
+🟠 The Kubernetes API (prod-eu-1) is rejecting 12 requests a second (priority level workload-low). To see which API server health checks fail, run kubectl get --raw '/readyz?verbose'
+🟠 The Kubernetes API (prod-eu-1) is rejecting 12 requests a second (priority level workload-low).
+| 🟠 The Kubernetes API (**prod-eu-1**) is rejecting 12 requests a second (priority level workload-low).
+| To see which API server health checks fail, run
+| ```
+| kubectl get --raw '/readyz?verbose'
+| ```
+10:17:15 settled
+🟠 invoices in billing (prod-eu-1) and two other workloads keep crashing with the same error. It fails with "failed to list *v1.Pod: the server has received too many requests and has asked us to try again later (get pods)". Its last run lasted ten seconds; two restarts since its pod was created about one hour ago. Affected: cart and search in shop. To read the output of the last crash, run kubectl logs deploy/invoices -c app -n billing --previous
+Proof: both replicas fail, on 2 nodes (invoices); both replicas fail, on 2 nodes (cart); both replicas fail, on 2 nodes (search).
+🟠 invoices in billing (prod-eu-1) and two other workloads keep crashing with the same error.
+| 🟠 **invoices** in **billing** (**prod-eu-1**) and two other workloads keep crashing with the same error.
+| It fails with
+| ```
+| failed to list *v1.Pod: the server has received too many requests and has asked us to try again later (get pods)
+| ```
+| Its last run lasted ten seconds; two restarts since its pod was created about one hour ago.
+| Affected: **cart** and **search** in **shop**.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/invoices -c app -n billing --previous
+| ```
+| *Proof: both replicas fail, on 2 nodes (invoices); both replicas fail, on 2 nodes (cart); both replicas fail, on 2 nodes (search).*
+10:43:15 roll-up
+🟠 kwatch (prod-eu-1) found two new problems at the same time. invoices in billing keeps crashing. search in shop keeps crashing. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - **invoices** in **billing** keeps crashing
+| - **search** in **shop** keeps crashing
+|
+| *Each one alerts on its own when it changes or resolves.*
+10:43:45 settled
+🔴 Cluster DNS (prod-eu-1) has been failing for about two minutes. It reports "lookup kubernetes.default.svc.cluster.local on 10.96.0.10:53: i/o timeout". To see the cluster DNS pods, run kubectl -n kube-system get pods -l k8s-app=kube-dns
+🔴 Cluster DNS (prod-eu-1) has been failing for about two minutes.
+| 🔴 Cluster DNS (**prod-eu-1**) has been failing for about two minutes.
+| It reports `lookup kubernetes.default.svc.cluster.local on 10.96.0.10:53: i/o timeout`.
+| To see the cluster DNS pods, run
+| ```
+| kubectl -n kube-system get pods -l k8s-app=kube-dns
+| ```
+10:44:15 settled
+🟠 cart in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "Error: dial tcp: lookup db.shop.svc.cluster.local on 10.96.0.10:53: no such host". Its last run lasted ten seconds; 13 restarts since its pod was created about two hours ago. To read the output of the last crash, run kubectl logs deploy/cart -c app -n shop --previous
+🟠 cart in shop (prod-eu-1) keeps crashing.
+| 🟠 **cart** in **shop** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with `Error: dial tcp: lookup db.shop.svc.cluster.local on 10.96.0.10:53: no such host`.
+| Its last run lasted ten seconds; 13 restarts since its pod was created about two hours ago.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/cart -c app -n shop --previous
+| ```

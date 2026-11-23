@@ -1,0 +1,10 @@
+10:03:15 settled
+🟠 api in shop (prod-eu-1) is failing: volume cannot be mounted. Cause not found yet: its node and registry are healthy and unchanged. In the last 30 minutes in shop: api: volume shared unset → other at 10:02 UTC. To see the pods' state and events, run kubectl describe pods api- -n shop
+🟠 api in shop (prod-eu-1) is failing: volume cannot be mounted.
+| 🟠 **api** in **shop** (**prod-eu-1**) is failing: volume cannot be mounted.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| In the last 30 minutes in shop: api: volume shared unset → other at 10:02 UTC.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods api- -n shop
+| ```

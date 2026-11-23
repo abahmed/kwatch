@@ -1,0 +1,11 @@
+10:03:15 settled
+🟠 node-local-dns in kube-system (prod-eu-1) keeps crashing because it holds the resolver address that lookups time out on. It fails with "[FATAL] listen tcp 169.254.20.10:8080: bind: address already in use". Replicas that do not depend on it are healthy. Affected: invoices in billing; transcode in media; web in shop. To read the output of the last crash, run kubectl logs ds/node-local-dns -c app -n kube-system --previous
+🟠 node-local-dns in kube-system (prod-eu-1) keeps crashing because it holds the resolver address that lookups time out on.
+| 🟠 **node-local-dns** in **kube-system** (**prod-eu-1**) keeps crashing because it holds the resolver address that lookups time out on.
+| It fails with `[FATAL] listen tcp 169.254.20.10:8080: bind: address already in use`.
+| Replicas that do not depend on it are healthy.
+| Affected: **invoices** in **billing**; **transcode** in **media**; **web** in **shop**.
+| To read the output of the last crash, run
+| ```
+| kubectl logs ds/node-local-dns -c app -n kube-system --previous
+| ```

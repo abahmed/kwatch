@@ -1,0 +1,14 @@
+10:13:15 settled
+🟠 db is failing in shop (prod-eu-1) after the 10:10 UTC release. The release changed the LOG. The scheduler says "0/2 nodes are available: 2 node has pod using PersistentVolumeClaim with the same name and ReadWriteOncePod access…". Fix: correct env var LOG of container app in deployment/db. To see the rollout state, run kubectl rollout status deployment/db -n shop
+🟠 db is failing in shop (prod-eu-1) after the 10:10 UTC release.
+| 🟠 db is failing in **shop** (**prod-eu-1**) after the 10:10 UTC release.
+| The release changed the LOG.
+| The scheduler says
+| ```
+| 0/2 nodes are available: 2 node has pod using PersistentVolumeClaim with the same name and ReadWriteOncePod access…
+| ```
+| Fix: correct env var LOG of container app in deployment/db.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/db -n shop
+| ```

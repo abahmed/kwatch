@@ -121,7 +121,7 @@ func (v *view) upstream(id inventory.EntityID) []hop {
 	out = append(out, v.releaseHops(id)...)
 	out = append(out, v.namespaceHop(id)...)
 	out = append(out, v.virtualHops(id)...)
-	out = sampleHops(uniqueHops(out))
+	out = v.withoutClusterDNSBehindResolver(id, sampleHops(uniqueHops(out)))
 	v.hops[id] = out
 	return out
 }

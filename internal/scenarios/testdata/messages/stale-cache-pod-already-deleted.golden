@@ -1,0 +1,17 @@
+10:01:15 settled
+🟠 api in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "boot failed". Its last run lasted ten seconds; six restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/api -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps crashing.
+| 🟠 **api** in **shop** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with `boot failed`.
+| Its last run lasted ten seconds; six restarts since its pod was created one hour ago.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/api -c app -n shop --previous
+| ```
+10:18:00 healthy for 3m0s
+✅ Replica set api-4dffe2cd in shop (prod-eu-1) was deleted. It was failing for 15 minutes.
+✅ Replica set api-4dffe2cd in shop (prod-eu-1) was deleted.
+| ✅ Replica set **api-4dffe2cd** in **shop** (**prod-eu-1**) was deleted.
+| It was failing for 15 minutes.

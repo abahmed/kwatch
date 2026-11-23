@@ -1,0 +1,11 @@
+10:06:15 settled
+🟠 Zone zone-c (prod-eu-1) has pods on its nodes failing the same way. One of them reports "Back-off pulling image: dial tcp: lookup mirror.zone-c.internal: i/o timeout". Every error mentions it. Replicas that do not depend on it are healthy. Affected: render in media. To see why the container cannot start, run kubectl describe pods render- -n media
+🟠 Zone zone-c (prod-eu-1) has pods on its nodes failing the same way.
+| 🟠 Zone **zone-c** (**prod-eu-1**) has pods on its nodes failing the same way.
+| One of them reports `Back-off pulling image: dial tcp: lookup mirror.zone-c.internal: i/o timeout`. Every error mentions it.
+| Replicas that do not depend on it are healthy.
+| Affected: **render** in **media**.
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods render- -n media
+| ```

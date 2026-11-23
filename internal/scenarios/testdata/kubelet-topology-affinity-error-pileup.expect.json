@@ -1,0 +1,11 @@
+{
+  "name": "kubelet-topology-affinity-error-pileup",
+  "description": "A node's topology manager rejects the pods bound to it with TopologyAffinityError; the ReplicaSet replaces each and failed pods pile up.",
+  "root": "node//n2",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/api"
+  ],
+  "tail": "10m0s"
+}

@@ -1,6 +1,7 @@
 package detectors
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -15,20 +16,51 @@ import (
 // the API server refuses the pods they ask for.
 var quotaCreators = []inventory.Kind{
 	kube.KindReplicaSet, kube.KindStatefulSet, kube.KindDaemonSet,
-	kube.KindJob,
+	kube.KindJob, kube.KindDeployment, kube.KindService, kube.KindPod,
 }
+
+// quotaRefusalReasons are the event reasons controllers record when a
+// create is refused: pods (FailedCreate), a Deployment's ReplicaSet
+// and a Service's EndpointSlices.
+var quotaRefusalReasons = []string{
+	"FailedCreate", "ReplicaSetCreateError",
+	"FailedToUpdateEndpointSlices", "FailedToCreateEndpointSlice",
+	"FailedScheduling",
+}
+
+// claimWaitText is what the scheduler says of a pod whose generic
+// ephemeral volume claim was not created: the claim create is refused.
+const claimWaitText = "waiting for ephemeral volume controller to create"
 
 // quotaRefusalText is what the API server says when a quota refuses a
 // create: "... is forbidden: exceeded quota: NAME, requested: ...".
 const quotaRefusalText = "exceeded quota: "
+
+// quotaRejectText is what it says when a quota's scope demands fields
+// the pod leaves out: "... is forbidden: failed quota: NAME: must
+// specify limits.cpu".
+const quotaRejectText = "failed quota: "
 
 // IsQuotaRefusal reports whether an event on a controller says the API
 // server refused its create because a quota would be exceeded. The engine
 // uses it to re-check the namespace quotas when such an event arrives,
 // because the event lands on the controller and not on the quota.
 func IsQuotaRefusal(note inventory.Note) bool {
-	return note.Reason == "FailedCreate" &&
-		strings.Contains(note.Message, quotaRefusalText)
+	return slices.Contains(quotaRefusalReasons, note.Reason) &&
+		(strings.Contains(note.Message, quotaRefusalText) ||
+			strings.Contains(note.Message, quotaRejectText) ||
+			strings.Contains(note.Message, claimWaitText))
+}
+
+// namesQuota reports whether a refusal names the quota, or any quota
+// when the name is empty.
+func namesQuota(message, quota string) bool {
+	if quota == "" {
+		return true
+	}
+	return strings.Contains(message, claimWaitText) ||
+		strings.Contains(message, quotaRefusalText+quota+",") ||
+		strings.Contains(message, quotaRejectText+quota+":")
 }
 
 // quotaRefusedCreate reports whether a controller in the namespace was
@@ -41,15 +73,11 @@ func quotaRefusedCreate(
 		return false
 	}
 	since := ctx.Now.Add(-EventWindow)
-	needle := quotaRefusalText
-	if quota != "" {
-		needle += quota + ","
-	}
 	for _, kind := range quotaCreators {
 		for _, id := range ctx.Model.EntitiesIn(kind, namespace) {
 			for _, note := range ctx.Model.Notes(id, since) {
 				if IsQuotaRefusal(note) &&
-					strings.Contains(note.Message, needle) {
+					namesQuota(note.Message, quota) {
 					ctx.RecheckAfter(note.At.Add(EventWindow).
 						Sub(ctx.Now) + time.Nanosecond)
 					return true

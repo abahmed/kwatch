@@ -18,6 +18,13 @@ var workloadConfigRowCases = []rowCase{
 			return evictedCase(f, "Pod ephemeral local storage usage "+
 				"exceeds the total limit of containers 1Mi")
 		}},
+	{row: "memory-over-request", want: "deployment/shop/api",
+		build: func(f *fixture) inventory.EntityID {
+			return evictedCase(f, "The node was low on resource: "+
+				"memory. Threshold quantity: 100Mi, available: 62Mi. "+
+				"Container app was using 7340032Ki, request is 200Mi, "+
+				"has larger consumption of memory.")
+		}},
 	{row: "probe-port-mismatch", want: "deployment/shop/api",
 		build: func(f *fixture) inventory.EntityID {
 			pods := f.workload("shop", "api", 2)
@@ -99,6 +106,7 @@ func oomCase(f *fixture, run time.Duration) inventory.EntityID {
 	pods := f.workload("shop", "api", 2)
 	for _, pod := range pods {
 		f.observe(containerOf(pod), map[string]inventory.Value{
+			kube.AttrMemoryLimit:  inventory.Number(64 << 20),
 			kube.AttrLastStarted:  inventory.Time(t0.Add(time.Minute)),
 			kube.AttrLastFinished: inventory.Time(t0.Add(time.Minute + run)),
 		})
@@ -115,6 +123,24 @@ func TestMemoryLimitNeedsShortRuns(t *testing.T) {
 	if c, ok := f.explain().CauseOf(effect); ok &&
 		c.Row == "memory-limit-too-low" {
 		t.Fatalf("a long run blamed the limit: %+v", c)
+	}
+}
+
+// TestMemoryLimitNeedsALimit: an OOM kill of a container with no memory
+// limit is not a limit set too low.
+func TestMemoryLimitNeedsALimit(t *testing.T) {
+	f := newFixture(t)
+	pods := f.workload("shop", "api", 2)
+	for _, pod := range pods {
+		f.observe(containerOf(pod), map[string]inventory.Value{
+			kube.AttrLastStarted:  inventory.Time(t0.Add(time.Minute)),
+			kube.AttrLastFinished: inventory.Time(t0.Add(time.Minute + 40*time.Second)),
+		})
+		f.fail(containerOf(pod), "OOMKilled", failingH, 2, "")
+	}
+	if c, ok := f.explain().CauseOf(containerOf(pods[0])); ok &&
+		c.Row == "memory-limit-too-low" {
+		t.Fatalf("no limit blamed as too low: %+v", c)
 	}
 }
 
@@ -150,5 +176,17 @@ func TestEphemeralLimitNeedsTheLimitMessage(t *testing.T) {
 	if c, ok := f.explain().CauseOf(effect); ok &&
 		c.Row == "ephemeral-limit-too-low" {
 		t.Fatalf("node disk pressure blamed the limit: %+v", c)
+	}
+}
+
+// An eviction for the node's own memory shortage names no container over
+// its request, and the node stays the cause.
+func TestMemoryOverRequestNeedsTheContainerMessage(t *testing.T) {
+	f := newFixture(t)
+	effect := evictedCase(f, "The node was low on resource: memory. "+
+		"Threshold quantity: 100Mi, available: 62Mi.")
+	if c, ok := f.explain().CauseOf(effect); ok &&
+		c.Row == "memory-over-request" {
+		t.Fatalf("node memory pressure blamed the workload: %+v", c)
 	}
 }

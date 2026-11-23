@@ -1,0 +1,10 @@
+10:03:15 settled
+🟠 edge in shop (prod-eu-1) keeps crashing because node n1 is what the failing workloads have in common, though it looks healthy. It fails with "listen tcp 0.0.0.0:9100: bind: address already in use". Replicas that do not depend on it are healthy. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 edge in shop (prod-eu-1) keeps crashing because node n1 is what the failing workloads have in common, though it looks healthy.
+| 🟠 **edge** in **shop** (**prod-eu-1**) keeps crashing because node n1 is what the failing workloads have in common, though it looks healthy.
+| It fails with `listen tcp 0.0.0.0:9100: bind: address already in use`.
+| Replicas that do not depend on it are healthy.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```

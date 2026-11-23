@@ -1,0 +1,21 @@
+10:33:15 settled
+🟠 web in shop (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (had untolerated taint). The scheduler says "0/4 nodes are available: 2 node(s) had untolerated taint {node.cloudprovider.kubernetes.io/uninitialized: true}, 2…". Replicas that do not depend on it are healthy. Fix: add the toleration the node taint needs to deployment/web. To see the pods' state and events, run kubectl describe pods web- -n shop
+🟠 web in shop (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (had untolerated taint).
+| 🟠 **web** in **shop** (**prod-eu-1**) has waited two minutes for a node because the scheduler rejects every node (**had untolerated taint**).
+| The scheduler says
+| ```
+| 0/4 nodes are available: 2 node(s) had untolerated taint {node.cloudprovider.kubernetes.io/uninitialized: true}, 2…
+| ```
+| Replicas that do not depend on it are healthy.
+| Fix: add the toleration the node taint needs to deployment/web.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods web- -n shop
+| ```
+10:36:15 digest
+🟡 kwatch summary (prod-eu-1): one new low-priority problem. Service web in shop has been waiting 5 min for a load balancer: no controller has acted on it. Not urgent: kwatch alerts on its own if it gets worse.
+🟡 kwatch summary (prod-eu-1): one new low-priority problem.
+| 🟡 **kwatch summary** · prod-eu-1 — 1 problem
+|
+| **Problems**
+| - Service **web** in **shop** has been waiting 5 min for a load balancer: no controller has acted on it

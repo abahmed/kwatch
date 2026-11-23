@@ -1,0 +1,14 @@
+10:05:00 material change
+🟠 Node n2 (prod-eu-1) is failing: condition KernelDeadlock is True (docker hung). It reports "task docker:7421 blocked for more than 120 seconds." Every app that uses it is failing. Affected: cart, orders and payments in shop.
+Related alerts: 3 not-ready pods, 1 node problem
+To check the node's conditions and recent events, run kubectl describe node n2
+🟠 Node n2 (prod-eu-1) is failing: condition KernelDeadlock is True (docker hung).
+| 🟠 Node n2 (**prod-eu-1**) is failing: condition KernelDeadlock is True (docker hung).
+| It reports `task docker:7421 blocked for more than 120 seconds.`
+| Every app that uses it is failing.
+| Affected: **cart**, **orders** and **payments** in **shop**.
+| Related alerts: 3 not-ready pods, 1 node problem
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n2
+| ```

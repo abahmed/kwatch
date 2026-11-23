@@ -1,0 +1,29 @@
+10:10:15 settled
+🔴 Validating webhook policy-guard (prod-eu-1) has no ready pods behind service guard. All three failing apps use it. It fails closed (failurePolicy Fail) and the API server has rejected requests because of it. Affected: ledger in billing; orders in shop.
+Related alerts: 3 failed pod creations, 3 replica failure alerts
+To check the webhook's backend and timeout, run kubectl get validatingwebhookconfiguration policy-guard -o yaml
+🔴 Validating webhook policy-guard (prod-eu-1) has no ready pods behind service guard.
+| 🔴 Validating webhook **policy-guard** (**prod-eu-1**) has no ready pods behind service **guard**.
+| All three failing apps use it.
+| It fails closed (failurePolicy Fail) and the API server has rejected requests because of it.
+| Affected: **ledger** in **billing**; **orders** in **shop**.
+| Related alerts: 3 failed pod creations, 3 replica failure alerts
+| To check the webhook's backend and timeout, run
+| ```
+| kubectl get validatingwebhookconfiguration policy-guard -o yaml
+| ```
+10:11:15 settled
+🟠 guard in policy-system (prod-eu-1) is failing: exited with code 137. All four failing apps use it. The apps that use it failed soon after it changed. The previous version fails the same way: the latest release did not break it, the error both versions stop with did. Also changed before it broke: guard: env REV changed at 10:10 UTC.
+Related alerts: 1 eviction
+To see why the pod was evicted, run kubectl describe pods guard- -n policy-system
+🟠 guard in policy-system (prod-eu-1) is failing: exited with code 137.
+| 🟠 **guard** in **policy-system** (**prod-eu-1**) is failing: exited with code 137.
+| All four failing apps use it.
+| The apps that use it failed soon after it changed.
+| The previous version fails the same way: the latest release did not break it, the error both versions stop with did.
+| Also changed before it broke: guard: env REV changed at 10:10 UTC.
+| Related alerts: 1 eviction
+| To see why the pod was evicted, run
+| ```
+| kubectl describe pods guard- -n policy-system
+| ```

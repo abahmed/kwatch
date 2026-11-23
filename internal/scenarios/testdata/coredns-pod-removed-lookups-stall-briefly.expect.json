@@ -1,0 +1,14 @@
+{
+  "name": "coredns-pod-removed-lookups-stall-briefly",
+  "description": "One CoreDNS pod is replaced in a rollout; lookups of two workloads stall for the resolver timeout and recover within two minutes.",
+  "root": "deployment/kube-system/coredns",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/cart",
+    "deployment/billing/invoices"
+  ],
+  "tail": "10m0s"
+}

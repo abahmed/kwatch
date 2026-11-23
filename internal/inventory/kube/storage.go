@@ -72,6 +72,12 @@ func (PVCSchema) Describe(obj any) (Description, bool) {
 	} else {
 		attrs[AttrClassUnset] = inventory.Bool(true)
 	}
+	if snap := claimSnapshotSource(pvc); snap != "" {
+		attrs[AttrRestoreSnapshot] = inventory.Text(snap)
+	}
+	if node := claimSelectedNode(pvc); node != "" {
+		attrs[AttrSelectedNode] = inventory.Text(node)
+	}
 	if pvc.Spec.Selector != nil {
 		attrs[AttrHasSelector] = inventory.Bool(true)
 	}
@@ -97,6 +103,10 @@ func (PVCSchema) Diff(old, new any) []inventory.FieldChange {
 		Path: "spec.resources.requests.storage", Before: b, After: a,
 	}}
 }
+
+// AttrNFSServer is the host an NFS volume is served from: the host
+// only, never a path or a credential.
+const AttrNFSServer = "nfs.server"
 
 // PVSchema describes PersistentVolumes.
 type PVSchema struct{}
@@ -126,6 +136,9 @@ func (PVSchema) Describe(obj any) (Description, bool) {
 		attrs[AttrMessage] = inventory.Text(evidenceText(pv.Status.Message))
 	}
 	setQuantity(attrs, AttrCapacity, pv.Spec.Capacity.Storage())
+	if nfs := pv.Spec.NFS; nfs != nil && nfs.Server != "" {
+		attrs[AttrNFSServer] = inventory.Text(nfs.Server)
+	}
 	if terms := pvNodeTerms(pv); terms != "" {
 		attrs[AttrNodeTerms] = inventory.Text(terms)
 	}

@@ -74,6 +74,17 @@ func fixText(p detection.Place, valueSaid bool) string {
 	if valueSaid {
 		value = ""
 	}
+	if resource, ok := strings.CutPrefix(p.Path, "spec.hard."); ok {
+		if resource == "pods" {
+			resource = "pod"
+		}
+		return fixLabel + "raise the " + resource + " limit in " + object +
+			" or lower the requests of workloads in namespace " +
+			p.Object.Namespace + "."
+	}
+	if p.Path == "tls.crt" {
+		return fixLabel + "renew the certificate in " + object + "."
+	}
 	if key, ok := envKey(p.Path); ok {
 		return fixLabel + envWords(key, p.Path) + " of " + target +
 			valueNow(value) + "."

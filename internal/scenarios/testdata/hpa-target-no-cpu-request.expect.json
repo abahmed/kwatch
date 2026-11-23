@@ -1,0 +1,12 @@
+{
+  "name": "hpa-target-no-cpu-request",
+  "description": "An HPA on CPU utilisation reports \"missing request for cpu\" because its target Deployment's pods set no CPU request; the metrics API is healthy.",
+  "root": "horizontalpodautoscaler/shop/web",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "apiservice//v1beta1.metrics.k8s.io",
+    "deployment/kube-system/metrics-server"
+  ],
+  "tail": "25m0s"
+}

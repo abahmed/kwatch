@@ -1,0 +1,11 @@
+{
+  "name": "rbac-hides-configmaps-event-names-it",
+  "description": "kwatch cannot read ConfigMaps; pods show CreateContainerConfigError and the event says configmap \"api-flags\" is not found.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 1,
+  "hidden": [
+    "configmap"
+  ],
+  "tail": "10m0s"
+}

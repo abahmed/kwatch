@@ -9,12 +9,17 @@ import (
 var workloadReasons = []ReasonInfo{
 	reason(reasons.ProgressDeadlineExceeded, ModeRolloutStuck),
 	reason(reasons.DeploymentUnavailable, ModeUnavailable),
+	// Someone paused it on purpose and replicas keep serving: worth a
+	// look in the digest, never an interruption.
+	reason(reasons.DeploymentPausedEdit, ModePausedEdit).digest(),
 	reason(reasons.DeploymentReplicaFailure, ModeReplicaFailure),
 	reason(reasons.ReplicaSetFailure, ModeReplicaFailure),
 	reason(reasons.DaemonSetUnavailable, ModeUnavailable),
 	reason(reasons.DaemonSetMisscheduled, ModeDaemonSetMisscheduled).
 		digest(),
 	reason(reasons.StsUnavailable, ModeUnavailable),
+	// A pod made by hand holds the name its controller needs.
+	reason(reasons.PodNameTaken, ModeNameTaken).digest(),
 	reason(reasons.ScalingDisabled, ModeScalingDisabled),
 	reason(reasons.FailedGetResourceMetric, ModeScalingNoMetrics).digest().
 		shown(kube.KindHPA),
@@ -23,7 +28,7 @@ var workloadReasons = []ReasonInfo{
 	reason(reasons.FailedGetScale, ModeScalingTargetMissing).shown(kube.KindHPA),
 	// A condition reason only: the matching event is FailedRescale.
 	reason(reasons.FailedUpdateScale, ModeScalingUpdateFailed),
-	reason(reasons.HPAInvalidSelector, ModeScalingInvalidSelector),
+	reason(reasons.HPAInvalidSelector, ModeScalingInvalidSelector).digest(),
 	reason(reasons.HPAMaxedOut, ModeScalingMaxedOut).causeOnly(),
 	reason(reasons.HPAScalingError, ModeScalingError),
 	// A scale target that does not exist and a Ready node whose kubelet
@@ -32,6 +37,7 @@ var workloadReasons = []ReasonInfo{
 	reason(reasons.HPATargetMissing, ModeScalingTargetMissing).digest(),
 	reason(reasons.WorkloadNeverReady, ModeNeverReady),
 	reason(reasons.ReadinessFlapping, ModeReadinessFlapping),
+	reason(reasons.ReplicasFlapping, ModeReplicasFlapping).digest(),
 	reason(reasons.KubeletUnreachable, ModeKubeletUnreachable).digest(),
 	reason(reasons.KwatchNetworkRestricted, ModeKwatchNetwork),
 	reason(reasons.JobRunningLong, ModeJobRunningLong),
@@ -80,10 +86,11 @@ var workloadReasons = []ReasonInfo{
 	reason(reasons.RuntimeClassMissing, ModeReferenceRuntimeClassMissing),
 	// A budget selecting no pods protects nothing, but on a cluster that
 	// scales workloads to zero it is the normal night.
-	reason(reasons.PdbSelectsNothing, ModeBudgetSelectsNothing).digest(),
+	reason(reasons.PdbSelectsNothing, ModeBudgetSelectsNothing),
 	reason(reasons.PdbOverlap, ModeBudgetOverlap),
 	reason(reasons.PdbSyncFailed, ModeBudgetSyncFailed),
 	reason(reasons.PdbBlocksDrain, ModeBudgetBlocksDrain),
+	reason(reasons.PodBlocksDrain, ModePodBlocksDrain).digest(),
 	reason(reasons.ResourceClaimUnallocated, ModeDeviceUnallocated),
 	reason(reasons.FailedPrepareDynamicResources, ModeDevicePrepareFailed).
 		event(Critical),

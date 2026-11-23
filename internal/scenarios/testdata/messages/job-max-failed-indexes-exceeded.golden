@@ -1,0 +1,13 @@
+10:01:45 settled
+🟠 Job import-shards in batch (prod-eu-1) is failing: failed after 1 pod failure. It was created at 10:00 UTC. It reports "Job has exceeded the specified maximal number of failed indexes".
+Related alerts: 1 error alert, 1 failed pod
+To see the pod's state and events, run kubectl describe pods import-shards- -n batch
+🟠 Job import-shards in batch (prod-eu-1) is failing: failed after 1 pod failure.
+| 🟠 Job **import-shards** in **batch** (**prod-eu-1**) is failing: failed after 1 pod failure.
+| It was created at 10:00 UTC.
+| It reports `Job has exceeded the specified maximal number of failed indexes`.
+| Related alerts: 1 error alert, 1 failed pod
+| To see the pod's state and events, run
+| ```
+| kubectl describe pods import-shards- -n batch
+| ```

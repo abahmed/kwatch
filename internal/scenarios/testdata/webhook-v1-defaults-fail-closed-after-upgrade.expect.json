@@ -1,0 +1,13 @@
+{
+  "name": "webhook-v1-defaults-fail-closed-after-upgrade",
+  "description": "A webhook configuration migrated to the v1 API now fails closed with a ten second timeout; its slow backend makes pod creation fail in two namespaces.",
+  "root": "validatingwebhookconfiguration//legacy-labels",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/policy-system/guard",
+    "deployment/shop/orders"
+  ],
+  "tail": "10m0s"
+}

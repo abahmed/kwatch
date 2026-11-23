@@ -1,0 +1,12 @@
+{
+  "name": "admission-policy-param-deleted-denies-all",
+  "description": "The parameter ConfigMap of a ValidatingAdmissionPolicy binding is deleted; rollouts in three namespaces are refused with \"no params found for policy binding\".",
+  "root": "validatingadmissionpolicy//require-owner.example.com",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/api"
+  ],
+  "tail": "10m0s"
+}

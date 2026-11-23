@@ -1,0 +1,12 @@
+{
+  "name": "crd-instances-grow-unbounded-list-times-out",
+  "description": "An operator crash-loops because listing the instances of a custom resource that grows without expiry times out at the API server.",
+  "root": "unknown",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/auth/dex-operator",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

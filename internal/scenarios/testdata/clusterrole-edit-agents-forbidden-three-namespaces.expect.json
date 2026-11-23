@@ -1,0 +1,13 @@
+{
+  "name": "clusterrole-edit-agents-forbidden-three-namespaces",
+  "description": "A ClusterRole bound in three namespaces loses the endpointslices resource; the agents there are denied listing it and exit on their next restart.",
+  "root": "clusterrole//app-discovery",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "deployment/shop/api",
+    "deployment/billing/api",
+    "deployment/jobs/runner"
+  ],
+  "tail": "10m0s"
+}

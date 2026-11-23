@@ -1,0 +1,11 @@
+{
+  "name": "job-pod-failure-policy-fail-job",
+  "description": "A Job's pod exits with a code its podFailurePolicy maps to FailJob; the Job fails at once without retries.",
+  "root": "job/batch/migrate",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

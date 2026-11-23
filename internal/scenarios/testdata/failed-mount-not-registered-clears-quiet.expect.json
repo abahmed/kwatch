@@ -1,0 +1,6 @@
+{
+  "name": "failed-mount-not-registered-clears-quiet",
+  "description": "A new pod gets one FailedMount \"object not registered\" warning for its projected volume and is ready five seconds later.",
+  "maxMessages": 0,
+  "quiet": true
+}

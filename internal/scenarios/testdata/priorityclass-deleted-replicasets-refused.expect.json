@@ -1,0 +1,13 @@
+{
+  "name": "priorityclass-deleted-replicasets-refused",
+  "description": "A PriorityClass is deleted while Deployments of three namespaces name it; at their next rollouts the ReplicaSets cannot create pods, and the old pods keep serving.",
+  "root": "priorityclass//team-high",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "deployment/shop/api",
+    "deployment/billing/api",
+    "deployment/jobs/runner"
+  ],
+  "tail": "10m0s"
+}

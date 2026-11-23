@@ -1,0 +1,23 @@
+10:01:15 settled
+🔴 Node worker-3 (prod-eu-1) is failing: heartbeat is stale: the kubelet stopped renewing its lease. Every app that uses it is failing. Replicas that do not depend on it are healthy. Affected: api in shop; cache in data.
+Related alerts: 2 not-ready pods, 1 node problem
+To check the node's conditions and recent events, run kubectl describe node worker-3
+🔴 Node worker-3 (prod-eu-1) is failing: heartbeat is stale: the kubelet stopped renewing its lease.
+| 🔴 Node **worker-3** (**prod-eu-1**) is failing: heartbeat is stale: the kubelet stopped renewing its lease.
+| Every app that uses it is failing.
+| Replicas that do not depend on it are healthy.
+| Affected: **api** in **shop**; **cache** in **data**.
+| Related alerts: 2 not-ready pods, 1 node problem
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node worker-3
+| ```
+10:02:30 startup summary
+🔴 kwatch (prod-eu-1) started and found one problem that began before it was watching. Node worker-3 is failing: heartbeat is stale: the kubelet stopped renewing its lease. It alerts on its own when it changes or resolves.
+🔴 kwatch (prod-eu-1) started and found one problem that began before it was watching.
+| 🔴 **kwatch started** · prod-eu-1 — 1 problem began before it was watching
+|
+| **Problems**
+| - Node **worker-3** — heartbeat is stale (the kubelet stopped renewing its lease)
+|
+| *It alerts on its own when it changes or resolves.*

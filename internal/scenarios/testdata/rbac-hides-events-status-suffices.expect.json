@@ -1,0 +1,8 @@
+{
+  "name": "rbac-hides-events-status-suffices",
+  "description": "kwatch's role cannot list Events; pods show ImagePullBackOff and the image string.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 1,
+  "tail": "10m0s"
+}

@@ -1,0 +1,22 @@
+10:01:15 settled
+🟠 Quota storage-quota in shop (prod-eu-1) is used up (requests.storage). To see the object's state and events, run kubectl describe resourcequota storage-quota -n shop
+🟠 Quota storage-quota in shop (prod-eu-1) is used up (requests.storage).
+| 🟠 Quota **storage-quota** in **shop** (**prod-eu-1**) is used up (requests.storage).
+| To see the object's state and events, run
+| ```
+| kubectl describe resourcequota storage-quota -n shop
+| ```
+10:03:15 settled
+🟠 api in shop (prod-eu-1) has waited two minutes for a node. Cause not found yet: its registry is healthy and unchanged. In the last 30 minutes in shop: api was created at 10:00 UTC. The scheduler says "0/1 nodes are available: waiting for ephemeral volume controller to create the persistentvolumeclaim…". To see the pods' state and events, run kubectl describe pods api- -n shop
+🟠 api in shop (prod-eu-1) has waited two minutes for a node.
+| 🟠 **api** in **shop** (**prod-eu-1**) has waited two minutes for a node.
+| Cause not found yet: its registry is healthy and unchanged.
+| In the last 30 minutes in shop: **api** was created at 10:00 UTC.
+| The scheduler says
+| ```
+| 0/1 nodes are available: waiting for ephemeral volume controller to create the persistentvolumeclaim…
+| ```
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods api- -n shop
+| ```

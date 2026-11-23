@@ -315,3 +315,21 @@ func TestStorageClassBindingMode(t *testing.T) {
 		})
 	}
 }
+
+func TestPVSchemaDescribeNFSServer(t *testing.T) {
+	pv := &corev1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{Name: "pv1"},
+		Spec: corev1.PersistentVolumeSpec{
+			PersistentVolumeSource: corev1.PersistentVolumeSource{
+				NFS: &corev1.NFSVolumeSource{
+					Server: "nfs.storage.svc", Path: "/exports"}},
+		},
+	}
+	desc, ok := kube.PVSchema{}.Describe(pv)
+
+	assert.True(t, ok)
+	assert.Equal(t, "nfs.storage.svc",
+		desc.Attributes[kube.AttrNFSServer].AsText())
+	_, has := kube.PVSchema{}.Describe(&corev1.PersistentVolume{})
+	assert.True(t, has)
+}

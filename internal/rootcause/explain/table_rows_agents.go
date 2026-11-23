@@ -59,13 +59,14 @@ var agentRows = []Row{
 	{
 		// A storage driver the pod's error names is registered by a
 		// DaemonSet that has no pod on the pod's node.
-		Name: "node-agent-absent",
+		Name: RuleNodeAgentAbsent,
 		Cause: Side{Kind: kube.KindDaemonSet,
 			Modes: []detection.Mode{ModeAgentAbsent}},
 		Link: LinkNodeAgent,
 		Effect: Side{Kind: kube.KindPod, Signal: SignalNodeAgent,
 			Modes: append([]detection.Mode{modeFailedMount,
-				modeFailedAttach}, agentEffectModes...)},
+				modeFailedAttach, detection.ModeNetworkCNINotReady},
+				agentEffectModes...)},
 		Prior: 0.65,
 	},
 }
@@ -84,7 +85,7 @@ func (v *view) agentHops(pod inventory.EntityID) []hop {
 		for _, other := range v.s.Model.Related(node, inventory.RunsOn,
 			inventory.Incoming) {
 			if other == pod || !v.nodeAgent(other, own) ||
-				!v.unitFailing(other) {
+				!v.agentDown(other) {
 				continue
 			}
 			out = append(out, hop{link: LinkNodeAgent, to: other})

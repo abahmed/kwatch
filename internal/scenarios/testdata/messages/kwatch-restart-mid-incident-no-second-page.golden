@@ -1,0 +1,9 @@
+10:02:30 startup summary
+🟠 kwatch (prod-eu-1) started and found one problem that began before it was watching. api in shop keeps crashing. It alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) started and found one problem that began before it was watching.
+| 🟠 **kwatch started** · prod-eu-1 — 1 problem began before it was watching
+|
+| **Problems**
+| - **api** in **shop** keeps crashing
+|
+| *It alerts on its own when it changes or resolves.*

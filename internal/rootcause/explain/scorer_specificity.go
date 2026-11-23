@@ -21,12 +21,18 @@ func scoreSpecificity(v *view, c *candidate) outcome {
 		return outcome{}
 	}
 	names := v.namesOf(c.id)
-	named := 0
+	named, byLookup := 0, 0
 	for _, effect := range effects {
 		if mentionsAny(v.specificityText(c, effect), names) ||
 			v.errorNamesBlockedCall(c, effect) {
 			named++
+			if hasSignal(SignalDNS, v.errorText(effect)) {
+				byLookup++
+			}
 		}
+	}
+	if byLookup == named && v.lookupNamesChangedDNS(c) {
+		return outcome{}
 	}
 	if named*2 < len(effects) {
 		return outcome{}
@@ -65,4 +71,13 @@ func (v *view) errorNamesBlockedCall(
 	edge, blocked := v.blocks[blockKey{c.id, pod}]
 	call, named := v.clusterCallOf(pod)
 	return blocked && named && !call.cascade && call.service == edge.service
+}
+
+// lookupNamesChangedDNS reports an external endpoint that the errors
+// name only as what a failing lookup asked for while a DNS object changed:
+// the name is the question, not evidence that the endpoint is the cause,
+// and the changed DNS object is the more specific one.
+func (v *view) lookupNamesChangedDNS(c *candidate) bool {
+	return c.id.Kind == KindExternalEndpoint &&
+		len(v.changedDNSHops()) > 0
 }

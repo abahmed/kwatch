@@ -1,0 +1,13 @@
+10:11:00 material change
+🟠 Mutating webhook sidecar-injector (prod-eu-1) calls Service injector, which does not exist. All three failing apps use it. Service ledger in billing; service runner in jobs; service api in shop can't serve traffic.
+Related alerts: 11 image pull failures, 11 pending pods
+To check the webhook's backend and timeout, run kubectl get mutatingwebhookconfiguration sidecar-injector -o yaml
+🟠 Mutating webhook sidecar-injector (prod-eu-1) calls Service injector, which does not exist.
+| 🟠 Mutating webhook **sidecar-injector** (**prod-eu-1**) calls Service injector, which does not exist.
+| All three failing apps use it.
+| Service **ledger** in **billing**; service **runner** in **jobs**; service **api** in **shop** can't serve traffic.
+| Related alerts: 11 image pull failures, 11 pending pods
+| To check the webhook's backend and timeout, run
+| ```
+| kubectl get mutatingwebhookconfiguration sidecar-injector -o yaml
+| ```

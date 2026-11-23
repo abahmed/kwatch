@@ -1,0 +1,17 @@
+10:02:15 settled
+🟠 Volume claim shared-uploads in shop (prod-eu-1) has been waiting for a volume for two minutes. It was created at 10:00 UTC. Claim shared-uploads is Pending: kwatch sees no workload in the cluster serving its provisioner pd.csi.storage.gke.io (it may run outside the cluster); the last provisioning failure says "failed to provision volume with StorageClass "gp3": rpc error: code = InvalidArgument desc = Volume capabilities…". Affected: uploads.
+Related alerts: 2 scheduling failures, 1 volume alert
+To see why the volume claim is not usable, run kubectl describe pvc shared-uploads -n shop
+🟠 Volume claim shared-uploads in shop (prod-eu-1) has been waiting for a volume for two minutes.
+| 🟠 Volume claim **shared-uploads** in **shop** (**prod-eu-1**) has been waiting for a volume for two minutes.
+| It was created at 10:00 UTC.
+| Claim **shared-uploads** is Pending: kwatch sees no workload in the cluster serving its provisioner pd.csi.storage.gke.io (it may run outside the cluster); the last provisioning failure says
+| ```
+| failed to provision volume with StorageClass "gp3": rpc error: code = InvalidArgument desc = Volume capabilities…
+| ```
+| Affected: **uploads**.
+| Related alerts: 2 scheduling failures, 1 volume alert
+| To see why the volume claim is not usable, run
+| ```
+| kubectl describe pvc shared-uploads -n shop
+| ```

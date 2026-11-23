@@ -77,13 +77,21 @@ func (m *Manager) revisedStep(p *Incident, now time.Time) (Decision, bool) {
 		return Decision{}, true
 	}
 	p.Pending.ClearRevised()
-	if causeWithdrawn(p) || hedgesTold(p) {
+	if causeWithdrawn(p) || hedgesTold(p) || m.rootGone(p) {
 		// The thread keeps its words; the fingerprint adopts the new
 		// root so the move is not re-sent as a material change.
 		p.Digest = fingerprint(p)
 		return Decision{}, false
 	}
 	return m.decide(p, Update, ReasonCauseRevised), true
+}
+
+// rootGone reports a revision whose new root was deleted since the
+// incident opened: the cause is already gone, so naming it adds nothing
+// to what the resolve says next. A page always speaks.
+func (m *Manager) rootGone(p *Incident) bool {
+	return p.Tier < Page && m.model != nil &&
+		removedSince(m.model, p.Root, p.Opened)
 }
 
 // causeWithdrawn reports a revision that took a known cause away and
@@ -138,6 +146,10 @@ func (m *Manager) materialStep(p *Incident, now time.Time) (Decision, bool) {
 	if materialHeld(p, now) || m.provisional(p, now) {
 		// A provisional rise waits for the saved reasons or the end
 		// of the restore grace (restore_reasons.go).
+		return Decision{}, true
+	}
+	if draining(p) && wasAnnounced(p) {
+		p.Digest = fingerprint(p)
 		return Decision{}, true
 	}
 	p.Delivery.MarkMaterial(now)

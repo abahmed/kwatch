@@ -1,0 +1,11 @@
+{
+  "name": "hostnetwork-port-taken-on-node",
+  "description": "A hostNetwork Deployment's replica on one node exits with \"address already in use\" because another process of that node holds the port; its replica on the other node serves.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/edge",
+    "node//n2"
+  ]
+}

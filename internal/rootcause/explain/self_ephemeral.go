@@ -7,6 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // ModeEphemeralTooLow is a pod the kubelet evicted for using more
@@ -42,8 +43,52 @@ func (v *view) podConfigModes(pod inventory.EntityID) []detection.Mode {
 			detection.ModeFailed}) {
 		return modes
 	}
-	if ephemeralOverLimit.MatchString(strings.ToLower(v.text(pod))) {
-		return append(modes, ModeEphemeralTooLow)
+	text := strings.ToLower(v.text(pod))
+	if ephemeralOverLimit.MatchString(text) {
+		modes = append(modes, ModeEphemeralTooLow)
+	}
+	if memoryOverRequest.MatchString(text) && v.onlyEvicted(pod) {
+		modes = append(modes, ModeMemoryOverRequest)
 	}
 	return modes
+}
+
+// onlyEvicted reports that no pod of another workload was evicted from
+// the pod's node: the kubelet evicts pods above their request first, so
+// the message alone says nothing when it evicts several workloads.
+func (v *view) onlyEvicted(pod inventory.EntityID) bool {
+	own := rootcause.TopOwner(v.s.Model, pod)
+	for _, node := range v.s.Model.Related(pod, inventory.RunsOn,
+		inventory.Outgoing) {
+		for _, other := range v.s.Model.Related(node, inventory.RunsOn,
+			inventory.Incoming) {
+			if other != pod &&
+				v.hasMode(other, []detection.Mode{detection.ModeEvicted}) &&
+				rootcause.TopOwner(v.s.Model, other) != own {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// ModeMemoryOverRequest is a pod the kubelet evicted for memory, naming
+// the container that used more than it requests: the node was short, but
+// the kubelet picked this pod because of its own use.
+const ModeMemoryOverRequest detection.Mode = "Config.MemoryOverRequest"
+
+// memoryOverRequest matches the kubelet's eviction message for a
+// container whose use is above its memory request.
+var memoryOverRequest = regexp.MustCompile(
+	`was using [^,]+, request is [^,]+, has larger consumption of memory`)
+
+// memoryOverRequestRow blames the workload the kubelet named as using
+// more memory than it requests, instead of the node that was short.
+var memoryOverRequestRow = Row{
+	Name: "memory-over-request",
+	Cause: Side{Group: AnyGroup, Kind: AnyKind,
+		Modes: []detection.Mode{ModeMemoryOverRequest}},
+	Link:   LinkSelf,
+	Effect: podSide(detection.ModeEvicted, detection.ModeFailed),
+	Prior:  0.9, Inside: true,
 }

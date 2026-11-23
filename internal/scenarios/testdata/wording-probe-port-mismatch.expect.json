@@ -1,0 +1,12 @@
+{
+  "name": "wording-probe-port-mismatch",
+  "description": "A release points the readiness probe at port 80 while the container serves 8080; no new pod becomes ready. The message names both ports.",
+  "root": "deployment/shop/web",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

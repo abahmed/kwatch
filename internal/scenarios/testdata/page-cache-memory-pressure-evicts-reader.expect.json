@@ -1,0 +1,14 @@
+{
+  "name": "page-cache-memory-pressure-evicts-reader",
+  "description": "A pod that streams large files fills its node's page cache; the node reports MemoryPressure and the kubelet evicts that pod repeatedly.",
+  "root": "deployment/media/reader",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/orders",
+    "deployment/shop/payments",
+    "deployment/shop/cart"
+  ],
+  "tail": "10m0s"
+}

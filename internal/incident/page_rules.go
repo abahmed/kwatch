@@ -145,6 +145,9 @@ var webhookKinds = []inventory.Kind{
 // webhook that answered and denied one workload's request is a policy
 // decision, not an outage: that notifies.
 func admissionBlocked(model inventory.Reader, p *Incident) bool {
+	if isolationBlocksAdmission(model, p) {
+		return true
+	}
 	if !hasKind(webhookKinds, p.Root.Kind) || p.Cause == nil ||
 		p.Cause.Root != p.Root || p.Cause.Rule != webhookRejectsRule ||
 		p.Cause.Mode == explain.ModeWebhookDenied {

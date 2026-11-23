@@ -1,0 +1,9 @@
+10:09:15 settled
+🟠 api in shop (prod-eu-1) has not been ready for three minutes. Cause not found yet: its node and registry are healthy and unchanged. To see the pods' state and events, run kubectl describe pods api- -n shop
+🟠 api in shop (prod-eu-1) has not been ready for three minutes.
+| 🟠 **api** in **shop** (**prod-eu-1**) has not been ready for three minutes.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods api- -n shop
+| ```

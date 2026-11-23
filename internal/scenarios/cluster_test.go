@@ -14,6 +14,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -283,6 +284,11 @@ func otherSchemaFor(obj runtime.Object) kube.Schema {
 		return kube.WebhookSchema{Mutating: true}
 	case *appsv1.ControllerRevision:
 		return kube.ControllerRevisionSchema{}
+	case *metav1.PartialObjectMetadata:
+		// Kinds watched for their metadata only.
+		return kube.NewMetadataSchema(obj.(*metav1.PartialObjectMetadata).
+			GroupVersionKind().Group, obj.GetObjectKind().
+			GroupVersionKind().Kind)
 	}
 	panic(fmt.Sprintf("scenarios: no schema for %T", obj))
 }

@@ -1,0 +1,10 @@
+10:06:55 settled
+🟠 api is failing in shop (prod-eu-1) after the 10:05 UTC change to config map api-config. Config map api-config changed two minutes ago (keys: mode); the pod started since then fails, the older one is healthy. It fails with "couldn't find key mode in ConfigMap shop/api-config". The error mentions it. To check the object the pods depend on, run kubectl get configmap api-config -n shop -o yaml
+🟠 api is failing in shop (prod-eu-1) after the 10:05 UTC change to config map api-config.
+| 🟠 **api** is failing in **shop** (**prod-eu-1**) after the 10:05 UTC change to config map **api-config**.
+| Config map **api-config** changed two minutes ago (keys: mode); the pod started since then fails, the older one is healthy.
+| It fails with `couldn't find key mode in ConfigMap shop/api-config`. The error mentions it.
+| To check the object the pods depend on, run
+| ```
+| kubectl get configmap api-config -n shop -o yaml
+| ```

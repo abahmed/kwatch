@@ -1,0 +1,12 @@
+{
+  "name": "statefulset-recreated-restarts-all-pods",
+  "description": "A StatefulSet is recreated and restarts every pod at once; the clients that reconnect together exhaust the memory of a downstream Deployment, which is OOMKilled. The reconnects are not visible, so the Deployment is the root.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

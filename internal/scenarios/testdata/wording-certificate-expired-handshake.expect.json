@@ -1,0 +1,12 @@
+{
+  "name": "wording-certificate-expired-handshake",
+  "description": "A mounted client certificate expired a day ago; the pods crash on an expired-certificate handshake. The message is in the past tense and names the Secret.",
+  "root": "secret/shop/bank-client-tls",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "deployment/shop/payments",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

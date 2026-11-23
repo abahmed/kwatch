@@ -1,0 +1,11 @@
+10:12:15 settled
+🟠 widget-op in billing (prod-eu-1) and two other workloads keep crashing with the same error. It fails with "no matches for kind "Widget" in version "example.com/v1beta1"". Its last run lasted ten seconds; two restarts since its pod was created about one hour ago. Service widget-op in billing; service widget-op in reports; service widget-op in shop can't serve traffic. To read the output of the last crash, run kubectl logs deploy/widget-op -c app -n billing --previous
+🟠 widget-op in billing (prod-eu-1) and two other workloads keep crashing with the same error.
+| 🟠 **widget-op** in **billing** (**prod-eu-1**) and two other workloads keep crashing with the same error.
+| It fails with `no matches for kind "Widget" in version "example.com/v1beta1"`.
+| Its last run lasted ten seconds; two restarts since its pod was created about one hour ago.
+| Service **widget-op** in **billing**; service **widget-op** in **reports**; service **widget-op** in **shop** can't serve traffic.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/widget-op -c app -n billing --previous
+| ```

@@ -13,6 +13,7 @@ var modalRows = map[string]bool{
 	explain.RuleConfigMapMissingOrChanged:    true,
 	explain.RuleRunConfigMapMissingOrChanged: true,
 	explain.RuleRunSecretMissingOrChanged:    true,
+	explain.RuleRegistryRefuses:              true,
 }
 
 // modalWords say what is wrong with the object a modal row blames. A
@@ -25,11 +26,18 @@ func modalWords(cause *rootcause.CauseRecord) (string, bool) {
 		return "", false
 	}
 	switch {
+	case cause.Rule == explain.RuleRegistryRefuses &&
+		cause.Mode.Within(explain.ModeImageRemoved):
+		return "no longer serves the image these pods pull", true
+	case cause.Rule == explain.RuleRegistryRefuses:
+		return "", false
 	case cause.Mode.Within(explain.ModeMissing),
 		cause.Mode.Within(explain.ModeDeleted):
 		return "does not exist", true
 	case cause.Mode.Within(explain.ModeKeyMissing):
 		return "lacks a key the pods read", true
+	case cause.Mode.Within(explain.ModeWrongType):
+		return "is not a registry login", true
 	case cause.Mode.Within(explain.ModeChanged):
 		return "changed shortly before", true
 	}

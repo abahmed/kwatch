@@ -1,0 +1,13 @@
+10:03:15 settled
+🟠 api is failing in shop (prod-eu-1) after the 10:02 UTC release. The release changed the template. It fails with "failed to create containerd task: failed to generate seccomp spec opts: cannot load seccomp profile…". To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api is failing in shop (prod-eu-1) after the 10:02 UTC release.
+| 🟠 **api** is failing in **shop** (**prod-eu-1**) after the 10:02 UTC release.
+| The release changed the template.
+| It fails with
+| ```
+| failed to create containerd task: failed to generate seccomp spec opts: cannot load seccomp profile…
+| ```
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```

@@ -1,0 +1,7 @@
+{
+  "name": "one-path-large-responses-time-out",
+  "description": "Responses over about 1400 bytes from pods on one node time out after a CNI MTU change; pods are Ready, probes pass and no Warning events exist, so nothing Kubernetes reports fails.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "10m0s"
+}

@@ -1,0 +1,14 @@
+10:12:15 settled
+🟠 api is failing in billing (prod-eu-1) after the 10:10 UTC change to cluster role app-discovery. The rules changed. It fails with "endpointslices.discovery.k8s.io is forbidden: cannot list resource "endpointslices" in API group "discovery.k8s.io"". Affected: runner in jobs; api in shop. To read the output of the last crash, run kubectl logs deploy/api -c app -n billing --previous
+🟠 api is failing in billing (prod-eu-1) after the 10:10 UTC change to cluster role app-discovery.
+| 🟠 **api** is failing in **billing** (**prod-eu-1**) after the 10:10 UTC change to cluster role **app-discovery**.
+| The rules changed.
+| It fails with
+| ```
+| endpointslices.discovery.k8s.io is forbidden: cannot list resource "endpointslices" in API group "discovery.k8s.io"
+| ```
+| Affected: **runner** in **jobs**; **api** in **shop**.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/api -c app -n billing --previous
+| ```

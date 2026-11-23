@@ -33,17 +33,38 @@ func (v *view) storageModes(
 	}
 	switch id.Kind {
 	case kube.KindPVC:
-		// The usage detector reports VolumeFull when it can read
-		// volume stats; the pseudo mode of the same name comes from
-		// the errors of the pods that mount the claim, for clusters
-		// where it cannot.
-		if link == LinkMounts && v.claimFull(id, effect) {
-			return pseudoFailing(v.claimFullMode(id)), true
+		return v.storageClaimModes(id, effect, link)
+	case kube.KindStorageClass:
+		if link == LinkUses && v.classRejects(id, effect) {
+			return pseudoFailing(ModeClassRejects), true
 		}
 	case kube.KindPV:
+		if link == LinkUses && v.refusedAsBound(id, effect) {
+			return pseudoFailing(ModeBoundElsewhere), true
+		}
 		if v.boundByClaim(id) {
 			return nil, true
 		}
+	}
+	return nil, false
+}
+
+// storageClaimModes are the pseudo modes of a claim in the storage
+// chain.
+func (v *view) storageClaimModes(
+	id, effect inventory.EntityID, link LinkType,
+) ([]modeHealth, bool) {
+	if link == LinkMounts && v.selectedNodeGone(id) {
+		return pseudoFailing(ModeSelectedNodeGone), true
+	}
+	if link == LinkUses && v.claimPins(id, effect) {
+		return pseudoFailing(ModeClaimPinsVolume), true
+	}
+	// The usage detector reports VolumeFull when it can read volume
+	// stats; the pseudo mode of the same name comes from the errors of
+	// the pods that mount the claim, for clusters where it cannot.
+	if link == LinkMounts && v.claimFull(id, effect) {
+		return pseudoFailing(v.claimFullMode(id)), true
 	}
 	return nil, false
 }

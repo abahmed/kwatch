@@ -1,0 +1,10 @@
+10:03:15 settled
+🟠 api in shop (prod-eu-1): the new version keeps failing; the previous version is still serving. The release changed the template. It fails with "initdb: error: could not look up effective user ID 1001: user does not exist". To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api in shop (prod-eu-1): the new version keeps failing; the previous version is still serving.
+| 🟠 **api** in **shop** (**prod-eu-1**): the new version keeps failing; the previous version is still serving.
+| The release changed the template.
+| It fails with `initdb: error: could not look up effective user ID 1001: user does not exist`.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```

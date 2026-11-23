@@ -1,0 +1,12 @@
+{
+  "name": "rollout-readiness-needs-leadership-deadlock",
+  "description": "A rollout's new pod reports ready only when it holds the leader lease, which the old pod keeps until the new one is ready; the rollout makes no progress.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

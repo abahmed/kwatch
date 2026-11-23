@@ -1,0 +1,12 @@
+{
+  "name": "dra-driver-down-prepare-fails",
+  "description": "A device driver's kubelet plugin crash-loops on a node; a pod with an allocated claim there stays in ContainerCreating with FailedPrepareDynamicResources.",
+  "root": "daemonset/kube-system/gpu-dra-driver",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n2",
+    "deployment/ml/trainer"
+  ],
+  "tail": "10m0s"
+}

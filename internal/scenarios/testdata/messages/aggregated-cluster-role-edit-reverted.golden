@@ -1,0 +1,13 @@
+10:36:15 settled
+🟠 dashboard is failing in shop (prod-eu-1) after the 10:35 UTC change to cluster role view-extended. The rules changed. It fails with "nodes is forbidden: User "system:serviceaccount:shop:dashboard" cannot list resource "nodes" in API group "" at the…". To read the output of the last crash, run kubectl logs deploy/dashboard -c app -n shop --previous
+🟠 dashboard is failing in shop (prod-eu-1) after the 10:35 UTC change to cluster role view-extended.
+| 🟠 **dashboard** is failing in **shop** (**prod-eu-1**) after the 10:35 UTC change to cluster role **view-extended**.
+| The rules changed.
+| It fails with
+| ```
+| nodes is forbidden: User "system:serviceaccount:shop:dashboard" cannot list resource "nodes" in API group "" at the…
+| ```
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/dashboard -c app -n shop --previous
+| ```

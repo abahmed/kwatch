@@ -1,0 +1,11 @@
+{
+  "name": "deployment-replicas-reset-by-gitops",
+  "description": "An HPA and a GitOps controller both set the replicas of a Deployment; the count flips between 3 and 6 every few minutes.",
+  "root": "deployment/shop/web",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

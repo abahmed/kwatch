@@ -1,0 +1,9 @@
+11:04:15 settled
+🟠 Job nightly in batch (prod-eu-1) is failing: failed after 3 pod failures. It reports "Job has reached the specified backoff limit". To see the object's state and events, run kubectl describe job nightly -n batch
+🟠 Job nightly in batch (prod-eu-1) is failing: failed after 3 pod failures.
+| 🟠 Job **nightly** in **batch** (**prod-eu-1**) is failing: failed after 3 pod failures.
+| It reports `Job has reached the specified backoff limit`.
+| To see the object's state and events, run
+| ```
+| kubectl describe job nightly -n batch
+| ```

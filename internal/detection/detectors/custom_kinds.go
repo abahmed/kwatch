@@ -15,7 +15,7 @@ import (
 const (
 	// DefaultCertificateIssue is how long an approved CSR may wait for
 	// its signer; kube-controller-manager signs within seconds.
-	DefaultCertificateIssue = 5 * time.Minute
+	DefaultCertificateIssue = 3 * time.Minute
 	// DefaultServingApproval is how long a kubelet serving CSR may wait
 	// for approval. kube-controller-manager never approves them, so an
 	// approver must; until then the kubelet has no serving certificate
@@ -43,7 +43,8 @@ func kindFindings(
 		return routeBackends(ctx, e)
 	}
 	if e.ID.Kind == kindCRD {
-		return conditionFindings(ctx, e)
+		return append(conditionFindings(ctx, e),
+			conversionBackendFindings(ctx, e)...)
 	}
 	var f detection.Finding
 	var ok bool
@@ -82,6 +83,7 @@ func certificateRequest(
 	}
 	approved, _, approvedAt := condition(e, "Approved")
 	grace := DefaultCertificateIssue
+	severity := detection.Warning
 	since := approvedAt
 	summary := "Certificate request was approved but no certificate " +
 		"was issued; no signer handles " + signer
@@ -89,6 +91,9 @@ func certificateRequest(
 		if signer != kubeletServingSigner {
 			return detection.Finding{}, false
 		}
+		// The kubelet keeps serving with its own certificate; only the
+		// clients that verify it fail, so it is a digest line.
+		severity = detection.Info
 		grace, since = DefaultServingApproval, clusterSince(e,
 			valueSince(e, kube.AttrCertificateIssued))
 		summary = "Kubelet serving certificate request is waiting for " +
@@ -98,7 +103,7 @@ func certificateRequest(
 		return detection.Finding{}, false
 	}
 	return detection.Finding{
-		Reason: reasons.CertificateNotIssued, Severity: detection.Warning,
+		Reason: reasons.CertificateNotIssued, Severity: severity,
 		Health: detection.Failing, Since: since, Summary: summary,
 		Evidence: evidence,
 	}, true

@@ -1,0 +1,11 @@
+{
+  "name": "release-pvc-not-found",
+  "description": "A release mounts a PersistentVolumeClaim that does not exist; the new pod is Pending with FailedScheduling \"persistentvolumeclaim not found\".",
+  "root": "persistentvolumeclaim/shop/data-0",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

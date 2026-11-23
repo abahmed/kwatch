@@ -1,0 +1,15 @@
+10:03:15 settled
+🟠 api is failing in shop (prod-eu-1), likely caused by the 10:02 UTC release. The release changed the LISTEN and one other field. It fails with "dial tcp 10.96.22.5:8080: connect: connection refused". Affected: web. To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api is failing in shop (prod-eu-1), likely caused by the 10:02 UTC release.
+| 🟠 **api** is failing in **shop** (**prod-eu-1**), likely caused by the 10:02 UTC release.
+| The release changed the LISTEN and one other field.
+| It fails with `dial tcp 10.96.22.5:8080: connect: connection refused`.
+| Affected: **web**.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```
+10:09:00 material change
+🟠 api in shop (prod-eu-1) is now also affecting web: it has no ready replicas (0 of 1) and has not been ready for three minutes.
+🟠 api in shop (prod-eu-1) is now also affecting web: it has no ready replicas (0 of 1) and has not been ready for three minutes.
+| 🟠 **api** in **shop** (**prod-eu-1**) is now also affecting web: it has no ready replicas (0 of 1) and has not been ready for three minutes.

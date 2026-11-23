@@ -1,0 +1,16 @@
+10:06:15 settled
+🟠 queue in streaming (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "panic: failed to join cluster: cluster id mismatch". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs queue-0 -c app -n streaming --previous
+🟠 queue in streaming (prod-eu-1) keeps crashing.
+| 🟠 **queue** in **streaming** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with `panic: failed to join cluster: cluster id mismatch`.
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| To read the output of the last crash, run
+| ```
+| kubectl logs queue-0 -c app -n streaming --previous
+| ```
+10:17:00 material change
+🟠 queue in streaming (prod-eu-1) is now also affecting disruption budget queue-pdb: it allows no eviction, so the drain of node n1 is blocked. It is also affecting node n1: it is cordoned for maintenance.
+🟠 queue in streaming (prod-eu-1) is now also affecting disruption budget queue-pdb: it allows no eviction, so the drain of node n1 is blocked.
+| 🟠 **queue** in **streaming** (**prod-eu-1**) is now also affecting disruption budget queue-pdb: it allows no eviction, so the drain of node n1 is blocked.
+| It is also affecting node n1: it is cordoned for maintenance.

@@ -1,0 +1,12 @@
+{
+  "name": "sporadic-connection-reset-no-cause",
+  "description": "A busy service's pods restart now and then on \"connection reset by peer\" with no event, condition or change anywhere in the cluster.",
+  "root": "unknown",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

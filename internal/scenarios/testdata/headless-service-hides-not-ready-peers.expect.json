@@ -1,0 +1,12 @@
+{
+  "name": "headless-service-hides-not-ready-peers",
+  "description": "A clustered StatefulSet's pods wait for their peers' names to resolve, but the headless Service publishes only ready addresses; no pod becomes ready.",
+  "root": "service/streaming/queue",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "statefulset/streaming/queue"
+  ],
+  "tail": "10m0s"
+}

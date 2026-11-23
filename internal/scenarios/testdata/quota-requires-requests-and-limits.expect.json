@@ -1,0 +1,12 @@
+{
+  "name": "quota-requires-requests-and-limits",
+  "description": "A compute ResourceQuota is added to a namespace; the next rollout, whose pods set no requests or limits, is refused with \"must specify limits.cpu\".",
+  "root": "resourcequota/shop/compute-quota",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/api"
+  ],
+  "tail": "10m0s"
+}

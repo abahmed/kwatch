@@ -580,28 +580,29 @@ here verbatim and checked by `TestScorecardGates`.
 
 | Metric | Target | Current | Result |
 | --- | --- | --- | --- |
-| Correct root cause (labelled) | >= 90% | 99.1% | pass |
+| Correct root cause (labelled) | >= 90% | 99.4% | pass |
 | Correct root cause (held-out) | >= 80% | 100% | pass |
-| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 270 high-confidence cases, labelled and held-out) | pass |
+| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 454 high-confidence cases, labelled and held-out) | pass |
 | Wrong root stated at likely confidence or higher (labelled) | <= 0 | 0 | pass |
 | Scenarios whose first message stated a wrong root | <= 0 | 0 | pass |
-| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (257 of 257 right) | pass |
-| Calibration: likely confidence | 50-95% (at least 10 cases) | 90.4% (47 of 52 right) | pass |
+| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (441 of 441 right) | pass |
+| Calibration: likely confidence | 50-95% (at least 10 cases) | 91.7% (55 of 60 right) | pass |
 | Calibration: high-confidence boundary | 0.55-0.75 (committed 0.70) | 0.55 | pass |
-| Calibration: precision at the high boundary | >= 92% (at least 10 cases) | 100.0% (257 of 257 right) | pass |
+| Calibration: precision at the high boundary | >= 92% (at least 10 cases) | 100.0% (441 of 441 right) | pass |
 | Messages per incident (p95) | <= 3 | 3 | pass |
 | Messages per incident (most) | <= 5 | 5 | pass |
-| Time to first message (page tier) | max <= 2m0s | p95 1m45s, max 1m45s (50 scenarios) | pass |
-| Time to first message (notify tier) | max <= 5m0s | p95 3m15s, max 4m15s (369 scenarios) | pass |
-| Time to first message (boot-held) | max <= 15m0s | p95 12m15s, max 12m15s (7 scenarios) | pass |
+| Time to first message (page tier) | max <= 2m0s | p95 1m45s, max 1m45s (69 scenarios) | pass |
+| Time to first message (notify tier) | max <= 5m0s | p95 4m15s, max 5m0s (621 scenarios) | pass |
+| Time to first message (boot-held) | max <= 15m0s | p95 12m0s, max 12m0s (7 scenarios) | pass |
+| Time to first message (episode-held) | max <= 15m0s | p95 11m15s, max 11m15s (1 scenarios) | pass |
 | Notifications from non-events (staging day) | <= 0 | 0 | pass |
-| Notifications per hour (staging day peak) | <= 30/h | 26/h | pass |
+| Notifications per hour (staging day peak) | <= 30/h | 25/h | pass |
 | Unchanged updates | <= 0% | 0% | pass |
-| Re-created incidents | <= 5% | 1.4% | pass |
+| Re-created incidents | <= 5% | 1.9% | pass |
 | Repeated recoveries | <= 0 | 0 | pass |
 | Storm messages in 2 minutes (shared node) | <= 3 | 1 | pass |
 | Storm messages in 2 minutes (shared registry) | <= 3 | 1 | pass |
-| Storm messages in 2 minutes (multi-cause) | <= 13 | 8 | pass |
+| Storm messages in 2 minutes (multi-cause) | <= 13 | 6 | pass |
 | Multi-cause storm causes reported | >= 10 | 10 | pass |
 | Scenarios blaming a must-not-blame entity | <= 0 | 0 | pass |
 | Quiet scenarios that alerted | <= 0 | 0 | pass |
@@ -611,15 +612,15 @@ here verbatim and checked by `TestScorecardGates`.
 | Recoveries said while members still fail | <= 0 | 0 | pass |
 | Scenarios that passed and no longer do (ratchet) | <= 0 | 0 | pass |
 
-30 of 30 gates pass. 528 labelled root cases in 546 scenarios; first-incident tier matches in 546 of 546 scenarios.
-Staging day: 1073 notifications in 81h27m0s (13.2/h mean, peak hour 26); 0 from non-events, 0 of them notify or page.
+31 of 31 gates pass. 828 labelled root cases in 878 scenarios; first-incident tier matches in 878 of 878 scenarios.
+Staging day: 1824 notifications in 130h44m0s (14.0/h mean, peak hour 25); 0 from non-events, 0 of them notify or page.
 Storm shared node: 1000 pods, 2 messages in total, 1 in the loudest 2 minutes.
 Storm shared registry: 1000 pods, 1 messages in total, 1 in the loudest 2 minutes.
-Storm multi-cause: 1000 pods from 10 causes, 10 of them reported, 10 messages in total, 8 in the loudest 2 minutes.
-Slowest first messages: boot-endpoints-still-down notify 12m15s, scale-down-moved-pod-never-starts page 12m0s, node-join-never-ready page 10m15s, young-node-persists notify 10m0s, own-volume-wait-too-long notify 10m0s.
+Storm multi-cause: 1000 pods from 10 causes, 10 of them reported, 9 messages in total, 6 in the loudest 2 minutes.
+Slowest first messages: scale-down-moved-pod-never-starts page 12m0s, etcd-path-intermittent-during-maintenance notify 11m15s, node-join-never-ready page 10m15s, young-node-persists notify 10m0s, drain-beside-stuck-replacement page 10m0s.
 Calibration: the labelled cases put high confidence at 0.55 (committed 0.70).
-Right roots: 312 with a stated cause, 206 by falling back to the failing entity with no stated cause, 5 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 9 scenarios, 9 of them labelled as legitimate revisions.
-Time to first correct root: p95 4m15s, max 25m30s over 458 scenarios; slowest: hpa-metrics-outlive-recovery 25m30s, log-missing-service 21m15s, boot-endpoints-still-down 12m15s, scale-down-moved-pod-never-starts 12m0s, one-hpa-bad-target 11m15s. Never stated: coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
+Right roots: 507 with a stated cause, 288 by falling back to the failing entity with no stated cause, 28 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 18 scenarios, 10 of them labelled as legitimate revisions.
+Time to first correct root: p95 4m15s, max 47m0s over 752 scenarios; slowest: sporadic-probe-timeouts-no-event 47m0s, sporadic-connection-reset-no-cause 42m15s, deployment-paused-with-pending-edit 31m15s, hpa-metrics-outlive-recovery 25m30s, log-missing-service 21m15s. Never stated: coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
 
 ## Scenarios
 
@@ -836,7 +837,7 @@ Time to first correct root: p95 4m15s, max 25m30s over 458 scenarios; slowest: h
 | readiness-outage-node-out-of-addresses | `external-endpoint//10.0.9.40:5432`, `node//n1` | `external-endpoint//10.0.9.40:5432`, `node//n1` | high 0.80 | notify/notify | 2 (4) | pass |
 | readiness-outage-member-leaves | `external-endpoint//10.0.9.40:5432`, `deployment/shop/payments`, `deployment/shop/reports` | `external-endpoint//10.0.9.40:5432`, `deployment/shop/payments (no cause)`, `deployment/shop/reports (no cause)` | high 0.80 | notify/notify | 2 (6) | pass |
 | kind-only-joins-address | `external-endpoint//10.0.7.20:6379` | `external-endpoint//10.0.7.20:6379` | high 0.80 | notify/notify | 1 (2) | pass |
-| kind-only-other-kind | `external-endpoint//10.0.7.20:6379`, `deployment/shop/pricing`, `deployment/shop/tracking` | `external-endpoint//10.0.7.20:6379`, `deployment/shop/pricing (no cause)`, `deployment/shop/tracking (no cause)` | high 1.00 | notify/notify | 2 (4) | pass |
+| kind-only-other-kind | `external-endpoint//10.0.7.20:6379`, `deployment/shop/pricing`, `deployment/shop/tracking` | `external-endpoint//10.0.7.20:6379`, `deployment/shop/pricing (no cause)`, `deployment/shop/tracking (no cause)` | high 1.00 | notify/notify | 1 (4) | pass |
 | young-node-transient | quiet | - | - | -/- | 0 (0) | pass |
 | young-node-persists | `failure-signature//dial tcp <ip>:6379: connect: connection refused` | `failure-signature//dial tcp <ip>:6379: connect: connection refused` | high 0.85 | notify/notify | 2 (2) | pass |
 | young-and-old-nodes-fail | `external-endpoint//10.0.7.20:6379` | `external-endpoint//10.0.7.20:6379` | high 1.00 | notify/notify | 2 (2) | pass |
@@ -1004,11 +1005,11 @@ Time to first correct root: p95 4m15s, max 25m30s over 458 scenarios; slowest: h
 | coupled-image-nil-pointer | `deployment/stock/sync` | `deployment/stock/sync` | high 1.00 | notify/notify | 1 (2) | pass |
 | cron-secret-edited-hours-before | `secret/billing/sync-key` | `secret/billing/sync-key` | high 0.80 | notify/notify | 1 (2) | pass |
 | cron-secret-edited-then-succeeded | `cronjob/billing/invoice-sync` | `cronjob/billing/invoice-sync` | likely 0.55 | notify/notify | 1 (2) | pass |
-| coupled-silent-image-fault | `deployment/mail/intake` | `configmap/mail/intake-config` | likely 0.69 | notify/notify | 1 (2) | wrong root |
+| coupled-silent-image-fault | `deployment/mail/intake` | `configmap/mail/intake-config` | likely 0.69 | notify/notify | 1 (2) | pass |
 | coupled-silent-config-fault | `configmap/post/intake-config` | `configmap/post/intake-config` | likely 0.69 | notify/notify | 1 (2) | pass |
-| coupled-silent-image-fault-secret | `deployment/mail/relay` | `secret/mail/relay-secret` | likely 0.69 | notify/notify | 1 (2) | wrong root |
+| coupled-silent-image-fault-secret | `deployment/mail/relay` | `secret/mail/relay-secret` | likely 0.69 | notify/notify | 1 (2) | pass |
 | coupled-silent-secret-fault-secret | `secret/post/relay-secret` | `secret/post/relay-secret` | likely 0.69 | notify/notify | 1 (2) | pass |
-| coupled-silent-image-fault-state | `deployment/mail/ledger` | `configmap/mail/ledger-config` | likely 0.69 | notify/notify | 1 (2) | wrong root |
+| coupled-silent-image-fault-state | `deployment/mail/ledger` | `configmap/mail/ledger-config` | likely 0.69 | notify/notify | 1 (2) | pass |
 | coupled-silent-config-fault-state | `configmap/post/ledger-config` | `configmap/post/ledger-config` | likely 0.69 | notify/notify | 1 (2) | pass |
 | node-lost-owner-routed | `node//n1` | `node//n1` | high 1.00 | page/page | 3 (4) | pass |
 | cni-agent-crash-quoted | `node//n1` | `node//n1` | high 1.00 | notify/notify | 2 (4) | pass |
@@ -1025,7 +1026,7 @@ Time to first correct root: p95 4m15s, max 25m30s over 458 scenarios; slowest: h
 | ingress-to-scaled-to-zero-service | quiet | - | - | -/- | 0 (0) | pass |
 | job-retry-succeeds | quiet | - | - | -/- | 0 (0) | pass |
 | job-retries-all-fail | `job/batch/report` | `job/batch/report (no cause)` | none | notify/notify | 2 (3) | pass |
-| node-join-kubelet-notices | quiet | - | - | -/digest | 0 (0) | pass |
+| node-join-kubelet-notices | quiet | - | - | -/- | 0 (0) | pass |
 | pod-dns-search-line-notice | quiet | - | - | -/digest | 0 (0) | pass |
 | chronic-never-ready-deployment | `deployment/shop/cert-controller` | `deployment/shop/cert-controller (no cause)` | none | notify/notify | 1 (3) | pass |
 | webhook-backend-namespace-gone | `service/policy-gone/policy-svc` | `service/policy-gone/policy-svc` | high 0.95 | notify/notify | 1 (2) | pass |
@@ -1073,14 +1074,14 @@ Time to first correct root: p95 4m15s, max 25m30s over 458 scenarios; slowest: h
 | adv-rbac-two-bindings | `rolebinding/shop/api-config-reader` | `rolebinding/shop/api-config-reader` | high 0.90 | notify/notify | 1 (2) | pass |
 | adv-forbidden-partner-api | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
 | adv-similar-name-configmap | `deployment/payments/payments` | `deployment/payments/payments (no cause)` | none | notify/notify | 1 (2) | pass |
-| adv-two-causes-stable | `unknown` | `configmap/shop/checkout-flags` | likely 0.69 | notify/notify | 1 (2) | wrong root |
+| adv-two-causes-stable | `unknown` | `configmap/shop/checkout-flags` | likely 0.69 | notify/notify | 1 (2) | pass |
 | adv-configmap-recreated-blip | quiet | - | - | -/- | 0 (0) | pass |
 | adv-dns-nxdomain-probed | `external-endpoint//sandbox.partner-gateway.example:443` | `external-endpoint//sandbox.partner-gateway.example:443` | high 1.00 | notify/notify | 1 (2) | pass |
 | adv-dns-nxdomain-unprobed | `deployment/shop/checkout` | `deployment/shop/checkout (no cause)` | none | notify/notify | 1 (2) | pass |
 | adv-dns-nxdomain-two-namespaces | `deployment/shop/checkout`, `deployment/billing/invoicer` | `deployment/shop/checkout (no cause)`, `deployment/billing/invoicer (no cause)` | none | notify/notify | 1 (4) | pass |
 | adv-init-wait-selector-edited | `service/shop/queue` | `service/shop/queue` | high 0.85 | notify/notify | 2 (3) | pass |
 | adv-webhook-timeout-six-namespaces | `validatingwebhookconfiguration//image-policy` | `validatingwebhookconfiguration//image-policy` | high 1.00 | page/page | 1 (2) | pass |
-| adv-same-error-different-targets | `deployment/shop/db-a`, `service/billing/db-b` | `deployment/shop/db-a`, `service/billing/db-b` | high 0.85 | notify/notify | 2 (4) | pass |
+| adv-same-error-different-targets | `deployment/shop/db-a`, `service/billing/db-b` | `deployment/shop/db-a`, `service/billing/db-b` | high 0.85 | notify/notify | 1 (4) | pass |
 | adv-hpa-max-throttled | `horizontalpodautoscaler/shop/web` | `horizontalpodautoscaler/shop/web` | high 0.75 | notify/notify | 2 (2) | pass |
 | adv-quota-after-hpa-scale-up | `resourcequota/batch/pod-cap` | `resourcequota/batch/pod-cap` | high 1.00 | notify/notify | 1 (2) | pass |
 | adv-statefulset-zone-without-nodes | `persistentvolumeclaim/streaming/data-kafka-2` | `persistentvolumeclaim/streaming/data-kafka-2` | high 1.00 | notify/notify | 1 (2) | pass |
@@ -1099,7 +1100,7 @@ Time to first correct root: p95 4m15s, max 25m30s over 458 scenarios; slowest: h
 | adv-throttled-but-healthy-quiet | quiet | - | - | -/- | 0 (0) | pass |
 | adv-rollout-in-flight-node-lost | `node//n2` | `node//n2` | high 1.00 | page/page | 2 (4) | pass |
 | adv-node-blip-then-bad-rollout | `deployment/shop/api` | `deployment/shop/api` | high 1.00 | notify/notify | 3 (3) | pass |
-| adv-two-causes-six-hours | `unknown` | `configmap/shop/checkout-flags` | likely 0.69 | notify/notify | 1 (3) | wrong root |
+| adv-two-causes-six-hours | `unknown` | `configmap/shop/checkout-flags` | likely 0.69 | notify/notify | 1 (3) | pass |
 | adv-netpol-unrelated-crash | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
 | adv-dependency-rolled-unrelated-panic | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
 | called-backend-not-ready-timeout | `deployment/shop/ledger` | `deployment/shop/ledger` | high 1.00 | notify/notify | 2 (3) | pass |
@@ -1171,6 +1172,338 @@ Time to first correct root: p95 4m15s, max 25m30s over 458 scenarios; slowest: h
 | helm-old-failure-workload-down | `deployment/shop/payments`, `helmrelease/shop/payments` | `deployment/shop/payments`, `helmrelease/shop/payments (no cause)` | high 0.98 | notify/notify | 2 (4) | pass |
 | drain-beside-stuck-replacement | `node//n3` | `node//n3` | high 1.00 | page/page | 1 (2) | pass |
 | drain-evictions-find-no-room | `node//n3` | `node//n3` | high 1.00 | notify/notify | 2 (2) | pass |
+| sched-node-selector-no-match | `scheduling//didn't match Pod's node affinity/selector` | `scheduling//didn't match Pod's node affinity/selector` | high 1.00 | notify/notify | 1 (2) | pass |
+| sched-anti-affinity-pending | `scheduling//didn't match pod anti-affinity rules` | `scheduling//didn't match pod anti-affinity rules` | high 1.00 | notify/notify | 1 (2) | pass |
+| release-command-not-found | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| release-read-only-root-filesystem | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| hpa-target-no-cpu-request | `horizontalpodautoscaler/shop/web` | `horizontalpodautoscaler/shop/web (no cause)` | none | digest/digest | 0 (2) | pass |
+| node-pid-pressure | `node//n1` | `node//n1` | high 1.00 | notify/notify | 1 (2) | pass |
+| node-pleg-not-healthy | `node//n1` | `node//n1` | high 1.00 | page/page | 2 (2) | pass |
+| node-max-pods-reached | `scheduling//Too many pods` | `scheduling//Too many pods` | high 0.85 | notify/notify | 1 (2) | pass |
+| node-no-execute-taint-evicts | quiet | - | - | -/- | 0 (0) | pass |
+| node-no-execute-taint-tolerated | quiet | - | - | -/- | 0 (0) | pass |
+| node-cni-ip-conflict | `node//n2` | `node//n2` | high 1.00 | notify/notify | 2 (2) | pass |
+| node-clock-skew-cert-rejected | `node//n3` | `node//n3` | high 1.00 | page/page | 2 (2) | pass |
+| pvc-volume-resize-failed | `persistentvolumeclaim/inventory/pgdata` | `persistentvolumeclaim/inventory/pgdata` | likely 0.53 | notify/notify | 2 (3) | pass |
+| pv-released-blocks-claim | `persistentvolume//pv-db-0` | `persistentvolume//pv-db-0` | high 1.00 | notify/notify | 1 (2) | pass |
+| cron-active-deadline-exceeded | `cronjob/ops/stats-rollup` | `cronjob/ops/stats-rollup` | high 0.70 | notify/notify | 1 (3) | pass |
+| pod-stuck-terminating-finalizer | `finalizer/streaming/storage.example.com/volume-detach` | `finalizer/streaming/storage.example.com/volume-detach` | high 0.85 | notify/notify | 1 (2) | pass |
+| release-post-start-hook-fails | `deployment/shop/api` | `deployment/shop/api` | high 0.77 | notify/notify | 2 (2) | pass |
+| release-invalid-image-name | `deployment/shop/api` | `deployment/shop/api` | high 0.77 | notify/notify | 1 (2) | pass |
+| release-image-pull-deadline | `deployment/shop/etl` | `deployment/shop/etl` | high 0.77 | notify/notify | 1 (2) | pass |
+| release-seccomp-profile-missing | `deployment/shop/api` | `deployment/shop/api` | high 0.77 | notify/notify | 1 (2) | pass |
+| release-pull-secret-wrong-type | `secret/shop/regcred` | `secret/shop/regcred` | high 1.00 | notify/notify | 1 (2) | pass |
+| release-priority-class-missing | `priorityclass//batch-critical` | `priorityclass//batch-critical` | high 0.75 | notify/notify | 1 (2) | pass |
+| deployment-paused-with-pending-edit | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | digest/digest | 1 (2) | pass |
+| deployment-paused-no-edit | quiet | - | - | -/- | 0 (0) | pass |
+| release-configmap-volume-missing | `configmap/shop/app-config` | `configmap/shop/app-config` | high 0.85 | notify/notify | 1 (2) | pass |
+| release-node-name-missing | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| network-packet-loss-to-node | `unknown` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| etcd-database-space-exceeded | `etcd//etcd` | `etcd//etcd (no cause)` | none | page/page | 1 (2) | pass |
+| ingress-class-unknown | `ingress/shop/shop` | `ingress/shop/shop (no cause)` | none | notify/notify | 1 (2) | pass |
+| gateway-class-missing | `gateway.gateway.networking.k8s.io/shop/public` | `gateway.gateway.networking.k8s.io/shop/public (no cause)` | none | notify/notify | 1 (2) | pass |
+| crd-conversion-webhook-gone | `customresourcedefinition//widgets.acme.example` | `customresourcedefinition//widgets.acme.example` | high 1.00 | notify/notify | 1 (2) | pass |
+| release-scheduler-name-not-running | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| release-pvc-not-found | `persistentvolumeclaim/shop/data-0` | `persistentvolumeclaim/shop/data-0` | high 0.85 | notify/notify | 1 (2) | pass |
+| release-probe-exec-binary-missing | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| release-probe-scheme-mismatch | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| release-script-not-executable | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| release-exit-139-segfault | `deployment/shop/api` | `deployment/shop/api` | high 1.00 | notify/notify | 1 (2) | pass |
+| release-exit-zero-crash-loop | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| release-sidecar-port-conflict | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| release-bind-low-port-non-root | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| release-subpath-not-a-directory | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| release-memory-emptydir-oom | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| release-token-automount-disabled | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| release-legacy-token-secret-missing | `secret/shop/api-token` | `secret/shop/api-token` | high 0.85 | notify/notify | 1 (2) | pass |
+| release-sysctl-forbidden | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| release-host-network-cluster-dns | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| release-registry-unknown-authority | `registry//registry.corp.example` | `registry//registry.corp.example` | high 0.90 | notify/notify | 1 (2) | pass |
+| hostnetwork-port-taken-on-node | `node//n1` | `node//n1` | high 0.79 | notify/notify | 1 (3) | pass |
+| hostpath-directory-missing-on-node | `node//n3` | `node//n3` | high 0.79 | notify/notify | 1 (2) | pass |
+| node-runtime-not-ready-after-upgrade | `node//n1` | `node//n1` | high 1.00 | page/page | 2 (2) | pass |
+| upgrade-in-tree-volume-plugin-removed | `deployment/shop/ledger` | `deployment/shop/ledger (no cause)` | none | notify/notify | 1 (2) | pass |
+| node-kubelet-upgrade-restarts-all-pods | quiet | - | - | -/- | 0 (0) | pass |
+| kubelet-admission-out-of-cpu-pileup | `node//n2` | `node//n2` | high 0.95 | notify/notify | 1 (2) | pass |
+| kubelet-admission-single-reject-replaced | quiet | - | - | -/- | 0 (0) | pass |
+| node-image-gc-failed-disk-pressure | `node//n1` | `node//n1` | high 1.00 | notify/notify | 1 (2) | pass |
+| node-conntrack-table-full | `node//n2` | `node//n2 (no cause)` | none | notify/notify | 1 (3) | pass |
+| node-max-map-count-too-low | `node//n3` | `node//n3` | high 0.79 | notify/notify | 1 (2) | pass |
+| networkpolicy-blocks-apiserver-access | `networkpolicy/shop/dns-only-egress` | `networkpolicy/shop/dns-only-egress` | high 1.00 | notify/notify | 1 (2) | pass |
+| node-pause-image-pull-fails | `node//n4` | `node//n4` | possible 0.49 | notify/notify | 1 (3) | pass |
+| nfs-server-unreachable-three-namespaces | `unknown` | `deployment/billing/invoices (no cause)` | none | notify/notify | 1 (3) | pass |
+| coredns-corefile-edit-breaks-dns | `configmap/kube-system/coredns` | `configmap/kube-system/coredns` | high 1.00 | page/page | 2 (2) | pass |
+| node-local-dns-down-on-two-nodes | `daemonset/kube-system/node-local-dns` | `daemonset/kube-system/node-local-dns` | high 1.00 | notify/notify | 1 (3) | pass |
+| dns-storm-from-looping-workload | `deployment/kube-system/coredns` | `deployment/kube-system/coredns` | high 1.00 | page/page | 4 (4) | pass |
+| kube-proxy-not-syncing-one-node | `daemonset/kube-system/kube-proxy` | `daemonset/kube-system/kube-proxy` | high 1.00 | notify/notify | 2 (3) | pass |
+| runaway-cronjob-fills-nodes | `cronjob/batch/fanout` | `cronjob/batch/fanout (no cause)` | none | notify/notify | 2 (3) | pass |
+| preemption-chain-across-namespaces | `deployment/ml/trainer` | `deployment/ml/trainer` | high 1.00 | notify/notify | 2 (4) | pass |
+| control-plane-certificate-expired | `apiserver//kube-apiserver` | `apiserver//kube-apiserver (no cause)` | none | page/page | 1 (2) | pass |
+| namespace-stuck-on-unavailable-apiservice | `apiservice//v1beta1.metrics.k8s.io` | `apiservice//v1beta1.metrics.k8s.io` | likely 0.60 | notify/notify | 3 (3) | pass |
+| pvc-rwx-class-supports-only-rwo | `persistentvolumeclaim/shop/shared-uploads` | `persistentvolumeclaim/shop/shared-uploads` | high 1.00 | notify/notify | 1 (2) | pass |
+| node-max-volume-count-reached | `scheduling//exceed max volume count` | `scheduling//exceed max volume count` | high 0.85 | notify/notify | 1 (2) | pass |
+| hpa-flapping-scale-up-down | `horizontalpodautoscaler/shop/web` | `horizontalpodautoscaler/shop/web` | high 0.80 | digest/digest | 0 (2) | pass |
+| hpa-single-scale-up-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| deployment-replicas-reset-by-gitops | `deployment/shop/web` | `deployment/shop/web (no cause)` | none | digest/digest | 0 (2) | pass |
+| statefulset-governing-service-missing | `service/streaming/queue` | `service/streaming/queue` | high 1.00 | notify/notify | 1 (2) | pass |
+| node-kernel-task-hung | `node//n2` | `node//n2` | high 1.00 | notify/notify | 1 (2) | pass |
+| node-xfs-shutdown | `node//n3` | `node//n3` | high 1.00 | notify/notify | 1 (3) | pass |
+| node-hardware-error-before-loss | `node//n1` | `node//n1` | high 1.00 | page/page | 2 (2) | pass |
+| node-kubelet-restarts-repeatedly | `node//n1` | `node//n1` | high 1.00 | notify/notify | 1 (2) | pass |
+| node-kubelet-single-restart-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| node-unregister-netdevice-stuck | `node//n3` | `node//n3 (no cause)` | none | notify/notify | 1 (3) | pass |
+| node-corrupt-image-layer | `node//n2` | `node//n2` | high 0.79 | notify/notify | 1 (2) | pass |
+| daemonset-pod-pending-node-full | `node//n4` | `node//n4` | high 0.75 | notify/notify | 1 (2) | pass |
+| daemonset-pod-pending-briefly-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| daemonset-failed-pod-recreated-loop | `node//n2` | `node//n2` | high 0.75 | notify/notify | 1 (2) | pass |
+| pdb-selector-matches-no-pods | `poddisruptionbudget/shop/search-pdb` | `poddisruptionbudget/shop/search-pdb (no cause)` | none | notify/notify | 1 (2) | pass |
+| pdb-percentage-on-unmanaged-pods | `poddisruptionbudget/shop/queue-pdb` | `poddisruptionbudget/shop/queue-pdb (no cause)` | none | digest/digest | 0 (2) | pass |
+| job-max-failed-indexes-exceeded | `job/batch/import-shards` | `job/batch/import-shards` | high 0.85 | notify/notify | 1 (2) | pass |
+| job-pod-failure-policy-fail-job | `job/batch/migrate` | `job/batch/migrate` | high 0.85 | notify/notify | 1 (2) | pass |
+| job-failed-then-ttl-deleted | `job/batch/rebuild-index` | `job/batch/rebuild-index` | high 0.85 | notify/notify | 1 (2) | pass |
+| job-completed-then-ttl-deleted-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| cronjob-unknown-time-zone | `cronjob/reports/nightly-digest` | `cronjob/reports/nightly-digest (no cause)` | none | notify/notify | 2 (2) | pass |
+| pod-security-refuses-statefulset-and-job | `namespace//streaming` | `namespace//streaming` | high 1.00 | notify/notify | 1 (3) | pass |
+| statefulset-claim-refused-by-storage-quota | `resourcequota/streaming/storage-quota` | `resourcequota/streaming/storage-quota` | high 1.00 | notify/notify | 1 (2) | pass |
+| quota-requires-requests-and-limits | `resourcequota/shop/compute-quota` | `resourcequota/shop/compute-quota` | high 1.00 | notify/notify | 1 (2) | pass |
+| quota-scoped-to-priority-class-exhausted | `resourcequota/shop/high-priority-pods` | `resourcequota/shop/high-priority-pods` | high 1.00 | notify/notify | 1 (2) | pass |
+| limit-range-ratio-refuses-rollout | `limitrange/shop/limits` | `limitrange/shop/limits` | high 0.80 | notify/notify | 1 (2) | pass |
+| pod-security-latest-version-three-namespaces | `namespace//team-a`, `namespace//team-b`, `namespace//team-c` | `namespace//team-a`, `namespace//team-b`, `namespace//team-c` | high 0.80 | notify/notify | 1 (4) | pass |
+| admission-policy-param-deleted-denies-all | `validatingadmissionpolicy//require-owner.example.com` | `validatingadmissionpolicy//require-owner.example.com` | high 1.00 | notify/notify | 1 (3) | pass |
+| ephemeral-volume-claim-refused-by-quota | `resourcequota/shop/storage-quota` | `resourcequota/shop/storage-quota (no cause)` | none | notify/notify | 2 (2) | pass |
+| deployment-replicaset-create-refused-by-quota | `resourcequota/shop/object-counts` | `resourcequota/shop/object-counts (no cause)` | none | notify/notify | 2 (2) | pass |
+| loadbalancer-service-no-eligible-nodes | `unknown` | `service/shop/web (no cause)` | none | digest/digest | 0 (2) | pass |
+| node-pod-cidr-not-available | `node//n4` | `node//n4` | high 1.00 | notify/notify | 1 (3) | pass |
+| pvc-lost-volume-deleted | `persistentvolumeclaim/shop/data` | `persistentvolumeclaim/shop/data` | high 0.80 | notify/notify | 1 (2) | pass |
+| pvc-static-volume-too-small | `persistentvolumeclaim/shop/data-nfs` | `persistentvolumeclaim/shop/data-nfs` | high 0.90 | notify/notify | 1 (2) | pass |
+| node-lost-rwo-volume-multi-attach | `node//n1` | `node//n1` | high 0.89 | page/page | 2 (3) | pass |
+| node-shutdown-terminates-bare-pod | `node//n1` | `node//n1` | likely 0.60 | notify/notify | 2 (2) | pass |
+| node-shutdown-pods-replaced-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| pod-resize-deferred-no-room | `node//n1` | `node//n1` | high 0.75 | notify/notify | 1 (2) | pass |
+| pod-scheduling-gate-never-removed | `deployment/shop/worker` | `deployment/shop/worker (no cause)` | none | notify/notify | 1 (2) | pass |
+| pod-scheduling-gate-removed-quickly-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| release-readiness-gate-never-set | `deployment/shop/api` | `deployment/shop/api` | high 0.86 | notify/notify | 1 (2) | pass |
+| device-plugin-down-gpu-unavailable | `daemonset/kube-system/nvidia-device-plugin` | `daemonset/kube-system/nvidia-device-plugin (no cause)` | none | notify/notify | 2 (3) | pass |
+| hpa-duplicate-for-one-deployment | `horizontalpodautoscaler/shop/web-extra` | `horizontalpodautoscaler/shop/web-extra (no cause)` | none | digest/digest | 0 (2) | pass |
+| hpa-container-metric-name-missing | `horizontalpodautoscaler/shop/web` | `horizontalpodautoscaler/shop/web (no cause)` | none | digest/digest | 0 (2) | pass |
+| statefulset-ordinal-name-taken-by-bare-pod | `pod/data/db-1` | `pod/data/db-1 (no cause)` | none | digest/digest | 0 (2) | pass |
+| headless-service-hides-not-ready-peers | `service/streaming/queue` | `service/streaming/queue` | high 1.00 | notify/notify | 1 (2) | pass |
+| coredns-cluster-role-edited | `clusterrole//system:coredns` | `clusterrole//system:coredns` | high 1.00 | page/page | 1 (2) | pass |
+| pod-cannot-reach-own-service-address | `unknown` | `deployment/shop/ledger (no cause)` | none | notify/notify | 1 (2) | pass |
+| failed-mount-not-registered-clears-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| pod-dns-nameserver-limit-notice | quiet | - | - | -/digest | 0 (0) | pass |
+| sporadic-probe-timeouts-no-event | `unknown` | `deployment/shop/payments (no cause)` | none | digest/digest | 0 (2) | pass |
+| rollout-read-write-once-pod-conflict | `deployment/shop/db` | `deployment/shop/db` | high 1.00 | notify/notify | 1 (2) | pass |
+| pvc-larger-than-any-node-capacity | `persistentvolumeclaim/shop/scratch` | `persistentvolumeclaim/shop/scratch` | high 1.00 | notify/notify | 1 (2) | pass |
+| pod-pending-claim-being-deleted | `persistentvolumeclaim/shop/pgdata` | `persistentvolumeclaim/shop/pgdata` | high 0.95 | notify/notify | 1 (2) | pass |
+| pv-terminating-while-claim-bound | `persistentvolumeclaim/shop/pgdata` | `persistentvolumeclaim/shop/pgdata` | high 0.75 | digest/digest | 1 (2) | pass |
+| release-pod-affinity-target-scaled-to-zero | `deployment/shop/cache` | `deployment/shop/cache` | high 0.95 | notify/notify | 1 (2) | pass |
+| pod-priority-class-preemption-never | `priorityclass//batch-nopreempt` | `priorityclass//batch-nopreempt` | high 0.80 | notify/notify | 1 (2) | pass |
+| kubelet-preempts-pods-for-critical-agent | `unknown` | `deployment/billing/payments (no cause)` | none | notify/notify | 2 (3) | pass |
+| kubelet-topology-affinity-error-pileup | `node//n2` | `node//n2` | high 0.93 | notify/notify | 1 (3) | pass |
+| kubelet-rejects-pod-node-shutting-down-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| node-runtime-class-handler-missing | `node//n3` | `node//n3` | high 0.79 | notify/notify | 1 (2) | pass |
+| release-user-namespace-volume-unsupported | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| release-image-volume-not-found | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| workload-hits-pod-pids-limit | `deployment/shop/worker` | `deployment/shop/worker (no cause)` | none | notify/notify | 1 (2) | pass |
+| node-hugepages-allocatable-lost | `node//n2` | `node//n2` | likely 0.60 | notify/notify | 1 (2) | pass |
+| node-invalid-disk-capacity | `node//n1` | `node//n1 (no cause)` | none | digest/digest | 0 (2) | pass |
+| node-allocatable-enforcement-failed | `node//n1` | `node//n1 (no cause)` | none | digest/digest | 1 (2) | pass |
+| dra-driver-down-prepare-fails | `daemonset/kube-system/gpu-dra-driver` | `daemonset/kube-system/gpu-dra-driver (no cause)` | none | notify/notify | 1 (2) | pass |
+| pod-resize-error-in-progress | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | digest/digest | 0 (2) | pass |
+| node-swap-notices-healthy-pods-quiet | quiet | - | - | -/digest | 0 (0) | pass |
+| release-pod-level-memory-limit-oom | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| release-sidecar-startup-probe-fails | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| job-success-policy-terminates-other-pods-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| job-replacement-waits-for-terminating-pod | `node//n1` | `node//n1` | high 0.80 | page/page | 2 (3) | pass |
+| job-suspended-while-running-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| ephemeral-debug-container-fails-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| release-grpc-liveness-probe-tls-server | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| release-crash-loop-reduced-backoff | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| all-nodes-lost-evictions-halted | `node//n1` | `node//n1 (no cause)` | none | page/page | 2 (2) | pass |
+| evicted-pods-linger-after-recovery-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| scheduler-leader-lost-after-etcd-slow | `etcd//etcd` | `etcd//etcd (no cause)` | none | page/page | 2 (2) | pass |
+| old-nodes-lose-network-together | `node//n1` | `node//n1 (no cause)` | none | page/page | 3 (3) | pass |
+| node-kubelet-status-updates-lag | `node//n1` | `node//n1` | high 0.90 | notify/notify | 1 (2) | pass |
+| memory-hog-moves-and-takes-down-nodes | `deployment/batch/ingest` | `deployment/batch/ingest` | high 0.98 | page/page | 3 (4) | pass |
+| all-replicas-on-one-node-lost | `node//n1` | `node//n1` | high 1.00 | page/page | 2 (3) | pass |
+| daemonset-without-limits-system-oom-cycle | `daemonset/observability/logship` | `daemonset/observability/logship (no cause)` | none | notify/notify | 1 (3) | pass |
+| api-endpoint-change-nodes-blip-together-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| node-cni-agent-saturated-by-connections | `daemonset/kube-system/cni-agent` | `daemonset/kube-system/cni-agent` | high 1.00 | notify/notify | 2 (3) | pass |
+| daemonset-selector-matches-no-node-after-upgrade | `daemonset/kube-system/net-agent` | `daemonset/kube-system/net-agent` | high 1.00 | notify/notify | 1 (3) | pass |
+| coredns-memory-limit-oom-loop | `deployment/kube-system/coredns` | `deployment/kube-system/coredns` | high 1.00 | page/page | 2 (3) | pass |
+| terminating-pods-hold-addresses | `finalizer/jobs/jobs.example.com/cleanup` | `finalizer/jobs/jobs.example.com/cleanup` | high 0.88 | notify/notify | 1 (3) | pass |
+| webhook-backend-evicted-cannot-return | `validatingwebhookconfiguration//policy-guard` | `validatingwebhookconfiguration//policy-guard` | high 1.00 | page/page | 2 (3) | pass |
+| daemonset-rollout-overloads-api-then-dns | `apiserver//kube-apiserver` | `apiserver//kube-apiserver (no cause)` | none | notify/notify | 5 (5) | pass |
+| crd-instances-grow-unbounded-list-times-out | `unknown` | `deployment/auth/dex-operator (no cause)` | none | notify/notify | 1 (2) | pass |
+| etcd-restarted-by-own-liveness-probe | `etcd//etcd` | `etcd//etcd` | high 1.00 | page/page | 2 (3) | pass |
+| endpoint-slice-lists-pods-that-are-gone | `unknown` | `deployment/billing/invoices (no cause)` | none | notify/notify | 2 (3) | pass |
+| drain-long-grace-period-within-grace-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| secret-controller-scaled-down-new-pods-wait | `unknown` | `deployment/billing/invoices (no cause)` | none | notify/notify | 1 (3) | pass |
+| statefulset-recreated-restarts-all-pods | `deployment/shop/api` | `deployment/shop/api` | high 1.00 | notify/notify | 1 (3) | pass |
+| one-replica-takes-all-connections-oom | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| cronjob-every-minute-fills-api-server-memory | `pod/kube-system/kube-apiserver-n1` | `pod/kube-system/kube-apiserver-n1` | likely 0.50 | notify/notify | 4 (4) | pass |
+| etcd-path-intermittent-during-maintenance | `etcd//etcd` | `etcd//etcd (no cause)` | none | notify/notify | 1 (2) | pass |
+| release-server-binds-loopback | `deployment/shop/api` | `deployment/shop/api` | high 1.00 | notify/notify | 2 (2) | pass |
+| release-server-binds-other-ip-family | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| service-protocol-udp-for-tcp-app | `service/shop/api` | `service/shop/api` | high 1.00 | notify/notify | 1 (2) | pass |
+| kube-dns-service-recreated-new-cluster-ip | `service/kube-system/kube-dns` | `service/kube-system/kube-dns` | high 1.00 | notify/notify | 1 (3) | pass |
+| kube-dns-service-selector-matches-nothing | `service/kube-system/kube-dns` | `service/kube-system/kube-dns` | high 1.00 | page/page | 2 (3) | pass |
+| coredns-upstream-resolver-unreachable | `deployment/kube-system/coredns` | `deployment/kube-system/coredns` | high 0.70 | notify/notify | 1 (3) | pass |
+| upgrade-overwrites-coredns-stub-domain | `configmap/kube-system/coredns` | `configmap/kube-system/coredns` | high 1.00 | notify/notify | 1 (3) | pass |
+| statefulset-fsgroup-recursive-mount-timeout | `statefulset/streaming/queue` | `statefulset/streaming/queue (no cause)` | none | notify/notify | 1 (2) | pass |
+| node-runtime-container-name-reserved | `node//n3` | `node//n3` | high 0.79 | notify/notify | 1 (2) | pass |
+| bootstrap-token-expired-nodes-cannot-join | `scheduling//Insufficient cpu` | `scheduling//Insufficient cpu` | high 1.00 | notify/notify | 1 (2) | pass |
+| node-left-cordoned-after-maintenance | `node//n3` | `node//n3` | high 0.85 | notify/notify | 1 (2) | pass |
+| bare-pod-evicted-never-replaced | `pod/shop/cache-standalone` | `pod/shop/cache-standalone (no cause)` | none | notify/notify | 1 (3) | pass |
+| bare-pod-restart-never-failed | `pod/batch/migrate-once` | `pod/batch/migrate-once (no cause)` | none | notify/notify | 1 (2) | pass |
+| drain-waits-on-pod-without-owner | `unknown` | `pod/ops/debug-shell (no cause)` | none | digest/digest | 1 (2) | pass |
+| metrics-server-cannot-verify-kubelet-certificate | `unknown` | `horizontalpodautoscaler/shop/web (no cause)` | none | digest/digest | 0 (2) | pass |
+| kubelet-serving-csr-pending-metrics-fail | `certificatesigningrequest//csr-4k8x2` | `certificatesigningrequest//csr-4k8x2 (no cause)` | none | digest/digest | 0 (2) | pass |
+| page-cache-memory-pressure-evicts-reader | `deployment/media/reader` | `deployment/media/reader` | high 0.73 | notify/notify | 1 (2) | pass |
+| evictions-in-succession-disk-threshold | `node//n1` | `node//n1` | high 1.00 | notify/notify | 2 (3) | pass |
+| node-pressure-condition-flaps | `node//n1` | `node//n1 (no cause)` | none | digest/digest | 1 (2) | pass |
+| release-exec-probe-hangs-pid-pressure | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 2 (2) | pass |
+| statefulset-rollout-wedged-after-template-fix | `statefulset/streaming/queue` | `statefulset/streaming/queue` | likely 0.67 | notify/notify | 4 (4) | pass |
+| node-disk-full-by-deleted-open-file | `node//n1` | `node//n1` | high 1.00 | notify/notify | 1 (2) | pass |
+| crash-looping-pods-exhaust-node-inodes | `deployment/batch/flapper` | `deployment/batch/flapper (no cause)` | none | notify/notify | 2 (3) | pass |
+| claim-terminating-held-by-completed-job-pod | `persistentvolumeclaim/batch/results` | `persistentvolumeclaim/batch/results (no cause)` | none | notify/notify | 1 (2) | pass |
+| pvc-selected-node-removed-before-provisioning | `persistentvolumeclaim/shop/data` | `persistentvolumeclaim/shop/data` | high 1.00 | notify/notify | 1 (2) | pass |
+| cronjob-pull-failures-fill-pod-capacity | `cronjob/ops/sync-feed` | `cronjob/ops/sync-feed (no cause)` | none | notify/notify | 3 (3) | pass |
+| job-on-failure-restarts-in-place-forever | `job/batch/import` | `job/batch/import` | high 0.85 | notify/notify | 1 (2) | pass |
+| crash-looping-statefulset-blocks-drain | `statefulset/streaming/queue` | `statefulset/streaming/queue (no cause)` | none | notify/notify | 2 (2) | pass |
+| release-volume-hides-image-files | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| release-writes-into-configmap-volume | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| service-external-name-is-an-ip-address | `service/shop/db` | `service/shop/db` | high 0.95 | notify/notify | 1 (2) | pass |
+| registry-removes-tags-shared-by-workloads | `registry//registry.example.com` | `registry//registry.example.com` | high 1.00 | notify/notify | 1 (3) | pass |
+| daemonset-host-root-mount-not-shared | `daemonset/monitoring/host-agent` | `daemonset/monitoring/host-agent (no cause)` | none | notify/notify | 1 (2) | pass |
+| release-post-start-hook-hangs | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| statefulset-ordinal-refuses-restart-after-drain | `statefulset/streaming/queue` | `statefulset/streaming/queue (no cause)` | none | notify/notify | 1 (2) | pass |
+| coredns-pod-removed-lookups-stall-briefly | `deployment/kube-system/coredns` | `deployment/kube-system/coredns` | high 0.80 | notify/notify | 2 (2) | pass |
+| sporadic-connection-reset-no-cause | `unknown` | `deployment/shop/api (no cause)` | none | digest/digest | 0 (2) | pass |
+| node-memory-starved-by-low-requests | `node//n1` | `node//n1` | high 1.00 | page/page | 3 (3) | pass |
+| probe-failure-on-terminating-pod-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| pods-bound-to-node-that-no-longer-exists | `node//n9` | `node//n9` | high 0.95 | notify/notify | 1 (2) | pass |
+| spread-skew-after-rollout-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| control-plane-failover-nodes-unknown-then-recover | `unknown` | `node//n1 (no cause)` | none | page/page | 3 (3) | pass |
+| etcd-wal-corrupt-after-reboot | `etcd//etcd` | `etcd//etcd` | high 1.00 | page/page | 2 (3) | pass |
+| in-cluster-nfs-server-restarts-consumers-hang | `unknown` | `deployment/billing/invoices (no cause)` | none | notify/notify | 1 (3) | pass |
+| upgrade-removes-api-version-controller-crashes | `deployment/ingress-system/legacy-controller` | `deployment/ingress-system/legacy-controller (no cause)` | none | notify/notify | 1 (2) | pass |
+| webhook-v1-defaults-fail-closed-after-upgrade | `validatingwebhookconfiguration//legacy-labels` | `validatingwebhookconfiguration//legacy-labels` | high 1.00 | page/page | 1 (3) | pass |
+| webhook-certificate-common-name-only-after-upgrade | `validatingwebhookconfiguration//cert-policy` | `validatingwebhookconfiguration//cert-policy` | high 1.00 | page/page | 1 (3) | pass |
+| upgrade-enforces-exec-probe-timeout | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| upgrade-changes-topology-spread-counting | `deployment/shop/api` | `deployment/shop/api` | high 0.95 | notify/notify | 1 (2) | pass |
+| controller-manager-static-pod-probe-port-removed | `deployment/kube-system/kube-controller-manager` | `deployment/kube-system/kube-controller-manager (no cause)` | none | notify/notify | 1 (3) | pass |
+| scheduler-config-names-removed-plugin | `scheduler//kube-scheduler` | `scheduler//kube-scheduler` | high 1.00 | page/page | 3 (3) | pass |
+| upgrade-without-cloud-controller-nodes-uninitialized | `scheduling//had untolerated taint` | `scheduling//had untolerated taint` | high 1.00 | notify/notify | 2 (3) | pass |
+| upgrade-garbage-collects-cross-namespace-owner-ref | quiet | - | - | -/- | 0 (0) | pass |
+| upgrade-addon-image-repository-not-mirrored | `deployment/kube-system/coredns` | `deployment/kube-system/coredns` | high 0.77 | notify/notify | 1 (2) | pass |
+| storageclass-provisioner-secret-missing | `storageclass//secure-fast` | `storageclass//secure-fast` | high 1.00 | notify/notify | 1 (2) | pass |
+| storageclass-parameter-rejected-claims-pending | `storageclass//fast-bad` | `storageclass//fast-bad` | high 1.00 | notify/notify | 1 (3) | pass |
+| pvc-request-below-driver-minimum-size | `persistentvolumeclaim/shop/cache-data` | `persistentvolumeclaim/shop/cache-data` | high 0.90 | notify/notify | 1 (2) | pass |
+| pvc-restore-from-snapshot-not-ready | `persistentvolumeclaim/shop/restore-data` | `persistentvolumeclaim/shop/restore-data` | high 0.90 | notify/notify | 1 (2) | pass |
+| volume-snapshot-two-default-snapshot-classes | `volumesnapshot.snapshot.storage.k8s.io/shop/nightly` | `volumesnapshot.snapshot.storage.k8s.io/shop/nightly (no cause)` | none | digest/digest | 0 (2) | pass |
+| volume-snapshot-content-creation-failed | `volumesnapshotcontent.snapshot.storage.k8s.io//snapcontent-3f2a` | `volumesnapshotcontent.snapshot.storage.k8s.io//snapcontent-3f2a (no cause)` | none | notify/notify | 1 (2) | pass |
+| snapshot-controller-scaled-to-zero | quiet | - | - | -/- | 0 (0) | pass |
+| volume-snapshot-delete-blocked-by-restoring-claim | `persistentvolumeclaim/shop/restore-data` | `persistentvolumeclaim/shop/restore-data` | high 0.80 | digest/digest | 1 (2) | pass |
+| volume-snapshot-content-missing | `volumesnapshotcontent.snapshot.storage.k8s.io//imported-content` | `volumesnapshotcontent.snapshot.storage.k8s.io//imported-content` | high 0.95 | notify/notify | 1 (2) | pass |
+| csi-attacher-down-pods-wait-for-attach | `deployment/kube-system/ebs-csi-controller` | `deployment/kube-system/ebs-csi-controller` | high 1.00 | notify/notify | 1 (3) | pass |
+| csi-driver-object-missing-pod-waits | `csidriver//hostpath.csi.example.com` | `csidriver//hostpath.csi.example.com` | high 0.85 | notify/notify | 1 (2) | pass |
+| pv-filesystem-mismatch-pod-waits | `persistentvolume//pv-restored` | `persistentvolume//pv-restored (no cause)` | none | notify/notify | 2 (2) | pass |
+| pvc-volume-health-inaccessible | `persistentvolumeclaim/inventory/pgdata` | `persistentvolumeclaim/inventory/pgdata (no cause)` | none | notify/notify | 1 (2) | pass |
+| selectorless-service-without-endpoints | `service/shop/external-db` | `service/shop/external-db` | high 0.75 | notify/notify | 1 (2) | pass |
+| endpointslice-writes-refused-by-quota | `resourcequota/shop/object-counts` | `resourcequota/shop/object-counts (no cause)` | none | notify/notify | 1 (3) | pass |
+| service-ipv6-family-pods-ipv4-only | `service/shop/api` | `service/shop/api` | high 0.95 | notify/notify | 1 (2) | pass |
+| node-cni-teardown-fails-pods-terminating | `node//n2` | `node//n2` | possible 0.49 | notify/notify | 1 (3) | pass |
+| node-cni-config-invalid-new-pods-fail | `node//n3` | `node//n3` | high 0.79 | notify/notify | 1 (2) | pass |
+| node-image-lacks-cni-plugin-binary | `node//n4` | `node//n4` | possible 0.49 | notify/notify | 1 (3) | pass |
+| rollout-surge-pod-no-node-free-of-replica | `deployment/shop/search` | `deployment/shop/search` | high 0.87 | notify/notify | 1 (2) | pass |
+| release-init-container-cpu-request-too-large | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| job-fails-backoff-limit-from-node-drains | `job/batch/nightly` | `job/batch/nightly (no cause)` | none | notify/notify | 1 (3) | pass |
+| cronjob-replace-policy-kills-every-run | `cronjob/reports/slow-export` | `cronjob/reports/slow-export (no cause)` | none | digest/digest | 1 (2) | pass |
+| job-never-completes-sidecar-keeps-running | `job/batch/report-gen` | `job/batch/report-gen` | high 0.85 | notify/notify | 1 (2) | pass |
+| rollout-readiness-needs-leadership-deadlock | `deployment/shop/api` | `deployment/shop/api` | high 0.90 | notify/notify | 2 (2) | pass |
+| rollout-callers-see-refused-connections | `unknown` | `deployment/shop/web (no cause)` | none | notify/notify | 1 (2) | pass |
+| encryption-provider-down-secret-reads-fail | `unknown` | `deployment/billing/invoices (no cause)` | none | notify/notify | 1 (3) | pass |
+| encryption-key-dropped-old-secrets-unreadable | `unknown` | `deployment/shop/orders (no cause)` | none | notify/notify | 1 (2) | pass |
+| authorization-webhook-down-forbidden-everywhere | `unknown` | `deployment/billing/operator (no cause)` | none | notify/notify | 1 (3) | pass |
+| service-account-recreated-running-pods-unauthorized | `serviceaccount/shop/api` | `serviceaccount/shop/api` | high 1.00 | notify/notify | 1 (2) | pass |
+| operator-role-lacks-lease-permission | `role/shop/operator-role` | `role/shop/operator-role` | high 0.70 | notify/notify | 1 (2) | pass |
+| aggregated-cluster-role-edit-reverted | `clusterrole//view-extended` | `clusterrole//view-extended` | high 0.85 | notify/notify | 1 (2) | pass |
+| networkpolicy-blocks-api-server-to-webhook-backend | `networkpolicy/policy-system/default-deny` | `networkpolicy/policy-system/default-deny` | high 1.00 | page/page | 1 (3) | pass |
+| networkpolicy-isolates-metrics-server | `networkpolicy/kube-system/isolate-metrics` | `networkpolicy/kube-system/isolate-metrics` | high 1.00 | notify/notify | 2 (2) | pass |
+| csr-approved-but-never-issued | `certificatesigningrequest//csr-9d4k1` | `certificatesigningrequest//csr-9d4k1 (no cause)` | none | notify/notify | 1 (2) | pass |
+| admission-policy-expression-error-denies-all | `validatingadmissionpolicy//require-team-label` | `validatingadmissionpolicy//require-team-label` | high 1.00 | notify/notify | 1 (3) | pass |
+| release-drops-all-capabilities-chown-fails | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| release-run-as-user-without-passwd-entry | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| dropped-oom-event-crash-loop | `deployment/shop/api` | `deployment/shop/api` | high 0.73 | notify/notify | 1 (2) | pass |
+| event-ttl-expired-before-kwatch-start | `deployment/billing/worker` | `deployment/billing/worker (no cause)` | none | notify/notify | 1 (1) | pass |
+| resync-replays-resolved-warnings | quiet | - | - | -/- | 0 (0) | pass |
+| kwatch-restart-mid-incident-no-second-page | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (1) | pass |
+| kwatch-restart-during-node-loss | `node//worker-3` | `node//worker-3` | high 1.00 | page/page | 2 (2) | pass |
+| clock-skew-node-events-predate-the-edit | `configmap/shop/api-config` | `configmap/shop/api-config` | high 1.00 | notify/notify | 1 (1) | pass |
+| clock-skew-future-events-secret-missing | `secret/media/encoder-creds` | `secret/media/encoder-creds` | high 0.85 | notify/notify | 1 (1) | pass |
+| event-before-pod-object-missing-secret | `secret/shop/checkout-creds` | `secret/shop/checkout-creds` | high 0.85 | notify/notify | 1 (1) | pass |
+| event-before-owner-replicaset-cached | `deployment/reports/gen` | `deployment/reports/gen` | high 0.83 | notify/notify | 1 (1) | pass |
+| rbac-hides-events-status-suffices | `deployment/shop/api` | `deployment/shop/api` | high 1.00 | notify/notify | 1 (1) | pass |
+| rbac-hides-nodes-pods-unknown-phase | `unknown` | `statefulset/data/pg (no cause)` | none | notify/notify | 1 (1) | pass |
+| rbac-hides-configmaps-event-names-it | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (1) | pass |
+| rbac-hides-pod-logs-dependency-refused | `unknown`, `deployment/shop/redis` | `deployment/shop/api (no cause)`, `deployment/shop/redis (no cause)` | none | notify/notify | 1 (2) | pass |
+| watch-gap-crash-and-recover-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| watch-gap-hides-rollout-start | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| watch-gap-node-flaps-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| late-unschedulable-event-after-pending-seen | `scheduling//had untolerated taint` | `scheduling//had untolerated taint` | high 0.85 | notify/notify | 1 (1) | pass |
+| dropped-kill-events-liveness-kills | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (1) | pass |
+| aggregated-event-count-jump | `deployment/shop/web` | `deployment/shop/web (no cause)` | none | notify/notify | 1 (1) | pass |
+| stale-cache-pod-already-deleted | `unknown` | `replicaset/shop/api-4dffe2cd (no cause)` | none | notify/notify | 2 (2) | pass |
+| one-zone-pods-cannot-reach-database | `zone//zone-b` | `zone//zone-b` | likely 0.58 | notify/notify | 1 (2) | pass |
+| one-zone-image-pull-fails | `zone//zone-c` | `zone//zone-c` | high 0.73 | notify/notify | 1 (2) | pass |
+| one-pool-new-taint-pods-pending | `scheduling//had untolerated taint` | `scheduling//had untolerated taint` | high 0.85 | notify/notify | 2 (2) | pass |
+| one-pool-disk-pressure-evictions | `nodepool//pool-logs` | `nodepool//pool-logs` | high 1.00 | notify/notify | 1 (2) | pass |
+| one-replica-corrupt-image-cache-node | `node//node-c` | `node//node-c` | high 0.79 | notify/notify | 1 (1) | pass |
+| one-replica-oom-hot-shard | `deployment/shop/cache` | `deployment/shop/cache` | high 0.73 | notify/notify | 1 (1) | pass |
+| some-replicas-old-config-subpath | `configmap/shop/api-config` | `configmap/shop/api-config` | high 0.80 | notify/notify | 1 (1) | pass |
+| one-path-large-responses-time-out | quiet | - | - | -/- | 0 (0) | pass |
+| one-path-slow-dependency-health-ok | quiet | - | - | -/- | 0 (0) | pass |
+| intermittent-resets-from-terminating-endpoint | quiet | - | - | -/- | 0 (0) | pass |
+| intermittent-one-coredns-replica-unsynced | `deployment/kube-system/coredns` | `deployment/kube-system/coredns (no cause)` | none | notify/notify | 1 (2) | pass |
+| canary-five-percent-bad-image | `deployment/shop/api-canary` | `deployment/shop/api-canary (no cause)` | none | notify/notify | 1 (1) | pass |
+| tenant-default-deny-breaks-dns | `networkpolicy/tenant-b/default-deny-all` | `networkpolicy/tenant-b/default-deny-all` | high 1.00 | notify/notify | 1 (2) | pass |
+| tenant-quota-forbids-storageclass | `resourcequota/tenant-c/storage-caps` | `resourcequota/tenant-c/storage-caps` | high 1.00 | notify/notify | 1 (2) | pass |
+| zone-spread-leaves-replicas-pending | `scheduling//didn't match pod topology spread constraints` | `scheduling//didn't match pod topology spread constraints` | high 1.00 | notify/notify | 1 (2) | pass |
+| one-pool-runtimeclass-handler-missing | `nodepool//pool-b` | `nodepool//pool-b` | high 0.82 | notify/notify | 1 (2) | pass |
+| statefulset-one-ordinal-data-corrupt | `statefulset/data/db` | `statefulset/data/db (no cause)` | none | notify/notify | 1 (1) | pass |
+| udp-only-blocked-by-policy | quiet | - | - | -/- | 0 (0) | pass |
+| readiness-gate-unmet-on-some-pods | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (1) | pass |
+| local-traffic-policy-unhealthy-nodes-quiet | quiet | - | - | -/digest | 0 (0) | pass |
+| shared-postgres-down-three-namespaces | `statefulset/data/pg` | `statefulset/data/pg` | high 0.80 | notify/notify | 1 (2) | pass |
+| shared-cache-no-endpoints-cross-namespace | `unknown` | `deployment/jobs/render (no cause)` | none | notify/notify | 1 (1) | pass |
+| ingress-controller-down-four-namespaces | `deployment/ingress-nginx/controller` | `deployment/ingress-nginx/controller (no cause)` | none | page/page | 1 (2) | pass |
+| shared-nfs-server-down-mount-timeouts | `deployment/storage/nfs-server` | `deployment/storage/nfs-server` | likely 0.57 | notify/notify | 3 (3) | pass |
+| shared-egress-proxy-down | `deployment/egress/proxy` | `deployment/egress/proxy` | high 1.00 | notify/notify | 1 (2) | pass |
+| shared-auth-service-jwks-unreachable | `deployment/identity/auth` | `deployment/identity/auth (no cause)` | none | notify/notify | 2 (2) | pass |
+| shared-cache-rolling-restart-brief-errors-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| shared-database-failover-digest | quiet | - | - | -/- | 0 (0) | pass |
+| clusterissuer-secret-deleted-certificates-stalled | `clusterissuer.certs.example.com//internal-ca` | `clusterissuer.certs.example.com//internal-ca (no cause)` | none | notify/notify | 3 (3) | pass |
+| clusterissuer-ca-secret-annotation-expired | `clusterissuer.certs.example.com//internal-ca` | `clusterissuer.certs.example.com//internal-ca (no cause)` | none | notify/notify | 3 (3) | pass |
+| shared-configmap-bad-json-three-namespaces | `failure-signature//unexpected end of json input reading platform/shared-flags key flags.json` | `failure-signature//unexpected end of json input reading platform/shared-flags key flags.json` | high 0.85 | notify/notify | 1 (1) | pass |
+| corefile-forwarder-edit-external-lookups-fail | `configmap/kube-system/coredns` | `configmap/kube-system/coredns` | high 1.00 | notify/notify | 1 (1) | pass |
+| crd-conversion-webhook-no-endpoints | `deployment/crd-system/gadget-conv` | `deployment/crd-system/gadget-conv (no cause)` | none | notify/notify | 2 (2) | pass |
+| secretstore-credential-secret-missing-externalsecrets-fail | `unknown` | `deployment/billing/api (no cause)` | none | notify/notify | 2 (2) | pass |
+| mutating-webhook-injects-missing-image | `mutatingwebhookconfiguration//sidecar-injector` | `mutatingwebhookconfiguration//sidecar-injector` | high 1.00 | notify/notify | 1 (2) | pass |
+| storageclass-recreated-wrong-parameters | `storageclass//fast-ssd` | `storageclass//fast-ssd` | high 1.00 | notify/notify | 2 (3) | pass |
+| priorityclass-deleted-replicasets-refused | `priorityclass//team-high` | `priorityclass//team-high` | high 0.90 | notify/notify | 1 (1) | pass |
+| clusterrole-edit-agents-forbidden-three-namespaces | `clusterrole//app-discovery` | `clusterrole//app-discovery` | high 1.00 | notify/notify | 1 (1) | pass |
+| apiservice-cabundle-mismatch-discovery-fails | `apiservice//v1alpha1.custom.example.com` | `apiservice//v1alpha1.custom.example.com` | high 0.85 | notify/notify | 1 (1) | pass |
+| crd-version-removed-operators-log-no-match | `failure-signature//no matches for kind "widget" in version "example.com/v#beta#"` | `failure-signature//no matches for kind "widget" in version "example.com/v#beta#"` | high 0.70 | notify/notify | 1 (1) | pass |
+| wording-oom-limit-too-low | `deployment/shop/api` | `deployment/shop/api` | high 1.00 | notify/notify | 1 (1) | pass |
+| wording-image-typo | `deployment/billing/worker` | `deployment/billing/worker` | high 0.91 | notify/notify | 1 (1) | pass |
+| wording-bad-rollout-config-key | `deployment/shop/api` | `deployment/shop/api` | high 0.88 | notify/notify | 1 (1) | pass |
+| wording-probe-port-mismatch | `deployment/shop/web` | `deployment/shop/web` | high 0.83 | notify/notify | 1 (1) | pass |
+| wording-certificate-expired-handshake | `secret/shop/bank-client-tls` | `secret/shop/bank-client-tls` | high 1.00 | notify/notify | 1 (1) | pass |
+| wording-first-message-ongoing-chronic | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| wording-quota-forbids-pods | `resourcequota/shop/compute` | `resourcequota/shop/compute` | high 1.00 | notify/notify | 1 (1) | pass |
+| wording-registry-rate-limited | `registry//docker.io` | `registry//docker.io` | high 1.00 | notify/notify | 1 (1) | pass |
 
 ## Held-out scenarios
 

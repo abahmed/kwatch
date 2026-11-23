@@ -1,0 +1,13 @@
+{
+  "name": "bootstrap-token-expired-nodes-cannot-join",
+  "description": "A scale-up needs new nodes whose join token expired a day ago; no Node object appears and the new pods stay Pending for lack of CPU. The token expiry is a Secret value kwatch cannot read, so only the Pending for lack of CPU is visible.",
+  "root": "scheduling//Insufficient cpu",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

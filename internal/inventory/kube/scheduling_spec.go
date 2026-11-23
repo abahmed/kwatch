@@ -134,6 +134,10 @@ func buildSchedulingSpec(pod *corev1.Pod) SchedulingSpec {
 	return spec
 }
 
+// FieldPrefix marks a requirement on a node field (metadata.name), as
+// against one on a node label.
+const FieldPrefix = "field:"
+
 func nodeTerms(a *corev1.Affinity) [][]Requirement {
 	if a == nil || a.NodeAffinity == nil ||
 		a.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
@@ -145,6 +149,11 @@ func nodeTerms(a *corev1.Affinity) [][]Requirement {
 		var reqs []Requirement
 		for _, r := range term.MatchExpressions {
 			reqs = append(reqs, Requirement{Key: r.Key,
+				Op: string(r.Operator), Values: r.Values})
+		}
+		// A DaemonSet pins its pod to one node by field.
+		for _, r := range term.MatchFields {
+			reqs = append(reqs, Requirement{Key: FieldPrefix + r.Key,
 				Op: string(r.Operator), Values: r.Values})
 		}
 		out = append(out, reqs)

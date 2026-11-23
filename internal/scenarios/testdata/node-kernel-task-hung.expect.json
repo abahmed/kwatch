@@ -1,0 +1,13 @@
+{
+  "name": "node-kernel-task-hung",
+  "description": "A node problem detector reports a hung kernel task and KernelDeadlock on a node that is still Ready; the pods on it time out their probes, their replicas on other nodes work.",
+  "root": "node//n2",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/payments",
+    "deployment/shop/cart"
+  ],
+  "tail": "10m0s"
+}

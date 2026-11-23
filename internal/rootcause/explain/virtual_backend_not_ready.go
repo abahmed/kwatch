@@ -23,7 +23,7 @@ var backendNotReadyRow = Row{
 	Cause: Side{Group: AnyGroup, Kind: AnyKind,
 		Modes: []detection.Mode{ModeBackendsNotReady}},
 	Link:   LinkBacks,
-	Effect: Side{Kind: kube.KindPod, Modes: callerFailures},
+	Effect: Side{Kind: kube.KindPod, Modes: callerOrMount},
 	Prior:  0.5,
 }
 

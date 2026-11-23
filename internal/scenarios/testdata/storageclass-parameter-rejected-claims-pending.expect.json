@@ -1,0 +1,14 @@
+{
+  "name": "storageclass-parameter-rejected-claims-pending",
+  "description": "A StorageClass carries a parameter the provisioner rejects; the claims of three namespaces are Pending with the same ProvisioningFailed message.",
+  "root": "storageclass//fast-bad",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/db",
+    "deployment/billing/ledger",
+    "deployment/media/store"
+  ],
+  "tail": "10m0s"
+}

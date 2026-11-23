@@ -18,7 +18,8 @@ var loadBalancerFailures = map[string]detection.Severity{
 	"SyncLoadBalancerFailed":   detection.Critical,
 	"UpdateLoadBalancerFailed": detection.Warning,
 	"DeleteLoadBalancerFailed": detection.Warning,
-	"UnAvailableLoadBalancer":  detection.Warning,
+	// No node is eligible to register: existing traffic is not cut.
+	"UnAvailableLoadBalancer": detection.Info,
 }
 
 // loadBalancerEvents reports recent load balancer controller failures as
@@ -41,7 +42,7 @@ func loadBalancerEvents(
 	}
 	sort.Strings(names)
 	f := detection.Finding{
-		Reason: reasons.LoadBalancerSyncFailed, Severity: detection.Warning,
+		Reason: reasons.LoadBalancerSyncFailed, Severity: detection.Info,
 		Summary: "Cloud load balancer controller failed (" +
 			strings.Join(names, ", ") + ")",
 	}

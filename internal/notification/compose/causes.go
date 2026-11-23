@@ -1,7 +1,6 @@
 package compose
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -26,25 +25,52 @@ type causeWording struct {
 // causeWords are keyed by the explain row that blamed the cause
 // (rootcause.CauseRecord.Rule). A row missing here reads "is failing".
 var causeWords = map[string]causeWording{
-	"account-missing-at-create":       {words: "does not exist"},
-	"apiserver-unavailable":           {words: "is not answering"},
-	"apiservice-backend-missing":      {words: "does not exist"},
-	"apiservice-unavailable":          {words: "is unavailable"},
-	"backends-failing":                {words: "has no healthy backends"},
-	"called-service-backend-changed":  {words: "changed shortly before"},
-	"called-service-backends-failing": {words: "is failing"},
-	"called-service-no-endpoints":     {words: "has no ready endpoints"},
+	"account-missing-at-create":             {words: "does not exist"},
+	"apiserver-unavailable":                 {words: "is not answering"},
+	"component-pod-etcd":                    {words: "is not running"},
+	"component-pod-kube-scheduler":          {words: "is not running"},
+	"component-pod-kube-controller-manager": {words: "is not running"},
+	"apiservice-backend-missing":            {words: "does not exist"},
+	"apiservice-unavailable":                {words: "is unavailable"},
+	"backends-failing":                      {words: "has no healthy backends"},
+	"called-service-backend-changed":        {words: "changed shortly before"},
+	"called-service-backends-failing":       {words: "is failing"},
+	"called-service-no-endpoints":           {words: "has no ready endpoints"},
 	"autoscaling-limit": {
 		words: "has reached its autoscaling limit"},
+	"autoscaler-flaps-replicas": {
+		words: "keeps changing the replica count"},
+	"scheduler-names-priority-class": {
+		words: "never preempts, which leaves its pods waiting for room"},
+	"scheduler-names-owner": {
+		words: "has an old pod that still holds its single-pod volume claim"},
+	"scheduler-names-claim": {
+		words: "has no node with enough free storage"},
+	"scheduler-names-affinity-target": {
+		words: "has no ready pods for the waiting pod to be placed beside"},
+	"scheduler-names-pinned-node": {
+		words: "has no room for the pod pinned to it"},
+	"scheduler-names-scarce-node": {
+		words: "has none left of the resource the pod asks for"},
 	"autoscaling-limit-unavailable": {
 		words: "has reached its autoscaling limit"},
 	"budget-blocks-drain": {words: "allows no eviction"},
 	"certificate-expired": {words: "holds an expired certificate"},
 	"claim-not-usable":    {words: "cannot be used"},
+	"conversion-webhook-down": {
+		words: "cannot convert its resources: its webhook backend does not exist"},
+	"volume-bound-elsewhere": {
+		words: "is already bound to a different claim"},
 	"claim-pins-pod": {
 		words: "is bound to a volume in a zone with no node for the pod"},
-	"cluster-dns-failing":          {words: "is not resolving names"},
+	"cluster-dns-failing": {words: "is not resolving names"},
+	"dns-config-changed":  {words: "changed shortly before"},
+	"dns-service-changed": {words: "changed shortly before"},
+	"dns-role-changed": {
+		words: "no longer grants the access it needs",
+	},
 	"cluster-dns-servers":          {words: "is not resolving names"},
+	"dns-servers-not-resolving":    {words: "is not resolving names"},
 	"cluster-dns-server-workload":  {words: "is not resolving names"},
 	"config-missing-or-changed":    {words: "does not exist"},
 	"configmap-missing-or-changed": {words: "does not exist"},
@@ -81,6 +107,8 @@ var causeWords = map[string]causeWording{
 		words: "it cannot connect to a service it depends on"},
 	"liveness-kills-before-ready": {own: true,
 		words: "its containers are not ready when liveness gives up"},
+	"memory-over-request": {own: true,
+		words: "its memory use is above what it requests"},
 	"memory-limit-too-low": {own: true,
 		words: "its memory limit is too low for normal use"},
 	"metrics-api-down": {words: "is not serving metrics"},
@@ -97,7 +125,9 @@ var causeWords = map[string]causeWording{
 		words: "serves every pod on that node and is failing"},
 	"node-agent-named-by-error": {
 		words: "serves every pod on that node and is failing"},
-	"node-agent-absent":  {words: "has no pod on that node"},
+	"node-agent-absent": {
+		words: "has no pod on the node the failing pods run on",
+	},
 	"node-not-ready":     {words: "is not ready"},
 	"node-overcommitted": {words: "is overcommitted on memory"},
 	"node-pid-pressure":  {words: "is short of process IDs"},
@@ -121,8 +151,18 @@ var causeWords = map[string]causeWording{
 	"workload-fills-disks": {
 		words: "fills the disks of the nodes it runs on, so pods on " +
 			"those nodes are evicted"},
+	"resolver-workload-failing": {
+		words: "holds the resolver address that lookups time out on"},
+	"workload-exhausts-memory": {
+		words: "exhausts the memory of the nodes it runs on, which stop " +
+			"reporting"},
 	"account-has-no-grant": {
 		words: "is named by no role binding, so nothing is granted to it"},
+	"role-lacks-grant": {
+		words: "does not grant the access its account is refused"},
+	"account-replaced": {
+		words: "was deleted and created again, which invalidates the " +
+			"tokens of running pods"},
 	"quota-exhausted": {words: "is used up"},
 	"resource-claim-unallocated": {
 		words: "has no device allocated, so its pod cannot start"},
@@ -133,6 +173,7 @@ var causeWords = map[string]causeWording{
 	"admission-policy-denies":    {words: "denies the pods being created"},
 	"rbac-change":                {words: "no longer grants the access it needs"},
 	"registry-refuses":           {words: "refuses the image pulls"},
+	"webhook-injects-image":      {words: "injects an image the pods cannot pull"},
 	"rollout":                    {words: "rolled out a change shortly before"},
 	"routed-missing":             {words: "does not exist"},
 	"missing-service-called":     {words: "does not exist"},
@@ -160,6 +201,17 @@ var causeWords = map[string]causeWording{
 		words: "sets no storage class and the cluster has no default one"},
 	"storage-class-missing":         {words: "does not exist"},
 	"storage-class-missing-pending": {words: "does not exist"},
+	"claim-pins-volume": {
+		words: "is bound to the volume whose deletion waits for it"},
+	"attacher-down": {
+		words: "runs the volume attacher the pods wait for and has no " +
+			"ready pods"},
+	"claim-selected-node-gone": {
+		words: "waits on a selected node that no longer exists"},
+	"claim-restores-from-snapshot": {
+		words: "is restored from the snapshot whose deletion waits for it"},
+	"storage-class-rejects": {
+		words: "sets a secret or parameter its provisioner rejects"},
 	"startup-budget-too-short": {own: true,
 		words: "its containers get too little time to start"},
 	"summary":                 {words: "is failing"},
@@ -168,6 +220,13 @@ var causeWords = map[string]causeWording{
 	"webhook-rejects":         {words: "is rejecting requests"},
 	"webhook-slows-api":       {words: "is slowing the API server"},
 	"zone-failing":            {words: "is failing as a whole"},
+	"node-kubelet-silent": {
+		words: "has reported nothing on the pods bound to it"},
+	"node-ended-pod": {words: "shut down and its kubelet ended the pod"},
+	"shared-zone": {
+		words: "has pods on its nodes failing the same way"},
+	"shared-nodepool": {
+		words: "has pods on its nodes failing the same way"},
 
 	// Rows that blame a workload whose pods run but are not ready.
 	"backends-not-ready": {
@@ -184,6 +243,10 @@ func ownCause(cause *rootcause.CauseRecord) bool {
 // causeWordsFor is what follows the cause's name when it has no
 // finding of its own.
 func causeWordsFor(cause *rootcause.CauseRecord) string {
+	return measuredGap(cause, tableWordsFor(cause))
+}
+
+func tableWordsFor(cause *rootcause.CauseRecord) string {
 	if cause.Root.Kind == kube.KindRegistry {
 		class := strings.ToLower(string(cause.Mode))
 		if alias, ok := pullClassOfMode[class]; ok {
@@ -262,123 +325,4 @@ func readableSummary(cause *rootcause.CauseRecord) bool {
 // has enough cpu".
 func schedulingWords(id inventory.EntityID) string {
 	return rootcause.SchedulingWords(id.Name)
-}
-
-// proofWords word one piece of evidence from its code and numbers. A
-// proof without a code is written as its text; an empty result drops
-// it.
-func proofWords(p rootcause.Proof) string {
-	if p.Code == "" {
-		return p.Text
-	}
-	if write, ok := proofWriters[p.Code]; ok {
-		return write(p)
-	}
-	return proofPhrases[p.Code]
-}
-
-// proofWriters word the proofs whose numbers or fields shape the
-// sentence.
-var proofWriters = map[rootcause.ProofCode]func(rootcause.Proof) string{
-	rootcause.ProofDependentsFail: func(p rootcause.Proof) string {
-		return dependentWords(p.Count, p.Total)
-	},
-	rootcause.ProofErrorsName: func(p rootcause.Proof) string {
-		return errorWords(p.Count, p.Total)
-	},
-	rootcause.ProofCoOnset: func(p rootcause.Proof) string {
-		switch {
-		case p.Total == 0 && p.Count == 2:
-			return "they started failing at the same time"
-		case p.Total == 0:
-			return "all started failing at the same time"
-		case p.Count == 2:
-			return "they started failing " + secondsWords(p.Total) +
-				" apart"
-		}
-		return "all started failing within " + secondsWords(p.Total)
-	},
-	rootcause.ProofWorkloadsMeet: func(p rootcause.Proof) string {
-		if p.Count == 2 {
-			return "both failing apps use it"
-		}
-		return "all " + numberWord(p.Count) + " failing apps use it"
-	},
-	rootcause.ProofFillsDisks: func(p rootcause.Proof) string {
-		return "its pods hold most of the disk in use on " +
-			numberWord(p.Count) + " nodes"
-	},
-	rootcause.ProofChanged: func(p rootcause.Proof) string {
-		return changedFieldsWords(p.Fields)
-	},
-	rootcause.ProofBaseline: func(p rootcause.Proof) string {
-		return "it deviates " + strconv.Itoa(p.Count) +
-			"% from its baseline"
-	},
-}
-
-// proofPhrases word the proofs that need no numbers. A code missing
-// here and in proofWriters is dropped: it only ever speaks against a
-// cause, and writers show supporting proof only.
-var proofPhrases = map[rootcause.ProofCode]string{
-	// Timing alone convinces nobody reading the note.
-	rootcause.ProofBeganBefore:     "",
-	rootcause.ProofNothingUpstream: "nothing it depends on is failing",
-	rootcause.ProofCreated:         "it was created shortly before",
-	rootcause.ProofSiblingsHealthy: "replicas that do not depend on it " +
-		"are healthy",
-	rootcause.ProofRevertRecovered: "reverting its change brought the " +
-		"apps that use it back",
-	rootcause.ProofFailedAfterChange: "the apps that use it " +
-		"failed soon after it changed",
-	rootcause.ProofNewRevisionFails: "only the new revision fails; the " +
-		"previous one stays healthy",
-}
-
-// dependentWords writes "the one app that uses it is failing", "every
-// app that uses it is failing" or "two of the three apps that use it are
-// failing".
-func dependentWords(n, of int) string {
-	switch {
-	case of == 1 && n == 1:
-		return "the one app that uses it is failing"
-	case n == of:
-		return "every app that uses it is failing"
-	}
-	return numberWord(n) + " of the " + numberWord(of) + " apps that " +
-		"use it " + verb(n, "is", "are") + " failing"
-}
-
-// errorWords writes "the error mentions it", "every error mentions it"
-// or "two of the four errors mention it".
-func errorWords(n, of int) string {
-	switch {
-	case of == 1 && n == 1:
-		return "the error mentions it"
-	case n == of:
-		return "every error mentions it"
-	}
-	return numberWord(n) + " of the " + numberWord(of) + " errors " +
-		verb(n, "mentions", "mention") + " it"
-}
-
-// changedFieldsWords words a change by the fields it touched: "its
-// selector changed shortly before".
-func changedFieldsWords(paths []string) string {
-	if len(paths) == 0 {
-		return "it changed shortly before"
-	}
-	var fields []string
-	for _, path := range paths {
-		fields = append(fields, lastSegment(path))
-	}
-	return "its " + joinAnd(fields, maxNamed) + " changed shortly before"
-}
-
-// secondsWords is "4 seconds", or "1 second".
-func secondsWords(n int) string {
-	if n == 1 {
-		return "1 second"
-	}
-	return strconv.Itoa(n) + " seconds"
 }

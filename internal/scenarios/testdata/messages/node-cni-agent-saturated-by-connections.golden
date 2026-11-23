@@ -1,0 +1,17 @@
+10:07:15 settled
+🟠 cni-agent in kube-system (prod-eu-1) is failing, affecting three workloads. No cause found in cluster state: its dependencies, node and registry are healthy and unchanged. Its error is a network timeout to 10.96.14.7:5432, so check the path to that address. It fails with "dial tcp 10.96.14.7:5432: i/o timeout". The last run of container app in pod invoices-bcf7f095-b in billing lasted ten seconds; two restarts since the pod was created about one hour ago. Affected: invoices in billing; transcode in media; web in shop. To read the output of the last crash, run kubectl logs deploy/invoices -c app -n billing --previous
+🟠 cni-agent in kube-system (prod-eu-1) is failing, affecting three workloads.
+| 🟠 **cni-agent** in **kube-system** (**prod-eu-1**) is failing, affecting three workloads.
+| No cause found in cluster state: its dependencies, node and registry are healthy and unchanged. Its error is a network timeout to 10.96.14.7:5432, so check the path to that address.
+| It fails with `dial tcp 10.96.14.7:5432: i/o timeout`.
+| The last run of container app in pod invoices-bcf7f095-b in **billing** lasted ten seconds; two restarts since the pod was created about one hour ago.
+| Affected: **invoices** in **billing**; **transcode** in **media**; **web** in **shop**.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/invoices -c app -n billing --previous
+| ```
+10:08:30 material change
+🟠 cni-agent in kube-system (prod-eu-1) has not been ready for three minutes. The last run of container app in pod invoices-bcf7f095-b in billing lasted ten seconds; two restarts since the pod was created about one hour ago.
+🟠 cni-agent in kube-system (prod-eu-1) has not been ready for three minutes.
+| 🟠 **cni-agent** in **kube-system** (**prod-eu-1**) has not been ready for three minutes.
+| The last run of container app in pod invoices-bcf7f095-b in **billing** lasted ten seconds; two restarts since the pod was created about one hour ago.

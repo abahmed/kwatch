@@ -1,0 +1,11 @@
+{
+  "name": "claim-terminating-held-by-completed-job-pod",
+  "description": "A claim deleted after its Job finished stays Terminating because the Job's Succeeded pod still references it.",
+  "root": "persistentvolumeclaim/batch/results",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

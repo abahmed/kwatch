@@ -1,0 +1,8 @@
+10:04:15 settled
+🟠 VolumeSnapshot restored in shop (prod-eu-1) is failing because volumesnapshotcontent imported-content does not exist. To see the object's state and events, run kubectl describe volumesnapshot restored -n shop
+🟠 VolumeSnapshot restored in shop (prod-eu-1) is failing because volumesnapshotcontent imported-content does not exist.
+| 🟠 VolumeSnapshot **restored** in **shop** (**prod-eu-1**) is failing because volumesnapshotcontent **imported-content** does not exist.
+| To see the object's state and events, run
+| ```
+| kubectl describe volumesnapshot restored -n shop
+| ```

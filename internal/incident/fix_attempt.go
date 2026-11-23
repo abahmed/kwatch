@@ -47,7 +47,7 @@ func touchesAttemptKind(ids []inventory.EntityID) bool {
 func findAttempt(
 	model inventory.HistoryReader, p *Incident, now time.Time,
 ) *inventory.Change {
-	if model == nil {
+	if model == nil || storageRoot(p.Root) {
 		return nil
 	}
 	since := p.Announced
@@ -56,8 +56,15 @@ func findAttempt(
 			since = known.At
 		}
 	}
+	return newestAttempt(model.ChangeSets(p.Root, since), since, now)
+}
+
+// newestAttempt is the newest attempt among the change sets, or nil.
+func newestAttempt(
+	sets []inventory.ChangeSet, since, now time.Time,
+) *inventory.Change {
 	var latest *inventory.Change
-	for _, set := range model.ChangeSets(p.Root, since) {
+	for _, set := range sets {
 		for _, change := range set.Changes {
 			if !isAttempt(change, since, now) {
 				continue
@@ -69,6 +76,12 @@ func findAttempt(
 		}
 	}
 	return latest
+}
+
+// storageRoot reports a root that is stored data: a claim or a volume.
+// Rolling out the workload that merely uses it does not repair it.
+func storageRoot(id inventory.EntityID) bool {
+	return id.Kind == kube.KindPVC || id.Kind == kube.KindPV
 }
 
 // isAttempt reports a change after since that edits a workload's pod

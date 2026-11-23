@@ -148,6 +148,7 @@ func measureLabelled(t *testing.T) labelledResult {
 		if m, ok := timeToFirstMessage(e.Name, log, result); ok &&
 			e.SyncAfter == 0 {
 			m.bootHeld = e.BootHeld
+			m.episodeHeld = episodeHeld[e.Name]
 			r.firstMessages = append(r.firstMessages, m)
 		}
 		r.noteFirstRoot(e, log, result)

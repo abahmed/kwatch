@@ -1,0 +1,15 @@
+10:11:15 settled
+🟠 queue in streaming (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged. In the last 30 minutes in streaming: node n1: unschedulable false → true; taints unset → node.kubernetes.io/unschedulable:NoSchedule at 10:10 UTC. It fails with "refusing to start: previous cluster state found on disk, not safe to bootstrap; rejoin required". Its last run lasted ten seconds. To read the output of the last crash, run kubectl logs queue-2 -c app -n streaming --previous
+🟠 queue in streaming (prod-eu-1) keeps crashing.
+| 🟠 **queue** in **streaming** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| In the last 30 minutes in streaming: node n1: unschedulable false → true; taints unset → node.kubernetes.io/unschedulable:NoSchedule at 10:10 UTC.
+| It fails with
+| ```
+| refusing to start: previous cluster state found on disk, not safe to bootstrap; rejoin required
+| ```
+| Its last run lasted ten seconds.
+| To read the output of the last crash, run
+| ```
+| kubectl logs queue-2 -c app -n streaming --previous
+| ```

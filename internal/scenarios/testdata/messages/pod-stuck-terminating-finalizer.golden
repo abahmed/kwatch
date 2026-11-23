@@ -1,0 +1,12 @@
+10:02:15 settled
+🟠 One object (pod queue-2) in streaming (prod-eu-1) has been stuck deleting since Sep 29: its finalizer storage.example.com/volume-detach is never removed; no controller in the cluster is known to handle it (API group storage.example.com). Replicas that do not depend on it are healthy.
+Related alerts: 1 rollout stall
+To see the object's state and events, run kubectl describe pod queue-2 -n streaming
+🟠 One object (pod queue-2) in streaming (prod-eu-1) has been stuck deleting since Sep 29: its finalizer storage.example.com/volume-detach is never removed; no controller in the cluster is known to handle it (API group storage.example.com).
+| 🟠 One object (pod **queue-2**) in **streaming** (**prod-eu-1**) has been stuck deleting since Sep 29: its finalizer **storage.example.com/volume-detach** is never removed; no controller in the cluster is known to handle it (API group storage.example.com).
+| Replicas that do not depend on it are healthy.
+| Related alerts: 1 rollout stall
+| To see the object's state and events, run
+| ```
+| kubectl describe pod queue-2 -n streaming
+| ```

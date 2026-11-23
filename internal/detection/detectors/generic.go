@@ -222,6 +222,10 @@ func stuckDeletion(
 	if leftover(ctx, e, since) {
 		f.Severity = detection.Info
 		f = asLeftover(ctx, f, e.ID, e.ID.Namespace)
+	} else if heldByBoundClaim(ctx, e) {
+		// The volume protection finalizer waits for a claim still in
+		// use: nothing is broken, the claim is the one to release.
+		f.Severity = detection.Info
 	}
 	return f, true
 }

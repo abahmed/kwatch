@@ -51,11 +51,9 @@ func fingerprint(p *Incident) string {
 		impactBucket(max(p.impactPeak, impactSize(p))),
 		strconv.Itoa(int(p.State)),
 	}
-	// Appended only when present so fingerprints of incidents without gaps
-	// stay what earlier versions persisted.
-	if len(p.Unverified) > 0 {
-		parts = append(parts, strings.Join(p.Unverified, ","))
-	}
+	// What kwatch cannot see is not read: a gap that surfaces after the
+	// announcement (a pod stuck on a node it may not list) is no news of
+	// the failure itself, and the next update carries it anyway.
 	if p.stagePeak >= stageCrashLoop {
 		// A member crash-looping is news once, whenever it begins.
 		parts = append(parts, "crash-loop")
@@ -323,9 +321,14 @@ func (p *Incident) rootReasonList() []string {
 
 // impactSize counts affected workloads, Services and Ingresses. Pods and
 // containers are excluded: replicas failing one by one are not news.
+// So are namespaces other than the root: a namespace stuck deleting
+// beside the API that blocks it is the same story, not a wider one.
 func impactSize(p *Incident) int {
 	n := 0
 	for _, id := range p.Impact {
+		if id.Kind == kube.KindNamespace && id != p.Root {
+			continue
+		}
 		if id.Kind != kube.KindPod && id.Kind != kube.KindContainer {
 			n++
 		}

@@ -119,7 +119,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | CSRFailed | varies | `CertificateSigningRequestFailure` | `custom` |
 | Cert.Expired | degraded | `TLSCertExpired` | `config` |
 | Certificate.Denied | degraded | `CertificateSigningRequestDenied` | `custom_kinds` |
-| Certificate.NotIssued | degraded | `CertificateSigningRequestNotIssued` | `custom_kinds` |
+| Certificate.NotIssued | varies | `CertificateSigningRequestNotIssued` | `custom_kinds` |
 | ClaimFailed | varies | `PersistentVolumeClaimFailure`, `ResourceClaimFailure` | `condition_rules`, `custom`, `storage` |
 | Cluster.VersionSkew | degraded | `ClusterVersionSkew` | `version_skew` |
 | Completed | varies | `Completed`, `PodCompleted` | - |
@@ -201,7 +201,9 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Missing.ConfigMap | varies | `ProjectedConfigMapMissing` | `config` |
 | Missing.Secret | varies | `ProjectedSecretMissing` | `config` |
 | Missing.ServiceAccount | varies | `ServiceAccountMissing` | `config` |
+| NameTaken | degraded | `PodNameTaken` | `pod_name_taken` |
 | Network.CNINotReady | varies | `NodeCNINotReady` | `node_health` |
+| Network.Conflict | varies | `NodePodNetworkConflict` | `node_health` |
 | Network.IPExhausted | varies | `NodePodIPExhausted` | `node_health` |
 | NetworkErrors | varies | `NodeNetworkErrors` | `resources` |
 | NetworkPolicy | degraded | `RestrictiveNetworkPolicy` | `network` |
@@ -215,7 +217,9 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | OOMKilled | failing | `OOMKILLED`, `OOMKilled` | `container`, `container_crashloop_run` |
 | PIDPressure | varies | `PIDPressure` | `condition_rules` |
 | PLEGSlow | degraded | `NodePLEGSlow` | `kubelet_health` |
+| PausedEdit | degraded | `DeploymentPausedEdit` | `workload_paused` |
 | Pending | degraded | `PhasePending`, `PodPending` | `generic`, `pod` |
+| Pod.BlocksDrain | degraded | `PodBlocksDrain` | `pod_drain_blocked` |
 | PortMismatch | failing | `IngressBackendPortMissing`, `ServicePortMismatch` | `ingress_ports`, `service_ports` |
 | Preempted | degraded | `PodPreempted` | `pod_preempted` |
 | Preempted.Repeatedly | degraded | `PodPreemptedRepeatedly` | `pod_preemption` |
@@ -242,6 +246,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Rollout.Stuck | degraded | `StatefulSetRolloutStuck` | `rollout` |
 | RolloutStuck | varies | `ProgressDeadlineExceeded` | `condition_rules` |
 | RuntimeErrors | varies | `NodeRuntimeErrors` | `resources` |
+| Scale.Flapping | degraded | `ReplicasFlapping` | `replicas_flapping` |
 | ScaledToZero | varies | `ScaledToZeroRouted` | `scaled_to_zero` |
 | Scaling.Disabled | varies | `ScalingDisabled` | - |
 | Scaling.Error | varies | `HPAScalingError` | `hpa` |
@@ -279,8 +284,8 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | VolumeFull | varies | `VolumeUsageHigh` | `usage` |
 | VolumeFull.Inodes | varies | `VolumeInodesHigh` | `usage` |
 | Waiting.Unknown | varies | `UnknownWaiting.` | - |
-| Webhook.BackendMissing | varies | `WebhookBackendNotFound` | `policy` |
-| Webhook.NoEndpoints | varies | `WebhookNoEndpoints` | `policy` |
+| Webhook.BackendMissing | degraded | `WebhookBackendNotFound` | `conversion_backend`, `policy` |
+| Webhook.NoEndpoints | degraded | `WebhookNoEndpoints` | `conversion_backend`, `policy` |
 | Webhook.Rejecting | degraded | `WebhookRejecting` | `webhook_calls` |
 | Webhook.Slow | varies | `WebhookSlow` | `webhook_calls` |
 

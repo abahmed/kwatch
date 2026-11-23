@@ -1,0 +1,11 @@
+{
+  "name": "etcd-wal-corrupt-after-reboot",
+  "description": "After a control-plane node reboots, etcd crash-loops on a corrupt write-ahead log and the API server follows.",
+  "root": "etcd//etcd",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "apiserver//kube-apiserver",
+    "node//n1"
+  ]
+}

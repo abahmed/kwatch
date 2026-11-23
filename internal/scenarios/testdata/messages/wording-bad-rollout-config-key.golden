@@ -1,0 +1,10 @@
+10:03:15 settled
+🟠 api in shop (prod-eu-1): the new version (api:2.3) can't start (it stops at start with "panic: missing key DB_PASSWORD_V2"); the previous version (api:2.2) is still serving. Its last run lasted ten seconds; two restarts since its pod was created less than a minute ago. Fix: change the image of container app in deployment/api. To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api in shop (prod-eu-1): the new version (api:2.3) can't start; the previous version (api:2.2) is still serving.
+| 🟠 **api** in **shop** (**prod-eu-1**): the new version (api:2.3) can't start (it stops at start with `panic: missing key DB_PASSWORD_V2`); the previous version (api:2.2) is still serving.
+| Its last run lasted ten seconds; two restarts since its pod was created less than a minute ago.
+| Fix: change the image of container app in deployment/api.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```

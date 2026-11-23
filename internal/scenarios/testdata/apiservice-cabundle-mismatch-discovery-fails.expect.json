@@ -1,0 +1,13 @@
+{
+  "name": "apiservice-cabundle-mismatch-discovery-fails",
+  "description": "An APIService fails its discovery check on an unknown certificate authority after its backend's serving certificate rotated; the backend is Ready and two namespace deletions stick.",
+  "root": "apiservice//v1alpha1.custom.example.com",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "deployment/custom-system/backend",
+    "namespace//old-shop",
+    "namespace//old-jobs"
+  ],
+  "tail": "10m0s"
+}

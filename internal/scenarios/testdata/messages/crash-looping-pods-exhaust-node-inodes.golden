@@ -1,0 +1,25 @@
+10:01:15 settled
+🟠 flapper in batch (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "exec /app/run: exec format error". Its last run lasted ten seconds; 2800 restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs deploy/flapper -c app -n batch --previous
+🟠 flapper in batch (prod-eu-1) keeps crashing.
+| 🟠 **flapper** in **batch** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with `exec /app/run: exec format error`.
+| Its last run lasted ten seconds; 2800 restarts since its pod was created one hour ago.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/flapper -c app -n batch --previous
+| ```
+10:11:15 settled
+🟠 Node n1 (prod-eu-1) is low on disk space. Every app that uses it is failing. Replicas that do not depend on it are healthy. Affected: orders and payments in shop.
+Related alerts: 2 error alerts, 2 evictions
+To check the node's conditions and recent events, run kubectl describe node n1
+🟠 Node n1 (prod-eu-1) is low on disk space.
+| 🟠 Node n1 (**prod-eu-1**) is low on disk space.
+| Every app that uses it is failing.
+| Replicas that do not depend on it are healthy.
+| Affected: **orders** and **payments** in **shop**.
+| Related alerts: 2 error alerts, 2 evictions
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```

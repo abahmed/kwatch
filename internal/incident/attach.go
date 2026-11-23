@@ -144,6 +144,7 @@ func (m *Manager) keepsMember(
 		!m.beganTooLate(previous, where.cause) &&
 		!m.sameChainFlip(previous, key, where.root) &&
 		!m.explanationLapsed(previous, where) &&
+		!m.deletionFinishing(previous, s, where) &&
 		!m.swingsBack(now, key, where.root) {
 		return false
 	}
@@ -368,7 +369,7 @@ func (m *Manager) reroute(
 	where = m.retakeFormer(now, s, where)
 	where = m.retakeSuspect(now, s, where)
 	where = m.retakeZone(now, where)
-	return m.joinNodeGroup(s, where)
+	return m.joinOutages(now, s, where)
 }
 
 // takeCause adopts the cause of a placement. A grouped incident speaks for

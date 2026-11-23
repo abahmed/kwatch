@@ -1,0 +1,11 @@
+{
+  "name": "job-never-completes-sidecar-keeps-running",
+  "description": "A Job pod's main container exited 0 hours ago but a proxy container keeps running, so the Job stays active and never completes.",
+  "root": "job/batch/report-gen",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

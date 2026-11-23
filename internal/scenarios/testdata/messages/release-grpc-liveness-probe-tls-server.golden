@@ -1,0 +1,11 @@
+10:03:15 settled
+🟠 api in shop (prod-eu-1): the new version keeps failing; the previous version is still serving. The release changed the livenessProbe to grpc :9090 every 10s, timeout 1s, 3 failures. Only the new revision fails; the previous one stays healthy. Fix: give the liveness probe of container app in deployment/api more time (now grpc :9090 every 10s, timeout 1s, 3 failures). To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api in shop (prod-eu-1): the new version keeps failing; the previous version is still serving.
+| 🟠 **api** in **shop** (**prod-eu-1**): the new version keeps failing; the previous version is still serving.
+| The release changed the livenessProbe to grpc :9090 every 10s, timeout 1s, 3 failures.
+| Only the new revision fails; the previous one stays healthy.
+| Fix: give the liveness probe of container app in deployment/api more time (now grpc :9090 every 10s, timeout 1s, 3 failures).
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```

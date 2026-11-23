@@ -1,0 +1,16 @@
+10:06:15 settled
+🟠 host-agent in monitoring (prod-eu-1) cannot start (create container error). Cause not found yet: its node and registry are healthy and unchanged. It fails with "failed to generate container spec: path / is mounted on / but it is not a shared or slave mount".
+Related alerts: 3 pending pods
+To see why the container cannot start, run kubectl describe pods host-agent- -n monitoring
+🟠 host-agent in monitoring (prod-eu-1) cannot start (create container error).
+| 🟠 **host-agent** in **monitoring** (**prod-eu-1**) cannot start (create container error).
+| Cause not found yet: its node and registry are healthy and unchanged.
+| It fails with
+| ```
+| failed to generate container spec: path / is mounted on / but it is not a shared or slave mount
+| ```
+| Related alerts: 3 pending pods
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods host-agent- -n monitoring
+| ```

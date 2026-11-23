@@ -1,0 +1,8 @@
+{
+  "name": "one-replica-corrupt-image-cache-node",
+  "description": "One replica on node-c stays in CreateContainerError \"failed to resolve rootfs\"; the same image runs on three other nodes.",
+  "root": "node//node-c",
+  "tier": "notify",
+  "maxMessages": 1,
+  "tail": "10m0s"
+}

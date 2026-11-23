@@ -1,0 +1,12 @@
+{
+  "name": "quota-scoped-to-priority-class-exhausted",
+  "description": "A ResourceQuota scoped to one PriorityClass allows two pods; a Deployment's third replica of that class is refused.",
+  "root": "resourcequota/shop/high-priority-pods",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/web"
+  ],
+  "tail": "10m0s"
+}

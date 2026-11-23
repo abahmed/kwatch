@@ -1,0 +1,13 @@
+{
+  "name": "wording-quota-forbids-pods",
+  "description": "A scale-out from three to five is refused because the namespace's CPU request quota is used up; the message names the quota, not the cluster.",
+  "root": "resourcequota/shop/compute",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/api"
+  ],
+  "tail": "10m0s"
+}

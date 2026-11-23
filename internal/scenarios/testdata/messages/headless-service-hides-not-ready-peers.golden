@@ -1,0 +1,10 @@
+10:14:15 settled
+🟠 queue in streaming (prod-eu-1) has not been ready for three minutes because service queue answers only for ready pods, which wait for each other's names. To see the object's state and events, run kubectl describe pod queue-0 -n streaming
+Proof: all 3 replicas fail, on 2 nodes.
+🟠 queue in streaming (prod-eu-1) has not been ready for three minutes because service queue answers only for ready pods, which wait for each other's names.
+| 🟠 **queue** in **streaming** (**prod-eu-1**) has not been ready for three minutes because service **queue** answers only for ready pods, which wait for each other's names.
+| To see the object's state and events, run
+| ```
+| kubectl describe pod queue-0 -n streaming
+| ```
+| *Proof: all 3 replicas fail, on 2 nodes.*

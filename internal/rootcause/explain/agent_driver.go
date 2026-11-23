@@ -63,6 +63,9 @@ func (v *view) absentAgentHops(pod inventory.EntityID) []hop {
 func (v *view) absentAgents(pod inventory.EntityID) []inventory.EntityID {
 	driver := v.driverIn(pod)
 	node, ok := v.nodeOf(pod)
+	if driver == "" && ok {
+		return v.pluginAbsent(pod)
+	}
 	if driver == "" || !ok {
 		return nil
 	}
@@ -122,6 +125,26 @@ func (v *view) containerModes(pod inventory.EntityID) []modeHealth {
 	for _, container := range v.s.Model.Related(pod, inventory.PartOf,
 		inventory.Incoming) {
 		out = append(out, findingModes(v.s.Findings[container])...)
+	}
+	return out
+}
+
+// pluginAbsent lists the DaemonSets that changed in the window and have
+// no pod on any node, when a pod's error says the node's network or
+// storage plugin is not ready: a selector or a taint left the agent
+// with nowhere to run, so every new pod finds its node without it.
+func (v *view) pluginAbsent(pod inventory.EntityID) []inventory.EntityID {
+	if !hasSignal(SignalNodeAgent, strings.ToLower(v.errorText(pod))) {
+		return nil
+	}
+	var out []inventory.EntityID
+	for _, ds := range v.s.Model.Entities(kube.KindDaemonSet) {
+		if len(rootcause.OwnedPods(v.s.Model, ds)) > 0 ||
+			len(v.changesOf(ds)) == 0 {
+			continue
+		}
+		v.gate(pod, ds)
+		out = append(out, ds)
 	}
 	return out
 }

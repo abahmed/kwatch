@@ -15,8 +15,11 @@ import (
 
 // Attribute names specific to networking entities.
 const (
-	AttrServiceType     = "service.type"
-	AttrHeadless        = "service.headless"
+	AttrServiceType = "service.type"
+	AttrHeadless    = "service.headless"
+	// AttrPublishNotReady is a Service that publishes the addresses of
+	// pods that are not ready yet (a peer-discovery Service).
+	AttrPublishNotReady = "service.publish.not.ready"
 	AttrSelector        = "selector"
 	AttrPorts           = "ports"
 	AttrLoadBalancer    = "loadbalancer.assigned"
@@ -67,6 +70,9 @@ func (ServiceSchema) Describe(obj any) (Description, bool) {
 	if svc.Spec.ClusterIP == corev1.ClusterIPNone {
 		attrs[AttrHeadless] = inventory.Bool(true)
 	}
+	if svc.Spec.PublishNotReadyAddresses {
+		attrs[AttrPublishNotReady] = inventory.Bool(true)
+	}
 	if ip := svc.Spec.ClusterIP; ip != "" && ip != corev1.ClusterIPNone {
 		attrs[AttrClusterIP] = inventory.Text(ip)
 	}
@@ -101,6 +107,14 @@ func (ServiceSchema) Diff(old, new any) []inventory.FieldChange {
 	return fields
 }
 
+// AttrEndpointAddresses are the addresses a slice lists, comma
+// separated: the pod addresses of its Service, whether or not a pod holds
+// them.
+const AttrEndpointAddresses = "endpoint.addresses"
+
+// maxSliceAddresses bounds the addresses kept per slice.
+const maxSliceAddresses = 64
+
 // EndpointSliceSchema describes EndpointSlices: they back a Service and
 // route to the pods they list.
 type EndpointSliceSchema struct{}
@@ -120,10 +134,14 @@ func (EndpointSliceSchema) Describe(obj any) (Description, bool) {
 		return Description{}, false
 	}
 	ready, terminating := 0, 0
+	var addresses []string
 	rel := relations{}
 	rel.add(inventory.Backs, inventory.CoreID(
 		KindService, slice.Namespace, slice.Labels[endpointServiceName]))
 	for _, endpoint := range slice.Endpoints {
+		if len(addresses) < maxSliceAddresses {
+			addresses = append(addresses, endpoint.Addresses...)
+		}
 		if endpoint.Conditions.Ready == nil || *endpoint.Conditions.Ready {
 			ready++
 		}
@@ -139,6 +157,10 @@ func (EndpointSliceSchema) Describe(obj any) (Description, bool) {
 		AttrEndpoints:      inventory.Number(float64(len(slice.Endpoints))),
 		AttrEndpointsReady: inventory.Number(float64(ready)),
 		AttrEndpointPorts:  inventory.Text(endpointPorts(slice)),
+	}
+	if len(addresses) > 0 {
+		attrs[AttrEndpointAddresses] = inventory.Text(
+			strings.Join(addresses, ","))
 	}
 	// Only a slice with a pod shutting down names it, so the many slices
 	// without one are described as before.

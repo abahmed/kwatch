@@ -1,0 +1,17 @@
+10:12:00 settled
+🟠 Node n3 (prod-eu-1) is cordoned for maintenance. The scheduler says "0/3 nodes are available: 1 node(s) were unschedulable, 2 Insufficient cpu. preemption: 0/3 nodes are available: 1…". Replicas that do not depend on it are healthy. Affected: web in shop.
+Related alerts: 2 scheduling failures
+To check the node's conditions and recent events, run kubectl describe node n3
+🟠 Node n3 (prod-eu-1) is cordoned for maintenance.
+| 🟠 Node n3 (**prod-eu-1**) is cordoned for maintenance.
+| The scheduler says
+| ```
+| 0/3 nodes are available: 1 node(s) were unschedulable, 2 Insufficient cpu. preemption: 0/3 nodes are available: 1…
+| ```
+| Replicas that do not depend on it are healthy.
+| Affected: **web** in **shop**.
+| Related alerts: 2 scheduling failures
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n3
+| ```

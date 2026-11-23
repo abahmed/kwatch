@@ -1,11 +1,33 @@
 package explain
 
 import (
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
+// componentPodCase fails a control-plane component and its own pod.
+func componentPodCase(
+	name string, component inventory.EntityID, mode detection.Mode,
+) rowCase {
+	return rowCase{row: "component-pod-" + name, want: component.String(),
+		build: func(f *fixture) inventory.EntityID {
+			f.fail(component, mode, failingH, 1, "")
+			pod := f.workload("kube-system", name, 1)[0]
+			f.observe(pod, map[string]inventory.Value{
+				kube.AttrLabels: inventory.Text(
+					"component=" + name + ",tier=control-plane")})
+			f.fail(pod, detection.ModeCrashLoop, failingH, 2, "")
+			return pod
+		}}
+}
+
 var controlPlaneRowCases = []rowCase{
+	componentPodCase("etcd", kube.Etcd, "Unavailable.Etcd"),
+	componentPodCase("kube-scheduler", kube.Scheduler,
+		"Unavailable.Scheduler"),
+	componentPodCase("kube-controller-manager", kube.ControllerManager,
+		"Unavailable.ControllerManager"),
 	{row: "scheduler-unavailable", want: "scheduler//kube-scheduler",
 		build: func(f *fixture) inventory.EntityID {
 			f.fail(kube.Scheduler, "Unavailable.Scheduler", failingH, 1, "")

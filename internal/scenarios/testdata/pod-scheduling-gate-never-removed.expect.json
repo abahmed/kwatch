@@ -1,0 +1,11 @@
+{
+  "name": "pod-scheduling-gate-never-removed",
+  "description": "Pods carry a scheduling gate whose controller is gone; they stay Pending with SchedulingGated and no scheduling event.",
+  "root": "deployment/shop/worker",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "30m0s"
+}

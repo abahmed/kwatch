@@ -37,7 +37,9 @@ type view struct {
 	// the entity: when one starts failing, the walk can reach further.
 	gates map[inventory.EntityID][]inventory.EntityID
 	// dnsSeen memoises dnsSignalled; nil until it is computed.
-	dnsSeen *bool
+	// removedImages memoises removedImage by image.
+	removedImages map[string]int
+	dnsSeen       *bool
 	// rbac memoises changedRBAC; nil until it is computed.
 	rbac *[]inventory.EntityID
 	// removed memoises removedOf per kind; nil until it is computed.
@@ -297,7 +299,8 @@ func (v *view) unitErrorText(pod inventory.EntityID) string {
 
 // effectState is how a failing entity is matched as a row's effect.
 func (v *view) effectState(id inventory.EntityID) state {
-	return state{id: id, modes: findingModes(v.s.Findings[id]),
+	modes := append(findingModes(v.s.Findings[id]), v.evictedPodModes(id)...)
+	return state{id: id, modes: modes,
 		text: v.text(id), errText: v.errorText(id),
 		verdicts: v.containerVerdicts(id), ran: v.hasRun(id),
 		agent: v.daemonPod(id)}
@@ -314,6 +317,9 @@ func (v *view) causeState(
 		return state{id: id}
 	}
 	modes := findingModes(v.s.Findings[id])
+	if link == LinkNodeAgent && len(modes) == 0 && v.agentUnready(id) {
+		modes = pseudoFailing(detection.ModeNotReady)
+	}
 	modes = append(modes, v.changeModes(id, effect, link)...)
 	if link == LinkSelf {
 		// A workload's own faults are read from the failing container.
@@ -328,6 +334,10 @@ func (v *view) causeState(
 		// A failed pull blames a Secret only as the pod's login, and
 		// a Secret that is only a login is blamed for nothing else.
 		modes = withoutPseudo(modes)
+	}
+	if link == LinkUses && id.Kind == kube.KindSecret &&
+		v.pullFailing(effect) && v.wrongTypePullLogin(id, effect) {
+		modes = append(modes, pseudoFailing(ModeWrongType)...)
 	}
 	return state{id: id, modes: modes}
 }

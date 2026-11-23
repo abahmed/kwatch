@@ -31,14 +31,29 @@ func scoreShared(v *view, c *candidate) outcome {
 	if fillsDisks(c) {
 		return diskHogOutcome(effects)
 	}
+	if exhaustsMemory(c) {
+		return memoryHogOutcome(effects)
+	}
 	workloads := v.workloadsOf(effects)
 	switch {
+	case c.split:
+		w := ReplicaSplitWeight
+		if isTopology(c.id) && v.nodeLocalErrors(effects) {
+			// The errors name what a node does: the group is it.
+			w += ReplicaSplitWeight
+		}
+		return outcome{weight: w,
+			code: rootcause.ProofReplicasNodeLocal,
+			text: "the workload's replicas on other nodes run"}
 	case workloads >= SharedMinWorkloads:
 		return outcome{weight: SharedWeight,
 			code: rootcause.ProofWorkloadsMeet, count: workloads,
 			text: fmt.Sprintf(
 				"failures of %d workloads meet here", workloads)}
-	case sharedKinds[c.id.Kind] && !isTopology(c.id):
+	case refusedByNode(c, c.direct()):
+		// The node's own kubelet refused the pod: one workload is enough.
+		return outcome{}
+	case sharedKinds[c.id.Kind] && !isTopology(c.id) && !quotesCheck(c):
 		return outcome{weight: -SharedPenalty,
 			code: rootcause.ProofOneWorkload,
 			text: "only one workload fails behind it"}
@@ -62,4 +77,19 @@ func (v *view) workloadOf(effect inventory.EntityID) inventory.EntityID {
 		unit = pod
 	}
 	return rootcause.TopOwner(v.s.Model, unit)
+}
+
+// quotesCheck reports a namespace blamed because the failures' own
+// errors quote its Pod Security check: it names itself, so one workload
+// is evidence enough.
+func quotesCheck(c *candidate) bool {
+	if c.id.Kind != kube.KindNamespace || len(c.covers) == 0 {
+		return false
+	}
+	for _, how := range c.covers {
+		if how.match.causeMode != ModePodSecurityDenied {
+			return false
+		}
+	}
+	return true
 }

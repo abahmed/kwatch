@@ -1,0 +1,10 @@
+10:13:15 settled
+🟠 search is failing in shop (prod-eu-1) after the 10:10 UTC release of registry.example.com/search:7. The previous image was registry.example.com/search:6. No node fits: the closest node, n1, already runs shop/search-a51a0a8d-a in its kubernetes.io/hostname, which the pod's anti-affinity refuses. To see the rollout state, run kubectl rollout status deployment/search -n shop
+🟠 search is failing in shop (prod-eu-1) after the 10:10 UTC release of registry.example.com/search:7.
+| 🟠 **search** is failing in **shop** (**prod-eu-1**) after the 10:10 UTC release of registry.example.com/search:7.
+| The previous image was registry.example.com/search:6.
+| No node fits: the closest node, n1, already runs shop/search-a51a0a8d-a in its kubernetes.io/hostname, which the pod's anti-affinity refuses.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/search -n shop
+| ```

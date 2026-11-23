@@ -349,7 +349,7 @@ func (v *view) addressInModel(host string) bool {
 	index := v.addresses()
 	_, service := index.services[ip.String()]
 	_, pod := index.pods[ip.String()]
-	return service || pod
+	return service || pod || index.slices[ip.String()]
 }
 
 // cutLabel splits "db.shop" into the Service name and namespace. A

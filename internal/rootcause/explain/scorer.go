@@ -60,6 +60,7 @@ var scorers = []scorer{
 	{"outcome", scoreOutcome},
 	{"revision", scoreRevision},
 	{"shared", scoreShared},
+	{"pull-split", scorePullSplit},
 	{"co-onset", scoreCoOnset},
 	{"baseline", scoreBaseline},
 	{"quality", scoreQuality},
@@ -110,7 +111,7 @@ func (v *view) score(c *candidate) scored {
 		return abs(out.contributions[i].Weight) >
 			abs(out.contributions[j].Weight)
 	})
-	if sharedFactorOnly(c) {
+	if sharedFactorOnly(c) && !c.split {
 		total = min(total, sharedFactorCap(out.contributions))
 	}
 	if dependencyLogOnly(c) {
@@ -120,6 +121,9 @@ func (v *view) score(c *candidate) scored {
 		total = min(total, ChangeOnlyMaxConfidence)
 	}
 	if v.blindToHiddenCause(c, out.contributions) {
+		total = min(total, HiddenCauseMaxConfidence)
+	}
+	if v.blindToHiddenDNSConfig(c) {
 		total = min(total, HiddenCauseMaxConfidence)
 	}
 	if v.releaseUnclaimed(c) {

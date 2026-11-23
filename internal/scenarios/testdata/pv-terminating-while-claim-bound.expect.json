@@ -1,0 +1,11 @@
+{
+  "name": "pv-terminating-while-claim-bound",
+  "description": "A PersistentVolume deleted while its claim is bound stays Terminating under the pv-protection finalizer.",
+  "root": "persistentvolumeclaim/shop/pgdata",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

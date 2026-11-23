@@ -63,6 +63,7 @@ var podReasons = []ReasonInfo{
 	reason(reasons.ContainerGCFailed, ModeDiskContainerGCFailed).event(Warning),
 	reason(reasons.NodePodIPExhausted, ModeNetworkIPExhausted),
 	reason(reasons.NodeCNINotReady, ModeNetworkCNINotReady),
+	reason(reasons.NodePodNetworkConflict, ModeNetworkConflict),
 	reason(reasons.NodeHeartbeatStale, ModeHeartbeatStale),
 	reason(reasons.PodResizeInfeasible, ModeResizeInfeasible),
 	reason(reasons.PodResizeDeferred, ModeResizeDeferred),

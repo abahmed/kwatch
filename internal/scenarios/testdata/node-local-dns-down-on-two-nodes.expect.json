@@ -1,0 +1,16 @@
+{
+  "name": "node-local-dns-down-on-two-nodes",
+  "description": "The node-local DNS cache DaemonSet crash-loops on two nodes; workloads of three namespaces fail name lookups there while their replicas on a third node work.",
+  "root": "daemonset/kube-system/node-local-dns",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "cluster-dns//cluster-dns",
+    "deployment/shop/web",
+    "deployment/billing/invoices",
+    "deployment/media/transcode"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "operator-role-lacks-lease-permission",
+  "description": "An operator upgrade starts leader election but its Role lacks access to leases; it crash-loops on \"leases is forbidden\".",
+  "root": "role/shop/operator-role",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/operator"
+  ],
+  "tail": "10m0s"
+}

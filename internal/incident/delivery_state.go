@@ -1,6 +1,7 @@
 package incident
 
 import (
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -73,12 +74,21 @@ func (m *Manager) RecordDigested(id string, at time.Time) {
 	}
 }
 
-// failingPods counts the distinct pods with a finding in p.
+// failingPods counts the distinct pods with a finding in p. A failing
+// container counts its pod, so a crash loop is not "no pods" until the
+// pod's own readiness finding arrives and then read as growth.
 func failingPods(p *Incident) int {
 	pods := map[string]bool{}
 	for key, s := range p.Members {
-		if key.Entity.Kind == kube.KindPod && !s.Advisory {
-			pods[key.Entity.String()] = true
+		if s.Advisory {
+			continue
+		}
+		switch key.Entity.Kind {
+		case kube.KindPod:
+			pods[key.Entity.Namespace+"/"+key.Entity.Name] = true
+		case kube.KindContainer:
+			pod, _, _ := strings.Cut(key.Entity.Name, "/")
+			pods[key.Entity.Namespace+"/"+pod] = true
 		}
 	}
 	return len(pods)

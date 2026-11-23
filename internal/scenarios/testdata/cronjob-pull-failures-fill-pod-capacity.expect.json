@@ -1,0 +1,12 @@
+{
+  "name": "cronjob-pull-failures-fill-pod-capacity",
+  "description": "A CronJob every minute with a missing image leaves a Pending pod per run until the nodes are at their pod limit and other workloads cannot be scheduled.",
+  "root": "cronjob/ops/sync-feed",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "deployment/billing/invoices"
+  ],
+  "tail": "10m0s"
+}

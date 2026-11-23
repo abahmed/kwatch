@@ -1,0 +1,36 @@
+10:01:15 settled
+🟠 Cron job sync-feed in ops (prod-eu-1) is failing: scheduled run did not start (due eight hours ago).
+Related alerts: 1 image pull failure
+To see why the container cannot start, run kubectl describe pod sync-feed-100-p -n ops
+🟠 Cron job sync-feed in ops (prod-eu-1) is failing: scheduled run did not start (due eight hours ago).
+| 🟠 Cron job **sync-feed** in **ops** (**prod-eu-1**) is failing: scheduled run did not start (due eight hours ago).
+| Related alerts: 1 image pull failure
+| To see why the container cannot start, run
+| ```
+| kubectl describe pod sync-feed-100-p -n ops
+| ```
+10:08:15 settled
+🟠 Container report in pod sync-feed-100-p in ops (prod-eu-1) cannot pull its image; two possible causes: registry registry.example.com refuses the image pulls or job sync-feed-100 rolled out a change shortly before.
+Related alerts: 6 pending pods
+To see why the container cannot start, run kubectl describe pod sync-feed-100-p -n ops
+🟠 Container report in pod sync-feed-100-p in ops (prod-eu-1) cannot pull its image; two possible causes: registry registry.example.com refuses the image pulls or job sync-feed-100 rolled out a change shortly before.
+| 🟠 Container report in pod **sync-feed-100-p** in **ops** (**prod-eu-1**) cannot pull its image; two possible causes: registry **registry.example.com** refuses the image pulls or job sync-feed-100 rolled out a change shortly before.
+| Related alerts: 6 pending pods
+| To see why the container cannot start, run
+| ```
+| kubectl describe pod sync-feed-100-p -n ops
+| ```
+10:25:15 settled
+🟠 invoices in billing (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (Too many pods). The scheduler says "0/2 nodes are available: 2 Too many pods. preemption: 0/2 nodes are available: 2 No preemption victims found for…". Replicas that do not depend on it are healthy. Affected: web in shop. To see the pods' state and events, run kubectl describe pods invoices- -n billing
+🟠 invoices in billing (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (Too many pods).
+| 🟠 **invoices** in **billing** (**prod-eu-1**) has waited two minutes for a node because the scheduler rejects every node (**Too many pods**).
+| The scheduler says
+| ```
+| 0/2 nodes are available: 2 Too many pods. preemption: 0/2 nodes are available: 2 No preemption victims found for…
+| ```
+| Replicas that do not depend on it are healthy.
+| Affected: **web** in **shop**.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods invoices- -n billing
+| ```

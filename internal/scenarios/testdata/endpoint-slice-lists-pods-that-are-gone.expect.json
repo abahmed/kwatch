@@ -1,0 +1,15 @@
+{
+  "name": "endpoint-slice-lists-pods-that-are-gone",
+  "description": "After a control-plane change a Service's EndpointSlice lists pods that no longer exist and omits the running ones; callers get \"no route to host\".",
+  "root": "unknown",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/payments",
+    "node//n1",
+    "node//n2",
+    "external-endpoint//10.244.0.10:8080"
+  ],
+  "ambiguous": true,
+  "tail": "10m0s"
+}

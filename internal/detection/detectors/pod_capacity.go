@@ -54,8 +54,38 @@ func capacityEvidence(
 			Label: "needs", Value: ask.text(need, true),
 		})
 		out = append(out, mostFree(model, ask, eligible))
+		if need > largestNode(model, ask, eligible) {
+			out = append(out, detection.Evidence{Label: LabelExceedsNodes,
+				Value: ask.text(need, true)})
+		}
 	}
 	return out
+}
+
+// LabelExceedsNodes marks a pod whose request is larger than any
+// schedulable node's whole capacity: no amount of room would fit it.
+const LabelExceedsNodes = "exceeds every node"
+
+// largestNode is the greatest capacity of the resource on one
+// schedulable node that the pod may use; zero when none reports it.
+func largestNode(
+	model inventory.Reader, ask resourceAsk, eligible map[string]bool,
+) float64 {
+	best := 0.0
+	for _, id := range model.Entities(kube.KindNode) {
+		node, ok := model.Entity(id)
+		if !ok || !schedulableNode(node) ||
+			(eligible != nil && !eligible[id.Name]) {
+			continue
+		}
+		if total, ok := number(node, ask.allocatable); ok {
+			best = math.Max(best, total)
+		}
+	}
+	if best == 0 {
+		return math.Inf(1)
+	}
+	return best
 }
 
 func blocked(blockers []kube.Blocker, reason string) bool {

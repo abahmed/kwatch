@@ -27,6 +27,9 @@ const (
 	// sorted. Wildcard groups and built-in groups are left out: they
 	// say nothing about which controller serves a custom group.
 	AttrRBACGroups = "rbac.groups"
+	// AttrRBACRules, on a Role or ClusterRole, is a short digest of its
+	// rules, so that an edit of any rule is a change of the object.
+	AttrRBACRules = "rbac.rules"
 	// AttrRBACRole, on a binding, is the role it grants, as
 	// "ClusterRole/name" or "Role/name".
 	AttrRBACRole = "rbac.role"
@@ -64,6 +67,9 @@ func setRBACAttributes(
 	}
 	switch kind {
 	case KindRole, KindClusterRole:
+		if digest := rulesDigest(u); digest != "" {
+			attrs[AttrRBACRules] = inventory.Text(digest)
+		}
 		if groups := writableGroups(u); len(groups) > 0 {
 			attrs[AttrRBACGroups] = inventory.Text(
 				strings.Join(groups, " "))

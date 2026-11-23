@@ -1,0 +1,12 @@
+{
+  "name": "csi-driver-object-missing-pod-waits",
+  "description": "The CSIDriver object of a driver was deleted; a pod that uses its volume waits in ContainerCreating for a volume attachment nobody creates.",
+  "root": "csidriver//hostpath.csi.example.com",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/db"
+  ],
+  "tail": "10m0s"
+}

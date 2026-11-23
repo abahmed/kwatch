@@ -1,0 +1,16 @@
+10:01:15 settled
+🟠 worker in billing (prod-eu-1) cannot pull its image. Cause not found yet: its node and registry are healthy and unchanged. It fails with "failed to pull and unpack image "registry.example/worker:v2.1O": failed to resolve reference…".
+Related alerts: 2 not-ready pods
+To see why the container cannot start, run kubectl describe pods worker- -n billing
+🟠 worker in billing (prod-eu-1) cannot pull its image.
+| 🟠 **worker** in **billing** (**prod-eu-1**) cannot pull its image.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| It fails with
+| ```
+| failed to pull and unpack image "registry.example/worker:v2.1O": failed to resolve reference…
+| ```
+| Related alerts: 2 not-ready pods
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods worker- -n billing
+| ```

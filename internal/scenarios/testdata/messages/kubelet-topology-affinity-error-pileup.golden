@@ -1,0 +1,10 @@
+10:11:15 settled
+🟠 api in shop (prod-eu-1) is failing because node n2 is what the failing workloads have in common, though it looks healthy. It fails with "Resources cannot be allocated with Topology locality". Replicas that do not depend on it are healthy. To check the node's conditions and recent events, run kubectl describe node n2
+🟠 api in shop (prod-eu-1) is failing because node n2 is what the failing workloads have in common, though it looks healthy.
+| 🟠 **api** in **shop** (**prod-eu-1**) is failing because node n2 is what the failing workloads have in common, though it looks healthy.
+| It fails with `Resources cannot be allocated with Topology locality`.
+| Replicas that do not depend on it are healthy.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n2
+| ```

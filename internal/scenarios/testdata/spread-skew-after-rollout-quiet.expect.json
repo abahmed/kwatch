@@ -1,0 +1,6 @@
+{
+  "name": "spread-skew-after-rollout-quiet",
+  "description": "After a rollout the three replicas of a Deployment with a spread constraint sit on two of three nodes; all are ready.",
+  "maxMessages": 0,
+  "quiet": true
+}

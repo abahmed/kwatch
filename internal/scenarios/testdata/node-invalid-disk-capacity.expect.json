@@ -1,0 +1,13 @@
+{
+  "name": "node-invalid-disk-capacity",
+  "description": "A kubelet reports InvalidDiskCapacity for its image file system, so image garbage collection and disk eviction cannot work; pods still run.",
+  "root": "node//n1",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/payments",
+    "deployment/shop/cart"
+  ],
+  "tail": "10m0s"
+}

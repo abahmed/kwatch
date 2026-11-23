@@ -1,0 +1,14 @@
+10:10:00 settled
+🟠 Quota high-priority-pods in shop (prod-eu-1) is used up (pods). ResourceQuota high-priority-pods: pods 2 of 2 used; this pod asks 1. Affected: web. Fix: raise the pod limit in resourcequota/high-priority-pods or lower the requests of workloads in namespace shop.
+Related alerts: 1 failed pod creation, 1 replica failure alert
+To see the object's state and events, run kubectl describe deployment web -n shop
+🟠 Quota high-priority-pods in shop (prod-eu-1) is used up (pods).
+| 🟠 Quota **high-priority-pods** in **shop** (**prod-eu-1**) is used up (pods).
+| ResourceQuota high-priority-pods: pods 2 of 2 used; this pod asks 1.
+| Affected: **web**.
+| Fix: raise the pod limit in resourcequota/high-priority-pods or lower the requests of workloads in namespace **shop**.
+| Related alerts: 1 failed pod creation, 1 replica failure alert
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment web -n shop
+| ```

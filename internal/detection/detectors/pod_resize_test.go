@@ -57,7 +57,7 @@ func TestPodResizeNotReported(t *testing.T) {
 	found, recheck := detectResize("PodResizePending", "True", "Deferred",
 		time.Minute)
 	assert.Empty(t, found, "a recent deferral is retried by the kubelet")
-	assert.Equal(t, 4*time.Minute, recheck)
+	assert.Equal(t, 2*time.Minute, recheck)
 
 	found, _ = detectResize("PodResizeInProgress", "True", "", time.Hour)
 	assert.Empty(t, found, "a resize in progress is not a failure")

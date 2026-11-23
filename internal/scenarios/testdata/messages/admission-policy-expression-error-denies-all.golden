@@ -1,0 +1,18 @@
+10:11:15 settled
+🟠 ledger in billing (prod-eu-1) cannot create pods because ValidatingAdmissionPolicy require-team-label denies the pods being created. It reports "Error creating: pods is forbidden: ValidatingAdmissionPolicy 'require-team-label' with binding…". Every error mentions it. All three failing apps use it. Affected: thumbs in media; orders in shop.
+Related alerts: 3 failed pod creations
+To see the object's state and events, run kubectl describe deployment ledger -n billing
+🟠 ledger in billing (prod-eu-1) cannot create pods because ValidatingAdmissionPolicy require-team-label denies the pods being created.
+| 🟠 **ledger** in **billing** (**prod-eu-1**) cannot create pods because ValidatingAdmissionPolicy **require-team-label** denies the pods being created.
+| It reports
+| ```
+| Error creating: pods is forbidden: ValidatingAdmissionPolicy 'require-team-label' with binding…
+| ```
+| Every error mentions it.
+| All three failing apps use it.
+| Affected: **thumbs** in **media**; **orders** in **shop**.
+| Related alerts: 3 failed pod creations
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment ledger -n billing
+| ```

@@ -17,6 +17,7 @@ func (v *view) causeOf(s scored) Cause {
 		Contributions: s.contributions, Changes: v.changesOf(s.c.id),
 		Summary: summaryOf(s.c.id, best.match.causeMode, len(s.c.covers)),
 		Began:   v.causeBegan(s.c),
+		Onset:   v.earliestSince(sortedKeys(s.c.covers)).t,
 		Hops:    s.c.chain.hops, Beyond: s.c.chain.beyond,
 	}
 }

@@ -1,0 +1,12 @@
+{
+  "name": "kwatch-restart-during-node-loss",
+  "description": "A node goes NotReady and kwatch restarts three minutes later; after the relist the node already holds the unreachable taint and Unknown condition.",
+  "root": "node//worker-3",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "statefulset/data/cache"
+  ],
+  "syncAfter": "30s",
+  "tail": "10m0s"
+}

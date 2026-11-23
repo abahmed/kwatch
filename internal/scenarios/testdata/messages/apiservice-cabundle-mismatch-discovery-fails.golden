@@ -1,0 +1,9 @@
+10:13:15 settled
+🟠 API service v1alpha1.custom.example.com (prod-eu-1) is not available (failed discovery check). It reports "x509: certificate signed by unknown authority". To see the object's state and events, run kubectl describe apiservice v1alpha1.custom.example.com
+🟠 API service v1alpha1.custom.example.com (prod-eu-1) is not available (failed discovery check).
+| 🟠 API service **v1alpha1.custom.example.com** (**prod-eu-1**) is not available (failed discovery check).
+| It reports `x509: certificate signed by unknown authority`.
+| To see the object's state and events, run
+| ```
+| kubectl describe apiservice v1alpha1.custom.example.com
+| ```

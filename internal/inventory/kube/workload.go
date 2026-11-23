@@ -2,6 +2,7 @@ package kube
 
 import (
 	"strconv"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -51,6 +52,8 @@ func (s workloadSchema[T]) Describe(obj any) (Description, bool) {
 	rel.add(inventory.OwnedBy, ownerIDs(workload)...)
 	if template := s.template(workload); template != nil {
 		attrs[AttrTemplateHash] = inventory.Text(TemplateHash(template))
+		attrs[AttrTemplateImages] = inventory.Text(
+			strings.Join(TemplateImages(template), "\n"))
 		attrs[AttrTemplateLabels] = inventory.Text(
 			labelText(template.Labels))
 		setHandlerSignals(attrs, template)

@@ -1,0 +1,11 @@
+{
+  "name": "rbac-hides-pod-logs-dependency-refused",
+  "description": "An API exits within two seconds, eight restarts; the reason is in logs kwatch may not read. Redis in the namespace is down too: its own incident, unlinked by timing alone.",
+  "root": "unknown",
+  "otherRoots": [
+    "deployment/shop/redis"
+  ],
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

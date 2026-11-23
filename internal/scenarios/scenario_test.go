@@ -217,6 +217,14 @@ func library() []scenario {
 		changeSourceScenarios(), helmWorkloadScenarios(),
 		helmOldScenarios(),
 		nodeRemovalTieScenarios(),
+		gapSchedScenarios(), gapNodeAScenarios(), gapNodeBScenarios(),
+		gapStorageScenarios(), gapStartScenarios(), gapSpecScenarios(),
+		gapClusterScenarios(),
+		gap2Scenarios(), gap3Scenarios(),
+		gap4aScenarios(), gap4bScenarios(),
+		gap5aScenarios(), gap5bScenarios(), gap67Scenarios(),
+		gap10Scenarios(),
+		gap17Scenarios(), gap24Scenarios(),
 	} {
 		out = append(out, group...)
 	}

@@ -1,0 +1,20 @@
+10:02:15 settled
+🟠 Volume claim data-ledger in billing (prod-eu-1) has been waiting for a volume for two minutes because storage class fast-bad sets a secret or parameter its provisioner rejects. Claim data-ledger is Pending: kwatch sees no workload in the cluster serving its provisioner pd.csi.storage.gke.io (it may run outside the cluster); the last provisioning failure says "failed to provision volume with StorageClass "fast-bad": invalid parameter "csi.storage.k8s.io/pvc-name-typo": reserved…". The scheduler says "0/2 nodes are available: pod has unbound immediate PersistentVolumeClaims. preemption: 0/2 nodes are available: 2…". Affected: ledger in billing; store in media; db in shop.
+Related alerts: 3 scheduling failures, 3 volume alerts
+To see the object's state and events, run kubectl describe persistentvolumeclaim data-ledger -n billing
+🟠 Volume claim data-ledger in billing (prod-eu-1) has been waiting for a volume for two minutes because storage class fast-bad sets a secret or parameter its provisioner rejects.
+| 🟠 Volume claim **data-ledger** in **billing** (**prod-eu-1**) has been waiting for a volume for two minutes because storage class **fast-bad** sets a secret or parameter its provisioner rejects.
+| Claim **data-ledger** is Pending: kwatch sees no workload in the cluster serving its provisioner pd.csi.storage.gke.io (it may run outside the cluster); the last provisioning failure says
+| ```
+| failed to provision volume with StorageClass "fast-bad": invalid parameter "csi.storage.k8s.io/pvc-name-typo": reserved…
+| ```
+| The scheduler says
+| ```
+| 0/2 nodes are available: pod has unbound immediate PersistentVolumeClaims. preemption: 0/2 nodes are available: 2…
+| ```
+| Affected: **ledger** in **billing**; **store** in **media**; db in **shop**.
+| Related alerts: 3 scheduling failures, 3 volume alerts
+| To see the object's state and events, run
+| ```
+| kubectl describe persistentvolumeclaim data-ledger -n billing
+| ```

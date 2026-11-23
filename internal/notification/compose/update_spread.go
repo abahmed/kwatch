@@ -18,7 +18,8 @@ func spreadSentences(f caseFacts, spread []detection.Finding) []sentence {
 	home := leadSubject(f)
 	spread = slices.DeleteFunc(slices.Clone(spread),
 		func(s detection.Finding) bool {
-			return partOfRoot(f, s.Entity) || partOfPlace(f, s.Entity)
+			return partOfRoot(f, s.Entity) || partOfPlace(f, s.Entity) ||
+				partOfNodes(f, s.Entity)
 		})
 	var order []string
 	byState := map[string][]inventory.EntityID{}
@@ -130,6 +131,12 @@ func spreadGroupSentences(
 // the place already says it, so the node is not news of its own.
 func partOfPlace(f caseFacts, id inventory.EntityID) bool {
 	return leadIsGroup(f) && id.Kind == kube.KindNode
+}
+
+// partOfNodes reports a node of a grouped node outage: the lead already
+// names it, so it is not spreading to itself.
+func partOfNodes(f caseFacts, id inventory.EntityID) bool {
+	return leadIsNodes(f) && id.Kind == kube.KindNode
 }
 
 // beWord is "is" for one subject and "are" for several.

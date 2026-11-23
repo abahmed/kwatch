@@ -1,0 +1,14 @@
+10:05:15 settled
+🟠 api in shop (prod-eu-1) has waited two minutes for a node because no node matches its node affinity or node selector. No node fits: no node has the label pool=gpu-b the pod selects. The scheduler says "0/2 nodes are available: 2 node(s) didn't match Pod's node affinity/selector. preemption: 0/2 nodes are available: 2…". Fix: correct the node selector of deployment/api (now pool=gpu-b). To see the pods' state and events, run kubectl describe pods api- -n shop
+🟠 api in shop (prod-eu-1) has waited two minutes for a node because no node matches its node affinity or node selector.
+| 🟠 **api** in **shop** (**prod-eu-1**) has waited two minutes for a node because no node matches its node affinity or node selector.
+| No node fits: no node has the label pool=gpu-b the pod selects.
+| The scheduler says
+| ```
+| 0/2 nodes are available: 2 node(s) didn't match Pod's node affinity/selector. preemption: 0/2 nodes are available: 2…
+| ```
+| Fix: correct the node selector of deployment/api (now pool=gpu-b).
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods api- -n shop
+| ```

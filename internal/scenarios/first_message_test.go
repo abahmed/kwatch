@@ -25,7 +25,22 @@ type firstMessage struct {
 	// bootHeld is set when the node boot grace holds the message on
 	// purpose, so it has its own gate.
 	bootHeld bool
+	// episodeHeld is set when the message waits on purpose for a
+	// repeating failure to show its pattern, so it has its own gate.
+	episodeHeld bool
 }
+
+// episodeHeld lists the scenarios whose first message waits for the
+// repeats that make a pattern: a service that goes down and comes back
+// three times in a quarter of an hour. One blip is not a failure, so
+// the pattern is the proof and the third outage is when it exists.
+var episodeHeld = map[string]bool{
+	"etcd-path-intermittent-during-maintenance": true,
+}
+
+// episodeHold is the longest an episode-held message may take: the
+// window in which the repeats are counted, and the usual allowance.
+const episodeHold = 15 * time.Minute
 
 // timeToFirstMessage measures one replay. It reports false when nothing
 // interrupted people: a quiet scenario, or one whose incidents are only
@@ -48,7 +63,7 @@ func timeToFirstMessage(
 			p.Tier < incident.Notify {
 			return
 		}
-		start := firstObservation(log, p, failureStart(p, log.Start))
+		start := firstObservation(log, p, failureStart(log, p, at))
 		if candidate := (firstMessage{scenario: name, tier: p.Tier,
 			delay: at.Sub(start)}); !found || at.Before(first.at) {
 			first, first.at, found = candidate, at, true
@@ -66,8 +81,12 @@ func timeToFirstMessage(
 	return first, found
 }
 
-func failureStart(p incident.Incident, floor time.Time) time.Time {
-	start := p.Opened
+func failureStart(
+	log replay.Log, p incident.Incident, announced time.Time,
+) time.Time {
+	floor := log.Start
+	start, symptom := p.Opened, time.Time{}
+	var later time.Time
 	for _, finding := range p.Members {
 		// A configuration risk predates the failure and is not one.
 		// Replicas that run different builds of one tag are healthy
@@ -76,14 +95,54 @@ func failureStart(p incident.Incident, floor time.Time) time.Time {
 		if finding.Advisory || finding.Reason == reasons.ImageDigestDrift {
 			continue
 		}
-		if !finding.Since.IsZero() && finding.Since.Before(start) {
+		if finding.Since.IsZero() || finding.Since.After(announced) {
+			continue
+		}
+		if finding.Since.Before(start) {
 			start = finding.Since
 		}
+		if finding.Since.After(floor) && (later.IsZero() ||
+			finding.Since.Before(later)) {
+			later = finding.Since
+		}
+		if finding.Entity != p.Root && (symptom.IsZero() ||
+			finding.Since.Before(symptom)) {
+			symptom = finding.Since
+		}
 	}
-	if start.Before(floor) {
-		return floor
+	// A standing condition (a cordon, a full quota, a stuck finalizer)
+	// predates what it breaks and is not an outage by itself: the
+	// failure begins with the first symptom the incident reports, the
+	// first pod or request that went wrong, when one follows it.
+	if !symptom.IsZero() && symptom.After(start) {
+		start = symptom
+	}
+	if !start.After(floor) {
+		// The condition was already there when kwatch began to watch,
+		// so its onset was not observed. The failure begins with the
+		// first symptom that follows: a member that went wrong after
+		// the log began, or else the first change the cluster made.
+		switch {
+		case !later.IsZero():
+			return later
+		default:
+			return firstChange(log, floor, announced)
+		}
 	}
 	return start
+}
+
+// firstChange is the time of the first entry after since that reports a
+// change or a removal, up to until; since when there is none.
+func firstChange(log replay.Log, since, until time.Time) time.Time {
+	for _, entry := range log.Entries {
+		if entry.At.After(since) && !entry.At.After(until) &&
+			(entry.Observation.Kind == inventory.Changed ||
+				entry.Observation.Kind == inventory.Gone) {
+			return entry.At
+		}
+	}
+	return since
 }
 
 // firstObservation is the time of the first log entry about an entity
@@ -119,7 +178,7 @@ func firstMessageGates(measured []firstMessage) []scorecard.Gate {
 	for _, l := range limits {
 		var delays []time.Duration
 		for _, m := range measured {
-			if !m.bootHeld && m.tier == l.tier {
+			if !m.bootHeld && !m.episodeHeld && m.tier == l.tier {
 				delays = append(delays, m.delay)
 			}
 		}
@@ -131,9 +190,17 @@ func firstMessageGates(measured []firstMessage) []scorecard.Gate {
 			held = append(held, m.delay)
 		}
 	}
-	return append(gates, namedFirstMessageGate(
+	var episodes []time.Duration
+	for _, m := range measured {
+		if m.episodeHeld {
+			episodes = append(episodes, m.delay)
+		}
+	}
+	gates = append(gates, namedFirstMessageGate(
 		"Time to first message (boot-held)", held,
 		kube.BootWindow+scorecard.GoalNotifyFirstMessage))
+	return append(gates, namedFirstMessageGate(
+		"Time to first message (episode-held)", episodes, episodeHold))
 }
 
 func firstMessageGate(

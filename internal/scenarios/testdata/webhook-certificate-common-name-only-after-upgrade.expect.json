@@ -1,0 +1,13 @@
+{
+  "name": "webhook-certificate-common-name-only-after-upgrade",
+  "description": "After an upgrade the API server rejects a webhook's serving certificate that has no subject alternative name; pod creation fails in two namespaces.",
+  "root": "validatingwebhookconfiguration//cert-policy",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/policy-system/guard",
+    "deployment/shop/orders"
+  ],
+  "tail": "10m0s"
+}

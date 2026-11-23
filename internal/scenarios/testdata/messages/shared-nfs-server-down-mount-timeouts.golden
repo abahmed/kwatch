@@ -1,0 +1,30 @@
+10:11:15 roll-up
+🟠 kwatch (prod-eu-1) found three new problems at the same time. api in billing is failing: volume cannot be mounted. gen in reports is failing: volume cannot be mounted. web in shop is failing: volume cannot be mounted. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found three new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 3 new problems at the same time
+|
+| **Problems**
+| - **api** (**billing**) — volume cannot be mounted
+| - **gen** (**reports**) — volume cannot be mounted
+| - **web** (**shop**) — volume cannot be mounted
+|
+| *Each one alerts on its own when it changes or resolves.*
+10:12:30 cause revised
+🟠 nfs-server in storage (prod-eu-1) has waited two minutes for a node. The scheduler says "0/1 nodes are available: 1 Insufficient memory." All four failing apps use it. Affected: api in billing; gen in reports; web in shop.
+Related alerts: 3 failed mount alerts, 3 pending pods
+To see the pods' state and events, run kubectl describe pods nfs-server- -n storage
+🟠 nfs-server in storage (prod-eu-1) has waited two minutes for a node.
+| 🟠 **nfs-server** in **storage** (**prod-eu-1**) has waited two minutes for a node.
+| The scheduler says `0/1 nodes are available: 1 Insufficient memory.`
+| All four failing apps use it.
+| Affected: **api** in **billing**; **gen** in **reports**; **web** in **shop**.
+| Related alerts: 3 failed mount alerts, 3 pending pods
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods nfs-server- -n storage
+| ```
+10:20:00 material change
+🟠 nfs-server in storage (prod-eu-1) now has no ready replicas (0 of 1). It is now also affecting api in billing; gen in reports; web in shop: they have no ready replicas (0 of 1).
+🟠 nfs-server in storage (prod-eu-1) now has no ready replicas (0 of 1).
+| 🟠 **nfs-server** in **storage** (**prod-eu-1**) now has no ready replicas (0 of 1).
+| It is now also affecting **api** in **billing**; **gen** in **reports**; **web** in shop: they have no ready replicas (0 of 1).

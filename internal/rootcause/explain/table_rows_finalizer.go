@@ -2,6 +2,7 @@ package explain
 
 import (
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // stuckObject is an object, of any kind, whose deletion a finalizer
@@ -12,6 +13,18 @@ var stuckObject = Side{Group: AnyGroup, Kind: AnyKind,
 // finalizerRows cover objects deleted long ago that stay because the
 // controller that removes their finalizers does not run.
 var finalizerRows = concatRows(finalizerHandlerRows(), []Row{{
+	// A pod on a healthy node held by a finalizer nothing is known to
+	// remove: the pod is where a lone leftover shows, and its owner's
+	// stalled rollout waits on it, so one pod is enough. It comes before
+	// the row for any object so that a pod matches this one.
+	Name: RuleFinalizerUnhandled,
+	Cause: Side{Kind: KindFinalizer,
+		Modes: []detection.Mode{ModeFinalizerUnhandled}},
+	Link: LinkFinalizes,
+	Effect: Side{Kind: kube.KindPod,
+		Modes: []detection.Mode{detection.ModeStuckDeleting}},
+	Prior: 0.55,
+}, {
 	// No controller is known to handle the finalizer, or one that is
 	// known runs: the objects that wait for it are one leftover. It
 	// needs two of them: one held object is its own problem.

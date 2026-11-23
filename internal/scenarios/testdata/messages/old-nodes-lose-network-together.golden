@@ -1,0 +1,20 @@
+10:06:45 settled
+🔴 Node n1 (prod-eu-1) has not been ready for about two minutes. It reports "container runtime network not ready: … Network plugin returns error: cni plugin not initialized". To check the node's conditions and recent events, run kubectl describe node n1
+🔴 Node n1 (prod-eu-1) has not been ready for about two minutes.
+| 🔴 Node n1 (**prod-eu-1**) has not been ready for about two minutes.
+| It reports
+| ```
+| container runtime network not ready: … Network plugin returns error: cni plugin not initialized
+| ```
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```
+10:08:20 material change
+🔴 Node n1 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
+🔴 Node n1 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
+| 🔴 Node n1 (**prod-eu-1**) is now also affecting **cart**, **orders** and **payments** in shop: they have not been ready for three minutes.
+10:18:20 material change
+🔴 Nodes n1–n4 (prod-eu-1) are now also affecting cart, orders and payments in shop: they have only 1 of 5 replicas ready and have not been ready for three minutes.
+🔴 Nodes n1–n4 (prod-eu-1) are now also affecting cart, orders and payments in shop: they have only 1 of 5 replicas ready and have not been ready for three minutes.
+| 🔴 Nodes n1–n4 (**prod-eu-1**) are now also affecting **cart**, **orders** and **payments** in shop: they have only 1 of 5 replicas ready and have not been ready for three minutes.

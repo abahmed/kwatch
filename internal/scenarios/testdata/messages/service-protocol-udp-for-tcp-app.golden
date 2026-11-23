@@ -1,0 +1,12 @@
+10:03:15 settled
+🟠 web in shop (prod-eu-1) keeps crashing because service api exposes the port over UDP, but its callers use TCP. It fails with "Get "http://api.shop.svc:8080/items": dial tcp 10.96.22.5:8080: i/o timeout". Every error mentions it. Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs deploy/web -c app -n shop --previous
+Proof: both replicas fail, on 2 nodes.
+🟠 web in shop (prod-eu-1) keeps crashing because service api exposes the port over UDP, but its callers use TCP.
+| 🟠 **web** in **shop** (**prod-eu-1**) keeps crashing because service **api** exposes the port over UDP, but its callers use TCP.
+| It fails with `Get "http://api.shop.svc:8080/items": dial tcp 10.96.22.5:8080: i/o timeout`. Every error mentions it.
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/web -c app -n shop --previous
+| ```
+| *Proof: both replicas fail, on 2 nodes.*

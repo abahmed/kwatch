@@ -1,0 +1,11 @@
+10:03:15 settled
+🟠 api in shop (prod-eu-1): the new version can't start (it stops at start with "FATAL: config key "MODE" has no value "fast""); the previous version is still serving. The release changed the MODE to fast. Only the new revision fails; the previous one stays healthy. Fix: correct env var MODE of container app in deployment/api. To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api in shop (prod-eu-1): the new version can't start; the previous version is still serving.
+| 🟠 **api** in **shop** (**prod-eu-1**): the new version can't start (it stops at start with `FATAL: config key "MODE" has no value "fast"`); the previous version is still serving.
+| The release changed the MODE to fast.
+| Only the new revision fails; the previous one stays healthy.
+| Fix: correct env var MODE of container app in deployment/api.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```

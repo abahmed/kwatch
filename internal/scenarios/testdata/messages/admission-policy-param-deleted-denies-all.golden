@@ -1,0 +1,10 @@
+10:11:15 settled
+🟠 Replica set app-77700b0d in billing (prod-eu-1) cannot create pods because ValidatingAdmissionPolicy require-owner.example.com denies the pods being created. All three failing apps use it. Affected: app in billing; app in media; app in shop. To see the object's state and events, run kubectl describe replicaset app-77700b0d -n billing
+🟠 Replica set app-77700b0d in billing (prod-eu-1) cannot create pods because ValidatingAdmissionPolicy require-owner.example.com denies the pods being created.
+| 🟠 Replica set **app-77700b0d** in **billing** (**prod-eu-1**) cannot create pods because ValidatingAdmissionPolicy **require-owner.example.com** denies the pods being created.
+| All three failing apps use it.
+| Affected: **app** in **billing**; **app** in **media**; **app** in **shop**.
+| To see the object's state and events, run
+| ```
+| kubectl describe replicaset app-77700b0d -n billing
+| ```

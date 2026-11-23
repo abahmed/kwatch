@@ -1,0 +1,18 @@
+10:01:15 settled
+🟠 Volume pv-restored (prod-eu-1) is failing: Kubernetes reported FailedMountOnFilesystemMismatch. To see the object's state and events, run kubectl describe persistentvolume pv-restored
+🟠 Volume pv-restored (prod-eu-1) is failing: Kubernetes reported FailedMountOnFilesystemMismatch.
+| 🟠 Volume **pv-restored** (**prod-eu-1**) is failing: Kubernetes reported FailedMountOnFilesystemMismatch.
+| To see the object's state and events, run
+| ```
+| kubectl describe persistentvolume pv-restored
+| ```
+10:04:15 settled
+🟠 db in shop (prod-eu-1) has been Pending since it was scheduled. Cause not found yet: its node, volumes and registry are healthy and unchanged. In the last 30 minutes in shop: db was created at 10:00 UTC. To see the pods' state and events, run kubectl describe pods db- -n shop
+🟠 db in shop (prod-eu-1) has been Pending since it was scheduled.
+| 🟠 db in **shop** (**prod-eu-1**) has been Pending since it was scheduled.
+| Cause not found yet: its node, volumes and registry are healthy and unchanged.
+| In the last 30 minutes in shop: db was created at 10:00 UTC.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods db- -n shop
+| ```

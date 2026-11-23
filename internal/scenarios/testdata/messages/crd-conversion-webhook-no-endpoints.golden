@@ -1,0 +1,30 @@
+10:11:15 settled
+🟠 gadget-conv in crd-system (prod-eu-1) cannot pull its image. Cause not found yet: its node and registry are healthy and unchanged. It fails with "toomanyrequests: rate limit".
+Related alerts: 1 pending pod
+To see why the container cannot start, run kubectl describe pods gadget-conv- -n crd-system
+🟠 gadget-conv in crd-system (prod-eu-1) cannot pull its image.
+| 🟠 **gadget-conv** in **crd-system** (**prod-eu-1**) cannot pull its image.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| It fails with `toomanyrequests: rate limit`.
+| Related alerts: 1 pending pod
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods gadget-conv- -n crd-system
+| ```
+10:12:15 settled
+🟠 gadget-ctl in billing (prod-eu-1) keeps crashing because service gadget-conv in crd-system has no ready endpoints. It fails with "conversion webhook for example.com/v1, Kind=Gadget failed: dial tcp: connect: connection refused". All three failing apps use it. Service gadget-ctl in billing; service gadget-ctl in shop can't serve traffic.
+Related alerts: 1 service without endpoints, 1 webhook alert
+To read the output of the last crash, run kubectl logs deploy/gadget-ctl -c app -n billing --previous
+🟠 gadget-ctl in billing (prod-eu-1) keeps crashing because service gadget-conv in crd-system has no ready endpoints.
+| 🟠 **gadget-ctl** in **billing** (**prod-eu-1**) keeps crashing because service **gadget-conv** in **crd-system** has no ready endpoints.
+| It fails with
+| ```
+| conversion webhook for example.com/v1, Kind=Gadget failed: dial tcp: connect: connection refused
+| ```
+| All three failing apps use it.
+| Service **gadget-ctl** in **billing**; service **gadget-ctl** in **shop** can't serve traffic.
+| Related alerts: 1 service without endpoints, 1 webhook alert
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/gadget-ctl -c app -n billing --previous
+| ```

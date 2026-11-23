@@ -1,0 +1,11 @@
+{
+  "name": "release-post-start-hook-fails",
+  "description": "A release adds a postStart hook that exits 1; the kubelet kills the container after each start (FailedPostStartHook) and the pod restarts in a loop.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

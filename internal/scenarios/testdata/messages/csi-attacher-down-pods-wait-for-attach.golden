@@ -1,0 +1,16 @@
+10:11:15 settled
+🟠 ebs-csi-controller in kube-system (prod-eu-1) keeps crashing because it runs the volume attacher the pods wait for and has no ready pods. It fails with "csi-attacher: failed to run: leader election lost". Every app that uses it is failing. Affected: ledger in billing; db in shop.
+Related alerts: 2 failed attach volume alerts
+To read the output of the last crash, run kubectl logs deploy/ebs-csi-controller -c app -n kube-system --previous
+Proof: both replicas fail, on 2 nodes.
+🟠 ebs-csi-controller in kube-system (prod-eu-1) keeps crashing because it runs the volume attacher the pods wait for and has no ready pods.
+| 🟠 **ebs-csi-controller** in **kube-system** (**prod-eu-1**) keeps crashing because it runs the volume attacher the pods wait for and has no ready pods.
+| It fails with `csi-attacher: failed to run: leader election lost`.
+| Every app that uses it is failing.
+| Affected: **ledger** in **billing**; db in **shop**.
+| Related alerts: 2 failed attach volume alerts
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/ebs-csi-controller -c app -n kube-system --previous
+| ```
+| *Proof: both replicas fail, on 2 nodes.*

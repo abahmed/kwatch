@@ -1,0 +1,23 @@
+10:06:30 settled
+🔴 Three nodes (prod-eu-1) have not reported for about two minutes: n1, n2 and n3; the Kubernetes API is also down. They report "Kubelet stopped posting node status." The kubelets stopped reporting and the cause is outside the cluster's view; check the machines behind these nodes.
+Related alerts: 3 node problems, 1 unavailable alert
+To check the node's conditions and recent events, run kubectl describe node n1
+🔴 Three nodes (prod-eu-1) have not reported for about two minutes: n1, n2 and n3; the Kubernetes API is also down.
+| 🔴 Three nodes (**prod-eu-1**) have not reported for about two minutes: n1, n2 and n3; the Kubernetes API is also down.
+| They report `Kubelet stopped posting node status.`
+| The kubelets stopped reporting and the cause is outside the cluster's view; check the machines behind these nodes.
+| Related alerts: 3 node problems, 1 unavailable alert
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```
+10:08:40 material change
+🔴 Nodes n1–n3 (prod-eu-1) are now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
+🔴 Nodes n1–n3 (prod-eu-1) are now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
+| 🔴 Nodes n1–n3 (**prod-eu-1**) are now also affecting **cart**, **orders** and **payments** in shop: they have not been ready for three minutes.
+10:14:40 healthy for 3m0s
+✅ Node n1 (prod-eu-1) is ready again, and the Kubernetes API is reachable again. It was down for six minutes. Six pods were affected.
+✅ Node n1 (prod-eu-1) is ready again, and the Kubernetes API is reachable again.
+| ✅ Node n1 (**prod-eu-1**) is ready again, and the Kubernetes API is reachable again.
+| It was down for six minutes.
+| Six pods were affected.

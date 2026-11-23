@@ -33,7 +33,8 @@ func heartbeatFinding(
 ) (detection.Finding, bool) {
 	status, reason, since := condition(e, "Ready")
 	if status != "Unknown" || reason != nodeStatusUnknown ||
-		!sustained(ctx, "node-heartbeat", since, nodeHeartbeatGrace) {
+		!sustained(ctx, "node-heartbeat", since,
+			silentGrace(ctx, since, nodeHeartbeatGrace)) {
 		return detection.Finding{}, false
 	}
 	if holding, _ := joinHold(ctx, e, status, since); holding {
@@ -68,6 +69,20 @@ var nodeSandboxReasons = map[detection.Mode]struct {
 		"Node has run out of pod IP addresses"},
 	detection.ModeNetworkCNINotReady: {reasons.NodeCNINotReady,
 		"Node network plugin is not ready; pods cannot get a network"},
+	detection.ModeNetworkConflict: {reasons.NodePodNetworkConflict,
+		"Node cannot set up pod networking: an IP address or route it " +
+			"assigns is already in use"},
+}
+
+// nodeSandboxMinPods is how many pods fail the same way before the node
+// is the cause. A conflict names a route or address in the node's own
+// network namespace, so one stuck pod already says so; a class that may
+// come from the cluster needs three.
+func nodeSandboxMinPods(mode detection.Mode) int {
+	if mode == detection.ModeNetworkConflict {
+		return 1
+	}
+	return nodeSandboxPods
 }
 
 // sandboxFindings reports a node on which several pods cannot get their
@@ -150,7 +165,7 @@ func buildSandboxFindings(
 	for mode, count := range t.pods {
 		// Pods that all started since were retried and recovered:
 		// nothing fails now.
-		if count >= nodeSandboxPods && t.stuck[mode] > 0 {
+		if count >= nodeSandboxMinPods(mode) && t.stuck[mode] > 0 {
 			modes = append(modes, mode)
 		}
 	}

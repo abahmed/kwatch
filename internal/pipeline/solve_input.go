@@ -187,6 +187,19 @@ func (e *Engine) readers(
 		out = append(out, e.deps.Model.Related(
 			o.Entity, inventory.RoutesTo, inventory.Incoming)...)
 	}
+	if o.Kind == inventory.Noted && o.Entity.Kind == kube.KindPod &&
+		o.Note.Reason == "Unhealthy" {
+		// A failed probe is recorded on the pod, yet its workload is
+		// what reads the flips of its pods' readiness.
+		out = append(out, inventory.TopOwner(e.deps.Model, o.Entity))
+	}
+	if o.Kind == inventory.Noted {
+		// The event is recorded on the controller, yet the pod it names
+		// holds the finding.
+		if pod, ok := detectors.ConflictingPodOf(o.Note); ok {
+			out = append(out, pod)
+		}
+	}
 	out = append(out, e.preemptedPods(o.Entity)...)
 	out = append(out, e.jobRuns(o.Entity)...)
 	if o.Kind != inventory.Gone && !update.Appeared {

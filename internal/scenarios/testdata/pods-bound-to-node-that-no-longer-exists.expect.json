@@ -1,0 +1,12 @@
+{
+  "name": "pods-bound-to-node-that-no-longer-exists",
+  "description": "Pods of two workloads still read Running or Terminating on a node whose object was deleted; their controllers do not replace them.",
+  "root": "node//n9",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/payments"
+  ],
+  "tail": "15m0s"
+}

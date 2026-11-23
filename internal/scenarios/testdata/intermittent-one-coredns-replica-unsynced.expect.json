@@ -1,0 +1,8 @@
+{
+  "name": "intermittent-one-coredns-replica-unsynced",
+  "description": "One of two coredns replicas is Running but not Ready after its ServiceAccount lost list endpointslices; half of the DNS queries time out.",
+  "root": "deployment/kube-system/coredns",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

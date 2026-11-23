@@ -1,0 +1,13 @@
+{
+  "name": "service-external-name-is-an-ip-address",
+  "description": "A Service of type ExternalName whose target is an IP address does not resolve; its callers fail with \"no such host\".",
+  "root": "service/shop/db",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "cluster-dns//cluster-dns",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

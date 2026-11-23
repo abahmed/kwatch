@@ -1,0 +1,11 @@
+{
+  "name": "release-run-as-user-without-passwd-entry",
+  "description": "A release runs the container as UID 1001, which the image's password file lacks; the start-up tool fails to look the user up.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

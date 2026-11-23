@@ -1,0 +1,11 @@
+{
+  "name": "release-bind-low-port-non-root",
+  "description": "A hardening release runs the container as non-root while the application binds port 80; it exits with \"permission denied\" on bind at every start.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

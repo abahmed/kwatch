@@ -1,0 +1,12 @@
+{
+  "name": "pv-released-blocks-claim",
+  "description": "A new claim stays Pending because the only matching PersistentVolume is Released and still references the deleted claim.",
+  "root": "persistentvolume//pv-db-0",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/ledger/db"
+  ],
+  "tail": "10m0s"
+}

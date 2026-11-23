@@ -1,0 +1,12 @@
+{
+  "name": "pvc-request-below-driver-minimum-size",
+  "description": "A claim asks for 100Mi where the backend's minimum volume is 1Gi; it is Pending with an OutOfRange ProvisioningFailed message.",
+  "root": "persistentvolumeclaim/shop/cache-data",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "storageclass//standard",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

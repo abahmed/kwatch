@@ -1,0 +1,11 @@
+{
+  "name": "release-sidecar-port-conflict",
+  "description": "A release adds a sidecar that binds the port the application binds; the application exits with \"address already in use\" at every start.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

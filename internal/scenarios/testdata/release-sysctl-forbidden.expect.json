@@ -1,0 +1,12 @@
+{
+  "name": "release-sysctl-forbidden",
+  "description": "A release asks for a sysctl the kubelet does not allow; every new pod is rejected with SysctlForbidden and the old pods keep serving.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "5m0s"
+}

@@ -1,0 +1,10 @@
+10:06:15 settled
+🟠 worker in shop (prod-eu-1) is held by scheduling gates that were never removed. Cause not found yet: its registry is healthy and unchanged. In the last 30 minutes in shop: worker was created at 10:00 UTC. To see the object's state and events, run kubectl describe deployment worker -n shop
+🟠 worker in shop (prod-eu-1) is held by scheduling gates that were never removed.
+| 🟠 **worker** in **shop** (**prod-eu-1**) is held by scheduling gates that were never removed.
+| Cause not found yet: its registry is healthy and unchanged.
+| In the last 30 minutes in shop: **worker** was created at 10:00 UTC.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment worker -n shop
+| ```

@@ -18,7 +18,7 @@ const kindCRD inventory.Kind = "customresourcedefinition"
 
 // resizeDeferredGrace is how long a deferred resize may wait for room on
 // the node before it is reported; the kubelet retries it.
-const resizeDeferredGrace = 5 * time.Minute
+const resizeDeferredGrace = 3 * time.Minute
 
 func init() {
 	registerNodeAndWorkload()
@@ -32,7 +32,7 @@ func registerNodeAndWorkload() {
 		nodePressureCheck("DiskPressure", reasons.DiskPressure,
 			"Node is low on disk space"),
 		nodePressureCheck("PIDPressure", reasons.PIDPressure,
-			"Node is running out of process IDs"),
+			"Node is low on process IDs"),
 		conditionCheck{cond: "NetworkUnavailable", status: "True",
 			finding: reasons.NetworkUnavailable, severity: detection.Critical,
 			waitsForYoungNode: true,
@@ -85,7 +85,8 @@ func registerClusterObjects() {
 				"its node"},
 		conditionCheck{cond: "PodResizeInProgress", status: "True",
 			reason: "Error", finding: reasons.PodResizeError,
-			severity: detection.Warning, message: quoteMessageIfAny,
+			// The pod keeps running at its old size.
+			severity: detection.Info, message: quoteMessageIfAny,
 			summary: "Pod resize failed to apply"},
 	)
 }

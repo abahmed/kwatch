@@ -1,0 +1,24 @@
+10:02:15 settled
+🟠 kube-scheduler in kube-system (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "failed to create scheduler: couldn't create scheduler: plugin "AzureDiskLimits" does not exist". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/kube-scheduler -c app -n kube-system --previous
+🟠 kube-scheduler in kube-system (prod-eu-1) keeps crashing.
+| 🟠 **kube-scheduler** in **kube-system** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with
+| ```
+| failed to create scheduler: couldn't create scheduler: plugin "AzureDiskLimits" does not exist
+| ```
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/kube-scheduler -c app -n kube-system --previous
+| ```
+10:03:00 cause revised
+🔴 Cause now known: The scheduler (prod-eu-1) has been failing for about two minutes. It reports "leader lease not renewed for 3m5s". The error mentions it.
+🔴 Cause now known: The scheduler (prod-eu-1) has been failing for about two minutes.
+| 🔴 Cause now known: The scheduler (**prod-eu-1**) has been failing for about two minutes.
+| It reports `leader lease not renewed for 3m5s`. The error mentions it.
+10:04:00 material change
+🔴 The scheduler (prod-eu-1) is now also affecting invoices in billing; cart and search in shop: they have not been looked at by the scheduler for two minutes.
+🔴 The scheduler (prod-eu-1) is now also affecting invoices in billing; cart and search in shop: they have not been looked at by the scheduler for two minutes.
+| 🔴 The scheduler (**prod-eu-1**) is now also affecting **invoices** in **billing**; **cart** and **search** in shop: they have not been looked at by the scheduler for two minutes.

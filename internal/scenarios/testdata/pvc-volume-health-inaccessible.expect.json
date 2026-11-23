@@ -1,0 +1,12 @@
+{
+  "name": "pvc-volume-health-inaccessible",
+  "description": "The driver reports a claim's volume as not accessible; the database using it crashes on input/output errors while its node is healthy.",
+  "root": "persistentvolumeclaim/inventory/pgdata",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/inventory/postgres"
+  ],
+  "tail": "10m0s"
+}

@@ -133,6 +133,9 @@ const (
 	// SharedWeight rewards a candidate that is the one thing several
 	// failing workloads have in common.
 	SharedWeight = 0.15
+	// ReplicaSplitWeight rewards a node that splits one workload's
+	// replicas cleanly: same template, so only the node differs.
+	ReplicaSplitWeight = 0.24
 	// SharedPenalty punishes a shared candidate (a node, a registry)
 	// blamed for one workload only: a shared cause would hurt more.
 	SharedPenalty = 0.2

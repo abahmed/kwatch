@@ -1,0 +1,6 @@
+{
+  "name": "job-success-policy-terminates-other-pods-quiet",
+  "description": "An indexed Job completes through its successPolicy when index 0 succeeds; its other pods are terminated with exit code 143.",
+  "maxMessages": 0,
+  "quiet": true
+}

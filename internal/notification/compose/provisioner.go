@@ -62,7 +62,8 @@ func provisionerLead(f caseFacts) (string, bool) {
 // blamed, and a proof sentence otherwise.
 func provisionerSentences(f caseFacts) []sentence {
 	claim, ok := provisionerClaim(f)
-	if !ok || causeRuleIs(f, provisionerRules...) {
+	if !ok || causeRuleIs(f, provisionerRules...) ||
+		causeRuleIs(f, explain.RuleVolumeBoundElsewhere) {
 		return nil
 	}
 	runs := evidence(claim, detection.EvidenceProvisionerWorkload)

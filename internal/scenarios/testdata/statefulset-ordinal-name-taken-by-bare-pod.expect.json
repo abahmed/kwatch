@@ -1,0 +1,12 @@
+{
+  "name": "statefulset-ordinal-name-taken-by-bare-pod",
+  "description": "A StatefulSet cannot create its pod db-1 because a pod with that name exists that it does not own.",
+  "root": "pod/data/db-1",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "statefulset/data/db"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "snapshot-controller-scaled-to-zero",
+  "description": "The snapshot controller Deployment is scaled to zero; VolumeSnapshots created by a backup tool never get a status or an event. Nothing Kubernetes reports fails.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "10m0s"
+}

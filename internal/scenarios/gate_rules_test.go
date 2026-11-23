@@ -8,6 +8,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/replay"
 	"github.com/abahmed/kwatch/internal/scorecard"
 )
 
@@ -67,16 +68,24 @@ func TestFirstMessageGateIsOnTheSlowest(t *testing.T) {
 
 func TestFailureStartIgnoresHistoryBeforeTheLog(t *testing.T) {
 	floor := scenarioStart
+	log := replay.Log{Start: floor}
+	end := floor.Add(time.Hour)
 	p := incident.Incident{Opened: floor.Add(3 * time.Minute)}
-	if got := failureStart(p, floor); !got.Equal(p.Opened) {
+	if got := failureStart(log, p, end); !got.Equal(p.Opened) {
 		t.Fatalf("no findings: start = %s, want opened", got)
 	}
 	p.Members = map[detection.Key]detection.Finding{
 		{Reason: "a"}: {Since: floor.Add(-time.Hour)},
-		{Reason: "b"}: {Since: floor.Add(time.Minute)},
 	}
-	if got := failureStart(p, floor); !got.Equal(floor) {
+	if got := failureStart(log, p, end); !got.Equal(floor) {
 		t.Fatalf("start = %s, want the log start", got)
+	}
+	// A standing condition is not the failure: the first symptom that
+	// follows it is.
+	p.Members[detection.Key{Reason: "b"}] = detection.Finding{
+		Since: floor.Add(time.Minute)}
+	if got := failureStart(log, p, end); !got.Equal(floor.Add(time.Minute)) {
+		t.Fatalf("start = %s, want the first symptom", got)
 	}
 }
 

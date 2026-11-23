@@ -2,6 +2,7 @@ package explain
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -94,4 +95,25 @@ func (s Snapshot) claimSizePlace(c Cause) *detection.Place {
 	}
 	return objectPlace(c.Root, "spec.resources.requests.storage",
 		detection.MemoryText(size))
+}
+
+// quotaPlace is the first resource of a quota that is used up.
+func (s Snapshot) quotaPlace(c Cause) *detection.Place {
+	quota, ok := s.Model.Entity(c.Root)
+	if !ok || c.Root.Kind != kube.KindQuota {
+		return nil
+	}
+	resource, _, _ := strings.Cut(attrText(quota, kube.AttrExhausted), ",")
+	if resource == "" {
+		return nil
+	}
+	return objectPlace(c.Root, "spec.hard."+resource, "")
+}
+
+// certificatePlace is the certificate a Secret holds when it has expired.
+func (s Snapshot) certificatePlace(c Cause) *detection.Place {
+	if c.Root.Kind != kube.KindSecret {
+		return nil
+	}
+	return objectPlace(c.Root, "tls.crt", "")
 }

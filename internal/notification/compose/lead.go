@@ -128,14 +128,17 @@ func failingNodes(f caseFacts) (int, string) {
 func blamedChange(f caseFacts) *inventory.Change {
 	cause := f.p.Cause
 	if cause == nil || cause.Change == nil || systemChange(*cause.Change) ||
-		onlyScaledToZero(f.members) {
+		onlyScaledToZero(f.members) || onlyPausedEdit(f.members) {
 		return nil
 	}
 	if cause.Rule == explain.RuleAccountMissingAtCreate ||
-		cause.Rule == explain.RowNodePullsThrottled {
+		cause.Rule == explain.RowNodePullsThrottled ||
+		cause.Rule == explain.RuleNodeAgentAbsent ||
+		cause.Rule == explain.RuleClaimSelectedNodeGone {
 		// "service account api does not exist" says more than the
 		// deletion that made it so, and a kubelet holding pulls back
-		// more than the node's arrival.
+		// more than the node's arrival, and a node agent without a pod
+		// more than the template edit before it.
 		return nil
 	}
 	change := cause.Change

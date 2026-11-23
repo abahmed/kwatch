@@ -1,0 +1,13 @@
+{
+  "name": "node-image-gc-failed-disk-pressure",
+  "description": "A node's image filesystem is full; image garbage collection reports ImageGCFailed, the node has DiskPressure and its pods are evicted.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/payments",
+    "deployment/shop/cart"
+  ],
+  "tail": "10m0s"
+}

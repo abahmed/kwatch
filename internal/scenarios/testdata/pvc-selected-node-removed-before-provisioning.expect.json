@@ -1,0 +1,12 @@
+{
+  "name": "pvc-selected-node-removed-before-provisioning",
+  "description": "A delayed-binding claim names a selected node that no longer exists; the claim and its pod stay Pending.",
+  "root": "persistentvolumeclaim/shop/data",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/db"
+  ],
+  "tail": "10m0s"
+}

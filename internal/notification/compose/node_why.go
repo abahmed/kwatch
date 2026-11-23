@@ -9,15 +9,17 @@ import (
 	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
-// unknownNodeText says what kwatch cannot know when the kubelet went
-// silent: the node's own words are only "stopped posting". The plural is
-// for an outage of several nodes.
-const unknownNodeText = "kwatch cannot see why from inside the cluster: " +
-	"the kubelet stopped reporting, so the node may be down or unreachable."
+// unknownNodeWords says what kwatch cannot know when the kubelet went
+// silent: the node's own words are only "stopped posting". It states
+// what was seen and where to look. The plural is for an outage of
+// several nodes.
+func unknownNodeWords(name string) string {
+	return "The kubelet stopped reporting and the cause is outside the " +
+		"cluster's view; check the machine behind node " + name + "."
+}
 
-const unknownNodesText = "kwatch cannot see why from inside the cluster: " +
-	"the kubelets stopped reporting, so the nodes may be down or " +
-	"unreachable."
+const unknownNodesText = "The kubelets stopped reporting and the cause " +
+	"is outside the cluster's view; check the machines behind these nodes."
 
 // nodeLead reports a case led by one node that is NotReady or silent.
 func nodeLead(f caseFacts) bool {
@@ -38,7 +40,7 @@ func nodeWhySentences(f caseFacts) []sentence {
 			text: endSentence(text)})
 	}
 	if evidence(f.lead, detection.EvidenceReadyStatus) == "Unknown" {
-		text := unknownNodeText
+		text := unknownNodeWords(f.lead.Entity.Name)
 		if leadIsNodes(f) {
 			text = unknownNodesText
 		}

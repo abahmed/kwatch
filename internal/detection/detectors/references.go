@@ -55,8 +55,12 @@ func missingClass(
 			missing = append(missing, id.Name)
 		}
 	}
-	if len(missing) == 0 || !sustained(ctx, "class/"+string(kind)+"/"+
-		strings.Join(missing, ","), time.Time{}, DefaultClassGrace) {
+	if len(missing) == 0 {
+		return detection.Finding{}, false
+	}
+	if !classRefused(ctx, e, kind, missing) && !sustained(ctx,
+		"class/"+string(kind)+"/"+strings.Join(missing, ","),
+		time.Time{}, DefaultClassGrace) {
 		return detection.Finding{}, false
 	}
 	label := string(kind)
@@ -72,6 +76,32 @@ func missingClass(
 			"its pods are rejected",
 		Evidence: evidence,
 	}, true
+}
+
+// classRefused reports that the API server itself refused the workload's
+// pods for a missing class ("no PriorityClass with name x was found"). It
+// answered from its own store, so the class is absent and the grace that
+// guards against a gap in kwatch's model is not needed.
+func classRefused(
+	ctx detection.Context, e inventory.Entity, kind inventory.Kind,
+	missing []string,
+) bool {
+	sources := append([]inventory.EntityID{e.ID},
+		ctx.Model.Related(e.ID, inventory.OwnedBy, inventory.Incoming)...)
+	for _, source := range sources {
+		for _, note := range ctx.Model.Notes(
+			source, ctx.Now.Add(-EventWindow)) {
+			message := strings.ToLower(note.Message)
+			for _, name := range missing {
+				if note.Warning && strings.Contains(message, "no "+
+					strings.ToLower(classTitle(kind))+" with name "+
+					strings.ToLower(name)) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func classTitle(kind inventory.Kind) string {

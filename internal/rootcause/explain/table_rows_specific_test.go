@@ -19,6 +19,15 @@ var workloadRowCases = []rowCase{
 			}
 			return containerOf(pods[0])
 		}},
+	{row: "rollout-unschedulable", want: "deployment/shop/api",
+		build: func(f *fixture) inventory.EntityID {
+			pods := f.workload("shop", "api", 1)
+			f.change(inventory.CoreID(kube.KindDeployment, "shop", "api"),
+				1, "spec.template.spec.containers[0].image")
+			f.fail(pods[0], "Pending", degradedH, 2, "0/3 nodes are "+
+				"available: 3 node(s) didn't match pod anti-affinity rules.")
+			return pods[0]
+		}},
 	{row: "config-missing-or-changed", want: "secret/shop/db-creds",
 		build: func(f *fixture) inventory.EntityID {
 			return usesCase(f, kube.KindSecret, true)
@@ -241,7 +250,12 @@ func TestTableRows(t *testing.T) {
 		runConfigRowCases, policyAdmitRowCases, claimRowCases,
 		volumeRowCases, controllerRowCases, accountRowCases,
 		pullRowCases, diskRowCases, grantRowCases, dependencyLogRowCases,
-		backendNotReadyRowCases, pullThrottleRowCases, helmRowCases}
+		backendNotReadyRowCases, pullThrottleRowCases, helmRowCases,
+		gapRowCases, dnsConfigRowCases, roleTokenRowCases,
+		schedulerNamesRowCases, peerRowCases, refusalRowCases,
+		serviceDefectRowCases, isolationRowCases, addressHolderRowCases,
+		dnsServingRowCases, memoryHogRowCases, resolverRowCases,
+		namedStorageRowCases, zoneSplitRowCases, injectedRowCases}
 	tested := map[string]bool{}
 	for _, group := range groups {
 		for _, tc := range group {

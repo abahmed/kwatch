@@ -25,6 +25,7 @@ func Explain(s Snapshot) Explanation {
 	})
 	viable, rejected := splitViable(ranked, v.rejected)
 	viable = v.extendChains(viable, graph, all)
+	viable = v.deferClusterDNS(viable)
 	var out Explanation
 	for _, area := range areasOf(all, viable) {
 		solved := v.solveArea(area, ranked, viable, rejected)

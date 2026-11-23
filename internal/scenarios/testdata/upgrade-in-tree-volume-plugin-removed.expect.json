@@ -1,0 +1,11 @@
+{
+  "name": "upgrade-in-tree-volume-plugin-removed",
+  "description": "After a cluster upgrade a pod that still uses an in-tree awsElasticBlockStore volume cannot mount it: FailedMount \"no volume plugin matched\".",
+  "root": "deployment/shop/ledger",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

@@ -38,7 +38,8 @@ func statefulSetRollout(
 	}
 	since := latest(valueSince(e, kube.AttrRevision),
 		valueSince(e, kube.AttrUpdatedReplicas))
-	if !sustained(ctx, "rollout-stuck", since, DefaultRolloutStuck) {
+	if !heldByTerminatingPod(ctx, e.ID) &&
+		!sustained(ctx, "rollout-stuck", since, DefaultRolloutStuck) {
 		return detection.Finding{}, false
 	}
 	summary := "Rollout to revision " + update + " is stuck: " +
@@ -95,6 +96,31 @@ func rolloutEvidence(
 		{Label: "updated replicas", Value: countText(updated)},
 		{Label: "partition", Value: countText(partition)},
 	}
+}
+
+// heldByTerminatingPod reports a pod of the owner that has been
+// terminating for longer than a rollout may stall: the StatefulSet waits
+// for it before it replaces the next ordinal, so the stall has already
+// lasted as long as the pod has been stuck.
+func heldByTerminatingPod(
+	ctx detection.Context, owner inventory.EntityID,
+) bool {
+	if ctx.Model == nil {
+		return false
+	}
+	for _, id := range ctx.Model.Related(
+		owner, inventory.OwnedBy, inventory.Incoming,
+	) {
+		pod, ok := ctx.Model.Entity(id)
+		if !ok || id.Kind != kube.KindPod || !flag(pod, kube.AttrDeleting) {
+			continue
+		}
+		if _, deadline := deletionTimes(pod); !deadline.IsZero() &&
+			ctx.Now.Sub(deadline) >= DefaultRolloutStuck {
+			return true
+		}
+	}
+	return false
 }
 
 // unreadyPods names the owned pods that are not ready, in name order.

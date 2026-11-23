@@ -1,0 +1,11 @@
+{
+  "name": "release-configmap-volume-missing",
+  "description": "A release mounts a ConfigMap volume that does not exist; the new pod stays in ContainerCreating with FailedMount \"configmap not found\".",
+  "root": "configmap/shop/app-config",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/api"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "release-init-container-cpu-request-too-large",
+  "description": "A release adds an init container that requests more CPU than any node has; the new pod is Pending on \"Insufficient cpu\" although the app asks for little. The init container's request explains it, not the scheduling reason alone.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

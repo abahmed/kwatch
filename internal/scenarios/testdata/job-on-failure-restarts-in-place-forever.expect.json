@@ -1,0 +1,11 @@
+{
+  "name": "job-on-failure-restarts-in-place-forever",
+  "description": "A Job whose pod restarts in place under OnFailure climbs to dozens of restarts and never reports Failed, however low its backoffLimit.",
+  "root": "job/batch/import",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "aggregated-event-count-jump",
+  "description": "One aggregated readiness event on a pod: first seen 08:00, count 600 at 08:50. kwatch sees one add and updates, not 600 events.",
+  "root": "deployment/shop/web",
+  "tier": "notify",
+  "maxMessages": 1,
+  "tail": "10m0s"
+}

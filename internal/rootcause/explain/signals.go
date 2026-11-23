@@ -17,6 +17,12 @@ const (
 	SignalDNS     Signal = "dns-error"
 	SignalWebhook Signal = "webhook-error"
 	SignalQuota   Signal = "quota-error"
+	// SignalClaimWait is a pod waiting for the claim of its generic
+	// ephemeral volume, which only a full storage quota holds back.
+	SignalClaimWait Signal = "claim-wait"
+	// SignalUnauthorized is a call the API server refuses because the
+	// caller's identity is not accepted (401), not for lack of rights.
+	SignalUnauthorized Signal = "unauthorized-error"
 	// SignalMetricsAPI is an autoscaler that cannot read the metrics
 	// API: the APIService is failing even before its own status says.
 	SignalMetricsAPI Signal = "metrics-api-error"
@@ -39,6 +45,9 @@ const (
 	// SignalNodeAgent is an error naming what a node agent does: the
 	// network plugin (CNI) or a storage driver (CSI) not ready.
 	SignalNodeAgent Signal = "node-agent-error"
+	// SignalSpread is a pod the scheduler cannot place because of the
+	// spread its own template asks for: required anti-affinity.
+	SignalSpread Signal = "spread-error"
 )
 
 // signalPatterns match each signal in lower-case text.
@@ -51,7 +60,12 @@ var signalPatterns = map[Signal]*regexp.Regexp{
 		`timed out`),
 	SignalDiskFull: regexp.MustCompile(`no space left on device|enospc|` +
 		`disk quota exceeded|file system is full|filesystem is full`),
-	SignalQuota:       regexp.MustCompile(`exceeded quota|failed quota`),
+	SignalQuota: regexp.MustCompile(`exceeded quota|failed quota`),
+	SignalUnauthorized: regexp.MustCompile(`must be logged in to the ` +
+		`server|\(unauthorized\)|401 unauthorized|status code 401: ` +
+		`unauthorized`),
+	SignalClaimWait: regexp.MustCompile(`waiting for ephemeral volume ` +
+		`controller to create the persistentvolumeclaim`),
 	SignalPodSecurity: regexp.MustCompile(`violates podsecurity`),
 	SignalLimitRange: regexp.MustCompile(`(maximum|minimum) [a-z./-]+ ` +
 		`usage per (container|pod|persistentvolumeclaim)|max limit to ` +
@@ -71,6 +85,8 @@ var signalPatterns = map[Signal]*regexp.Regexp{
 		`failed to set ?up sandbox container .*network|` +
 		`driver name \S+ not found in the list of registered csi|` +
 		`csinode \S+ does not contain driver`),
+	SignalSpread: regexp.MustCompile(`didn't match pod anti-affinity ` +
+		`rules`),
 	SignalTLS: regexp.MustCompile(`x509:|certificate has expired|` +
 		`tls: (bad|expired|unknown) certificate|certificate is not ` +
 		`yet valid`),

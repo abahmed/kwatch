@@ -1,0 +1,13 @@
+{
+  "name": "networkpolicy-blocks-apiserver-access",
+  "description": "An egress NetworkPolicy that allows only DNS is applied to a controller; its calls to the API server's address time out while the API server answers its probe.",
+  "root": "networkpolicy/shop/dns-only-egress",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "apiserver//kube-apiserver",
+    "deployment/shop/sync",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

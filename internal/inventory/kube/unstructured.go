@@ -111,6 +111,9 @@ func (s UnstructuredSchema) id(
 func (s UnstructuredSchema) Diff(old, new any) []inventory.FieldChange {
 	before, ok1 := old.(*unstructured.Unstructured)
 	after, ok2 := new.(*unstructured.Unstructured)
+	if fields := s.rulesChange(before, after, ok1 && ok2); fields != nil {
+		return fields
+	}
 	if !ok1 || !ok2 || before.GetGeneration() == after.GetGeneration() ||
 		after.GetGeneration() == 0 {
 		return nil
@@ -216,4 +219,20 @@ func unstructuredConditions(u *unstructured.Unstructured) []condition {
 func str(m map[string]any, key string) string {
 	value, _ := m[key].(string)
 	return value
+}
+
+// rulesChange is the edit of a role's rules: RBAC objects carry no
+// generation, so the digest of their rules tells an edit.
+func (s UnstructuredSchema) rulesChange(
+	before, after *unstructured.Unstructured, both bool,
+) []inventory.FieldChange {
+	if !both || s.group != "" || (s.kind != KindRole &&
+		s.kind != KindClusterRole) {
+		return nil
+	}
+	was, now := rulesDigest(before), rulesDigest(after)
+	if was == now {
+		return nil
+	}
+	return []inventory.FieldChange{{Path: "rules", Before: was, After: now}}
 }

@@ -1,0 +1,11 @@
+{
+  "name": "one-replica-oom-hot-shard",
+  "description": "One of three 512Mi cache replicas is OOMKilled six times in forty minutes; the others restart zero times.",
+  "root": "deployment/shop/cache",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

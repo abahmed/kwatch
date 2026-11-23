@@ -1,0 +1,12 @@
+10:02:15 settled
+🟠 api in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "config key missing". Its last run lasted ten seconds; 12 restarts since its pod was created one hour ago. It is already acknowledged (annotation on deployment/api), so kwatch sends no reminders while it stays. To read the output of the last crash, run kubectl logs deploy/api -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps crashing.
+| 🟠 **api** in **shop** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with `config key missing`.
+| Its last run lasted ten seconds; 12 restarts since its pod was created one hour ago.
+| It is already acknowledged (annotation on deployment/api), so kwatch sends no reminders while it stays.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/api -c app -n shop --previous
+| ```

@@ -1,0 +1,12 @@
+{
+  "name": "release-exec-probe-hangs-pid-pressure",
+  "description": "A release adds an exec probe whose script never exits; probes time out, the container restarts and the node reports PIDPressure later.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

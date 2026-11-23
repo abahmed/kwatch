@@ -1,0 +1,11 @@
+{
+  "name": "pod-resize-error-in-progress",
+  "description": "A pod's in-place memory resize stays in progress and the kubelet reports ResizeError because usage is above the new limit.",
+  "root": "deployment/shop/api",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

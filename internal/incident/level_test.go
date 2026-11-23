@@ -13,7 +13,8 @@ import (
 func TestAlertLevelTextCoversEveryCode(t *testing.T) {
 	codes := []string{levelPageHeld, levelNotify, levelDigestOnly,
 		levelRoutine, levelKnown, levelRhythm, levelCauseOnly,
-		levelAdvisory, levelDrain, levelIdle, levelKept, levelLowered,
+		levelAdvisory, levelUnaffected, levelDrain, levelIdle, levelKept,
+		levelLowered,
 		levelLoweredTo, levelSilenced, levelOverride, levelNoPaging}
 	for _, code := range codes {
 		assert.NotEmpty(t, AlertLevelText(code), code)

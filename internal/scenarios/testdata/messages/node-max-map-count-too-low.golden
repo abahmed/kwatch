@@ -1,0 +1,13 @@
+10:03:15 settled
+🟠 search in shop (prod-eu-1) keeps crashing because node n3 is what the failing workloads have in common, though it looks healthy. It fails with "bootstrap checks failed: max virtual memory areas vm.max_map_count [65530] is too low, increase to at least [262144]". Replicas that do not depend on it are healthy. To check the node's conditions and recent events, run kubectl describe node n3
+🟠 search in shop (prod-eu-1) keeps crashing because node n3 is what the failing workloads have in common, though it looks healthy.
+| 🟠 **search** in **shop** (**prod-eu-1**) keeps crashing because node n3 is what the failing workloads have in common, though it looks healthy.
+| It fails with
+| ```
+| bootstrap checks failed: max virtual memory areas vm.max_map_count [65530] is too low, increase to at least [262144]
+| ```
+| Replicas that do not depend on it are healthy.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n3
+| ```

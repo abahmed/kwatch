@@ -1,8 +1,6 @@
 package explain
 
 import (
-	"slices"
-
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -40,6 +38,9 @@ type candidate struct {
 	// coOnset marks a shared factor of only CoOnsetMinWorkloads
 	// workloads, kept because they began failing as one moment.
 	coOnset bool
+	// split marks a node accepted for a clean replica split (see
+	// cleanReplicaSplit) with nothing else explaining its effects.
+	split bool
 }
 
 // direct returns the effects the candidate explains through a row,
@@ -221,12 +222,12 @@ func (v *view) addUpstream(cs *candidateSet, effect inventory.EntityID) {
 			// Nothing is wrong with it; it is still what several
 			// failing workloads may have in common.
 			cs.noteChecked(effect, r.id)
-			cause = v.sharedFactorState(r.id)
+			cause = v.suspectState(r.id, effect)
 			if len(cause.modes) == 0 {
 				continue
 			}
 		}
-		if v.throughHealthyNode(r) {
+		if v.throughHealthyNode(r) && !sharedFactorOnlyState(cause) {
 			cs.reject(r.id, effect, "the node between it and "+
 				effect.String()+" is healthy")
 			continue
@@ -371,25 +372,4 @@ func applyMinCovered(cs *candidateSet) {
 			delete(cs.byID, c.id)
 		}
 	}
-}
-
-// sortIDs sorts ids by their canonical key.
-func sortIDs(ids []inventory.EntityID) {
-	slices.SortFunc(ids, inventory.CompareIDs)
-}
-
-// failures lists the entities with a Failing or Degraded finding.
-func failures(findings map[inventory.EntityID][]detection.Finding,
-) []inventory.EntityID {
-	var out []inventory.EntityID
-	for id, found := range findings {
-		for _, f := range found {
-			if unhealthy(f) {
-				out = append(out, id)
-				break
-			}
-		}
-	}
-	sortIDs(out)
-	return out
 }

@@ -1,4 +1,4 @@
-10:17:15 settled
+10:14:15 settled
 🟠 fleet in shop (prod-eu-1) has been Pending since it was scheduled because node n3 was removed at 10:10 UTC. The failing pods run on node n5, which joined under a minute before they began failing. All three failing apps use it. Services fleet, storage and support can't serve traffic. To see the pods' state and events, run kubectl describe pods fleet- -n shop
 🟠 fleet in shop (prod-eu-1) has been Pending since it was scheduled because node n3 was removed at 10:10 UTC.
 | 🟠 **fleet** in **shop** (**prod-eu-1**) has been Pending since it was scheduled because node n3 was removed at 10:10 UTC.

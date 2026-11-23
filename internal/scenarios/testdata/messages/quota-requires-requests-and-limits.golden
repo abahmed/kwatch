@@ -1,0 +1,12 @@
+10:03:15 settled
+🟠 Quota compute-quota in shop (prod-eu-1) is failing: refuses the creates that name it. Affected: api.
+Related alerts: 1 failed pod creation, 1 replica failure alert
+To see the object's state and events, run kubectl describe deployment api -n shop
+🟠 Quota compute-quota in shop (prod-eu-1) is failing: refuses the creates that name it.
+| 🟠 Quota **compute-quota** in **shop** (**prod-eu-1**) is failing: refuses the creates that name it.
+| Affected: **api**.
+| Related alerts: 1 failed pod creation, 1 replica failure alert
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment api -n shop
+| ```

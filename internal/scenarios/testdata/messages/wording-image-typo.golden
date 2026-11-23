@@ -1,0 +1,11 @@
+10:03:15 settled
+🟠 worker is failing in billing (prod-eu-1) after the 10:02 UTC release of registry.example/worker:v2.1O. The previous image was registry.example/worker:v2.1. Its image cannot be pulled. Fix: change the image of container app in deployment/worker. To see why the container cannot start, run kubectl describe pods worker- -n billing
+🟠 worker is failing in billing (prod-eu-1) after the 10:02 UTC release of registry.example/worker:v2.1O.
+| 🟠 **worker** is failing in **billing** (**prod-eu-1**) after the 10:02 UTC release of registry.example/worker:v2.1O.
+| The previous image was registry.example/worker:v2.1.
+| Its image cannot be pulled.
+| Fix: change the image of container app in deployment/worker.
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods worker- -n billing
+| ```

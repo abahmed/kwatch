@@ -1,0 +1,12 @@
+{
+  "name": "release-host-network-cluster-dns",
+  "description": "A release turns on hostNetwork with the default DNS policy; the pods resolve with the node's resolver and fail to look up cluster service names.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "cluster-dns//cluster-dns"
+  ]
+}

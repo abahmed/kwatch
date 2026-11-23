@@ -1,0 +1,17 @@
+10:02:15 settled
+🟠 Volume claim data-nfs in shop (prod-eu-1) has been waiting for a volume for two minutes. It was created at 10:00 UTC. The scheduler says "0/1 nodes are available: pod has unbound immediate PersistentVolumeClaims. preemption: 0/1 nodes are available: 1…". Affected: reports.
+Related alerts: 1 scheduling failure, 1 volume mismatch alert
+To see why the volume claim is not usable, run kubectl describe pvc data-nfs -n shop
+🟠 Volume claim data-nfs in shop (prod-eu-1) has been waiting for a volume for two minutes.
+| 🟠 Volume claim **data-nfs** in **shop** (**prod-eu-1**) has been waiting for a volume for two minutes.
+| It was created at 10:00 UTC.
+| The scheduler says
+| ```
+| 0/1 nodes are available: pod has unbound immediate PersistentVolumeClaims. preemption: 0/1 nodes are available: 1…
+| ```
+| Affected: **reports**.
+| Related alerts: 1 scheduling failure, 1 volume mismatch alert
+| To see why the volume claim is not usable, run
+| ```
+| kubectl describe pvc data-nfs -n shop
+| ```

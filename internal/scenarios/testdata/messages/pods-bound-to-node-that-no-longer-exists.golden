@@ -1,0 +1,13 @@
+10:10:00 material change
+🟠 orders in shop (prod-eu-1) has been terminating for 30 minutes because node n9 was removed. Both failing apps use it. Affected: payments.
+Related alerts: 2 unavailable workloads
+To check the node's conditions and recent events, run kubectl describe node n9
+🟠 orders in shop (prod-eu-1) has been terminating for 30 minutes because node n9 was removed.
+| 🟠 **orders** in **shop** (**prod-eu-1**) has been terminating for 30 minutes because node n9 was removed.
+| Both failing apps use it.
+| Affected: **payments**.
+| Related alerts: 2 unavailable workloads
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n9
+| ```

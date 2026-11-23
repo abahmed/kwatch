@@ -1,0 +1,15 @@
+{
+  "name": "pod-security-latest-version-three-namespaces",
+  "description": "After a cluster upgrade three namespaces enforce restricted:latest; the next rollout of each is refused for a newly required field.",
+  "root": "namespace//team-a",
+  "otherRoots": [
+    "namespace//team-b",
+    "namespace//team-c"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

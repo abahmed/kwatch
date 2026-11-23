@@ -102,7 +102,8 @@ func stagingLog() replay.Log {
 	logs := append([]replay.Log{backgroundChurn()}, nonEventLogs()...)
 	spacing := stagingSpacing
 	for i, s := range scenarios {
-		start := stagingStart.Add(spacing*time.Duration(i+1) +
+		slot := stagingSlot(i, len(scenarios))
+		start := stagingStart.Add(spacing*time.Duration(slot+1) +
 			jitter(s.expect.Name, spacing/3))
 		logs = append(logs, stagingInstance(s, start, i))
 	}

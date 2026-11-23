@@ -1,0 +1,14 @@
+{
+  "name": "release-server-binds-loopback",
+  "description": "A release makes the server listen on 127.0.0.1 only; the new pod runs but its readiness probe is refused on the pod address and a caller's connections are refused.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "service/shop/api",
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "5m0s"
+}

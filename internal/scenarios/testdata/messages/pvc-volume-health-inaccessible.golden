@@ -1,0 +1,12 @@
+10:06:15 settled
+🟠 postgres in inventory (prod-eu-1) keeps crashing. Cause not found yet: its node, volumes and registry are healthy and unchanged, so look at the app itself. It fails with "PANIC: could not read block 12 in file "base/16384/1259": Input/output error". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/postgres -c app -n inventory --previous
+🟠 postgres in inventory (prod-eu-1) keeps crashing.
+| 🟠 **postgres** in **inventory** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node, volumes and registry are healthy and unchanged, so look at the app itself.
+| It fails with `PANIC: could not read block 12 in file "base/16384/1259": Input/output error`.
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/postgres -c app -n inventory --previous
+| ```

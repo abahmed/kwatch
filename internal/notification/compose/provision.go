@@ -11,7 +11,8 @@ const weightProvision = 0.6
 // could not find.
 func provisionSentences(f caseFacts) []sentence {
 	if !causeRuleIs(f, explain.RuleStorageClassMissing,
-		explain.RuleStorageClassMissingPending) {
+		explain.RuleStorageClassMissingPending,
+		explain.RuleStorageClassRejects) {
 		return nil
 	}
 	for _, s := range f.members {

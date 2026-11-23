@@ -1,0 +1,12 @@
+{
+  "name": "pvc-static-volume-too-small",
+  "description": "A claim pre-bound to a static volume asks for more capacity than the volume has; it stays Pending with VolumeMismatch.",
+  "root": "persistentvolumeclaim/shop/data-nfs",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/reports"
+  ],
+  "tail": "10m0s"
+}

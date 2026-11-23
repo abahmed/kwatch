@@ -1,0 +1,15 @@
+{
+  "name": "node-cni-agent-saturated-by-connections",
+  "description": "The CNI agent of one node is saturated by a pod's connection churn and fails its probes; pods of three namespaces on that node time out while other nodes are fine.",
+  "root": "daemonset/kube-system/cni-agent",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n2",
+    "deployment/shop/web",
+    "deployment/billing/invoices",
+    "deployment/media/transcode",
+    "cluster-dns//cluster-dns"
+  ],
+  "tail": "10m0s"
+}

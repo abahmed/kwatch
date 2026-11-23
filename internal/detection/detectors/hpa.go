@@ -89,6 +89,11 @@ func (HPA) Detect(
 		out = append(out, missing)
 	}
 	out = append(out, hpaConditionFindings(ctx, e, targetMissing)...)
+	for _, target := range scaleTargets(ctx, e.ID) {
+		if s, ok := replicasFlapping(ctx, targetEntity(ctx, target)); ok {
+			out = append(out, s)
+		}
+	}
 	current, _ := number(e, kube.AttrCurrentReplicas)
 	desired, _ := number(e, kube.AttrDesiredReplicas)
 	maximum, ok := number(e, kube.AttrMaxReplicas)

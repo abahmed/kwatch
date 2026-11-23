@@ -1,0 +1,8 @@
+10:11:15 settled
+🟠 db in shop (prod-eu-1) is failing because csidriver hostpath.csi.example.com does not exist. To see the pods' state and events, run kubectl describe pods db- -n shop
+🟠 db in shop (prod-eu-1) is failing because csidriver hostpath.csi.example.com does not exist.
+| 🟠 db in **shop** (**prod-eu-1**) is failing because csidriver **hostpath.csi.example.com** does not exist.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods db- -n shop
+| ```

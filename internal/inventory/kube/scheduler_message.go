@@ -20,8 +20,14 @@ type Blocker struct {
 	Nodes  int
 }
 
+// selectorReason is the scheduler's name for the pod's own node selector
+// or affinity rejecting a node.
+const selectorReason = "node affinity/selector"
+
 // ParseSchedulerMessage decodes a FailedScheduling message into blockers,
-// most common first, and the node count.
+// most common first, and the node count. Nodes the pod's own selector
+// excludes are excluded on purpose, so that reason ranks after every
+// other reason: it names the cause only when nothing else rejects.
 func ParseSchedulerMessage(message string) ([]Blocker, int) {
 	head, tail, found := strings.Cut(message, ":")
 	if !found {
@@ -59,7 +65,12 @@ func ParseSchedulerMessage(message string) ([]Blocker, int) {
 		blockers = append(blockers, Blocker{Reason: reason, Nodes: nodes})
 	}
 	sort.SliceStable(blockers, func(i, j int) bool {
-		return blockers[i].Nodes > blockers[j].Nodes
+		a, b := blockers[i], blockers[j]
+		if sel := strings.Contains(a.Reason, selectorReason); sel !=
+			strings.Contains(b.Reason, selectorReason) {
+			return !sel
+		}
+		return a.Nodes > b.Nodes
 	})
 	return blockers, total
 }

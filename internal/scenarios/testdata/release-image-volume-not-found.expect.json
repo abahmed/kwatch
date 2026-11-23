@@ -1,0 +1,12 @@
+{
+  "name": "release-image-volume-not-found",
+  "description": "A release mounts an image volume whose tag does not exist; the new pod cannot start and the kubelet reports the pull failing with \"not found\".",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "registry//registry.example.com"
+  ]
+}

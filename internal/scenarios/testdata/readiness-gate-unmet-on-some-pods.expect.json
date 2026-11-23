@@ -1,0 +1,8 @@
+{
+  "name": "readiness-gate-unmet-on-some-pods",
+  "description": "Two of five pods stay Ready=False with every container ready: the template's readiness gate is never set to True by the external controller.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 1,
+  "tail": "10m0s"
+}

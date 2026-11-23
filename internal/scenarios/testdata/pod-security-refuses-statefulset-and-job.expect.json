@@ -1,0 +1,12 @@
+{
+  "name": "pod-security-refuses-statefulset-and-job",
+  "description": "A namespace gets an enforced restricted Pod Security label; a StatefulSet scale-up and a Job both fail with \"violates PodSecurity\" and create no pod.",
+  "root": "namespace//streaming",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "statefulset/streaming/queue"
+  ],
+  "tail": "10m0s"
+}

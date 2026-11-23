@@ -1,0 +1,15 @@
+{
+  "name": "scheduler-config-names-removed-plugin",
+  "description": "A custom scheduler configuration names a plugin removed in the upgrade; the scheduler crash-loops and new pods stay Pending with no scheduling events.",
+  "root": "scheduler//kube-scheduler",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/cart",
+    "deployment/shop/search",
+    "deployment/billing/invoices"
+  ],
+  "tail": "5m0s"
+}

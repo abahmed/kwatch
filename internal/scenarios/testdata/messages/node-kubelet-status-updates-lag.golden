@@ -1,0 +1,9 @@
+10:04:15 settled
+🟠 runner in ci (prod-eu-1) has been Pending since it was scheduled because node n1 has reported nothing on the pods bound to it. Every app that uses it is failing. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 runner in ci (prod-eu-1) has been Pending since it was scheduled because node n1 has reported nothing on the pods bound to it.
+| 🟠 **runner** in ci (**prod-eu-1**) has been Pending since it was scheduled because node n1 has reported nothing on the pods bound to it.
+| Every app that uses it is failing.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```

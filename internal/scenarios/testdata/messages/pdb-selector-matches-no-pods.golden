@@ -1,0 +1,8 @@
+10:11:15 settled
+🟠 Disruption budget search-pdb in shop (prod-eu-1) selects no pods. To see the object's state and events, run kubectl describe poddisruptionbudget search-pdb -n shop
+🟠 Disruption budget search-pdb in shop (prod-eu-1) selects no pods.
+| 🟠 Disruption budget **search-pdb** in **shop** (**prod-eu-1**) selects no pods.
+| To see the object's state and events, run
+| ```
+| kubectl describe poddisruptionbudget search-pdb -n shop
+| ```

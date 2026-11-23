@@ -1,0 +1,16 @@
+10:11:15 settled
+🟠 pg in data (prod-eu-1) keeps running out of memory. ledger fails calling service pg with "dial tcp pg.data.svc.cluster.local:5432: connect: connection refused". It was killed within 10 seconds of starting. Service ledger in billing; service gen in reports; service api in shop can't serve traffic. Its containers have no memory limit, so nothing caps their memory use. It runs a single replica.
+Related alerts: 9 crash loops
+To read the output of the last crash, run kubectl logs pg-0 -c app -n data --previous
+🟠 pg in data (prod-eu-1) keeps running out of memory.
+| 🟠 pg in **data** (**prod-eu-1**) keeps running out of memory.
+| **ledger** fails calling service pg with `dial tcp pg.data.svc.cluster.local:5432: connect: connection refused`.
+| It was killed within 10 seconds of starting.
+| Service **ledger** in **billing**; service **gen** in **reports**; service **api** in **shop** can't serve traffic.
+| Its containers have no memory limit, so nothing caps their memory use.
+| It runs a single replica.
+| Related alerts: 9 crash loops
+| To read the output of the last crash, run
+| ```
+| kubectl logs pg-0 -c app -n data --previous
+| ```

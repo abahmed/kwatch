@@ -1,0 +1,26 @@
+10:06:15 settled
+🟠 queue is failing in streaming (prod-eu-1) after the 10:05 UTC release of registry.example.com/queue:4-bad. The previous image was registry.example.com/queue:4. It fails with "Failed to pull image "registry.example.com/queue:4-bad": rpc error: code = NotFound desc = failed to pull and unpack…". Fix: change the image of container app in statefulset/queue. To see why the container cannot start, run kubectl describe pod queue-2 -n streaming
+🟠 queue is failing in streaming (prod-eu-1) after the 10:05 UTC release of registry.example.com/queue:4-bad.
+| 🟠 **queue** is failing in **streaming** (**prod-eu-1**) after the 10:05 UTC release of registry.example.com/queue:4-bad.
+| The previous image was registry.example.com/queue:4.
+| It fails with
+| ```
+| Failed to pull image "registry.example.com/queue:4-bad": rpc error: code = NotFound desc = failed to pull and unpack…
+| ```
+| Fix: change the image of container app in statefulset/queue.
+| To see why the container cannot start, run
+| ```
+| kubectl describe pod queue-2 -n streaming
+| ```
+10:07:00 fix attempt
+🟠 Rollout queue-c of queue in streaming (prod-eu-1) started at 10:07 UTC; watching.
+🟠 Rollout queue-c of queue in streaming (prod-eu-1) started at 10:07 UTC; watching.
+| 🟠 Rollout queue-c of **queue** in **streaming** (**prod-eu-1**) started at 10:07 UTC; watching.
+10:17:00 material change
+🟠 queue in streaming (prod-eu-1) is now failing: rollout to revision queue-c is stuck: 0 of 3 pods updated.
+🟠 queue in streaming (prod-eu-1) is now failing: rollout to revision queue-c is stuck: 0 of 3 pods updated.
+| 🟠 **queue** in **streaming** (**prod-eu-1**) is now failing: rollout to revision queue-c is stuck: 0 of 3 pods updated.
+10:17:10 fix attempt still failing
+🟠 queue in streaming (prod-eu-1) is still failing 10 minutes after rollout queue-c.
+🟠 queue in streaming (prod-eu-1) is still failing 10 minutes after rollout queue-c.
+| 🟠 **queue** in **streaming** (**prod-eu-1**) is still failing 10 minutes after rollout queue-c.

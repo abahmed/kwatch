@@ -1,0 +1,12 @@
+{
+  "name": "release-registry-unknown-authority",
+  "description": "A release pulls from a private registry whose certificate is signed by an authority the nodes do not trust; the pull fails with \"x509: certificate signed by unknown authority\".",
+  "root": "registry//registry.corp.example",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/api"
+  ]
+}

@@ -1,0 +1,16 @@
+10:07:15 settled
+🟠 Node pool pool-logs (prod-eu-1) is failing as a whole: three nodes are low on disk space. Every app that uses it is failing. All four failing apps use it. Affected: shipper in logs.
+Related alerts: 7 error alerts, 7 evictions
+To see why the pod was evicted, run kubectl describe pods shipper- -n logs
+Proof: all 7 replicas fail, on 3 nodes.
+🟠 Node pool pool-logs (prod-eu-1) is failing as a whole: three nodes are low on disk space.
+| 🟠 Node pool **pool-logs** (**prod-eu-1**) is failing as a whole: three nodes are low on disk space.
+| Every app that uses it is failing.
+| All four failing apps use it.
+| Affected: **shipper** in **logs**.
+| Related alerts: 7 error alerts, 7 evictions
+| To see why the pod was evicted, run
+| ```
+| kubectl describe pods shipper- -n logs
+| ```
+| *Proof: all 7 replicas fail, on 3 nodes.*

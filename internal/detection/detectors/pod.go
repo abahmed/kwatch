@@ -29,14 +29,14 @@ const (
 // gatedPendingFactor stretches the pending threshold for a pod held by
 // scheduling gates. A gate is held on purpose by the controller that
 // added it, often while it waits for capacity or quota, so only a gate
-// held five times as long as an ordinary pending pod looks forgotten.
-const gatedPendingFactor = 5
+// held three times as long as an ordinary pending pod looks forgotten.
+const gatedPendingFactor = 3
 
 // startedPendingFactor stretches the pending threshold for a pod that is
 // scheduled but has not started. Its container findings already report
 // image and configuration problems, so the pod itself only reports a
-// wait three times as long as an ordinary pending pod.
-const startedPendingFactor = 3
+// wait one and a half times as long as an ordinary pending pod.
+const startedPendingFactor = 1.5
 
 // Pod detects pod-level failures: unschedulable, evicted, failed, stuck
 // terminating, and not ready for longer than the pod's own startup budget.
@@ -68,15 +68,27 @@ func (Pod) Kinds() []inventory.Kind { return []inventory.Kind{kube.KindPod} }
 func (d Pod) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
-	return append(append(d.detect(ctx, e), preemptedFindings(ctx, e)...),
-		graceKillFindings(ctx, e)...)
+	out := append(append(append(d.detect(ctx, e),
+		preemptedFindings(ctx, e)...), graceKillFindings(ctx, e)...),
+		nameTakenFindings(ctx, e)...)
+	if f, ok := unownedBlocksDrain(ctx, e); ok {
+		out = append(out, f)
+	}
+	return out
 }
 
 func (d Pod) detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	if flag(e, kube.AttrDeleting) {
-		return append(d.terminating(ctx, e), preemptionFindings(ctx, e)...)
+		out := append(d.terminating(ctx, e), preemptionFindings(ctx, e)...)
+		if text(e, kube.AttrReason) == nodeLostReason {
+			// The node controller marked the pod lost: its node
+			// stopped reporting. That is known now, not after the
+			// pod has outlived its grace period.
+			out = append(out, unknownState(valueSince(e, kube.AttrReason)))
+		}
+		return out
 	}
 	switch text(e, kube.AttrPhase) {
 	case "Pending":
@@ -89,14 +101,23 @@ func (d Pod) detect(
 	case "Running":
 		return append(d.notReady(ctx, e), conditionFindings(ctx, e)...)
 	case "Unknown":
-		return []detection.Finding{{
-			Reason:   reasons.PodStatusUnknown,
-			Severity: detection.Warning,
-			Since:    valueSince(e, kube.AttrPhase),
-			Summary:  "Pod state is unknown: its node stopped reporting",
-		}}
+		return []detection.Finding{unknownState(valueSince(e, kube.AttrPhase))}
 	default:
 		return nil
+	}
+}
+
+// nodeLostReason is the status reason the node controller gives a pod
+// whose node stopped reporting.
+const nodeLostReason = "NodeLost"
+
+// unknownState is the finding for a pod whose node stopped reporting.
+func unknownState(since time.Time) detection.Finding {
+	return detection.Finding{
+		Reason:   reasons.PodStatusUnknown,
+		Severity: detection.Warning,
+		Since:    since,
+		Summary:  "Pod state is unknown: its node stopped reporting",
 	}
 }
 
@@ -188,8 +209,8 @@ func (d Pod) notStarted(
 	if initRunning(ctx, e.ID) {
 		return nil
 	}
-	wait := d.thresholds.Pending*startedPendingFactor +
-		bootGraceFor(ctx, e)
+	wait := time.Duration(float64(d.thresholds.Pending)*
+		startedPendingFactor) + bootGraceFor(ctx, e)
 	if !sustained(ctx, "pod-pending", started, wait) {
 		return nil
 	}

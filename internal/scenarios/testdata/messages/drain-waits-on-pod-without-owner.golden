@@ -1,0 +1,7 @@
+10:41:15 digest
+🟡 kwatch summary (prod-eu-1): one new low-priority problem. Pod debug-shell in ops has no controller, so the drain of node n1 cannot move it. Not urgent: kwatch alerts on its own if it gets worse.
+🟡 kwatch summary (prod-eu-1): one new low-priority problem.
+| 🟡 **kwatch summary** · prod-eu-1 — 1 problem
+|
+| **Problems**
+| - Pod **debug-shell** in **ops** has no controller, so the drain of node n1 cannot move it

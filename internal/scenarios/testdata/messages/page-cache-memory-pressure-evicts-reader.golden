@@ -1,0 +1,15 @@
+10:07:15 settled
+🟠 reader in media (prod-eu-1) is failing because its memory use is above what it requests. Its node was short of memory. Its containers have no memory limit, so nothing caps their memory use.
+Related alerts: 1 eviction
+To see why the pod was evicted, run kubectl describe pods reader- -n media
+Proof: node n1 is healthy for 3 other pods.
+🟠 reader in media (prod-eu-1) is failing because its memory use is above what it requests.
+| 🟠 **reader** in **media** (**prod-eu-1**) is failing because its memory use is above what it requests.
+| Its node was short of memory.
+| Its containers have no memory limit, so nothing caps their memory use.
+| Related alerts: 1 eviction
+| To see why the pod was evicted, run
+| ```
+| kubectl describe pods reader- -n media
+| ```
+| *Proof: node n1 is healthy for 3 other pods.*

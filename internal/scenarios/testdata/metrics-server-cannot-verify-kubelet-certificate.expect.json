@@ -1,0 +1,13 @@
+{
+  "name": "metrics-server-cannot-verify-kubelet-certificate",
+  "description": "metrics-server fails to scrape a kubelet because of a certificate name mismatch; the metrics APIService is Available and the HPA reports FailedGetResourceMetric.",
+  "root": "unknown",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "apiservice//v1beta1.metrics.k8s.io",
+    "deployment/shop/web",
+    "node//n1"
+  ],
+  "tail": "20m0s"
+}
