@@ -110,7 +110,11 @@ jobs:
         go-version-file: go.mod
 
     - name: Run scenarios and alert-quality gates
-      run: make scenarios-gate SCENARIOS_FILTER="${{ matrix.filter }}"
+      # Passed through the environment so the shell does not expand the
+      # make-escaped $$ anchors (bash reads $$ as its own process id).
+      env:
+        SCENARIOS_FILTER: ${{ matrix.filter }}
+      run: make scenarios-gate
 
     - name: Publish alert-quality report
       if: always()
