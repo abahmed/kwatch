@@ -35,7 +35,7 @@ jobs:
         persist-credentials: false
 
     - name: Install Go
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         # Read from go.mod so the CI Go version can never drift from the repo.
         go-version-file: go.mod
@@ -105,7 +105,7 @@ jobs:
         persist-credentials: false
 
     - name: Install Go
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         go-version-file: go.mod
 
@@ -177,7 +177,7 @@ jobs:
 
     - name: Install Go
       if: steps.run.outputs.build == 'true'
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         go-version-file: go.mod
 
@@ -281,7 +281,7 @@ jobs:
     # GitHub release downloads, which can fail with 504s.
     - name: Set up Go for Kind
       if: steps.changes.outputs.chart == 'true'
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         go-version-file: go.mod
 

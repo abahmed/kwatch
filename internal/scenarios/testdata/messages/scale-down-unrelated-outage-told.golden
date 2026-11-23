@@ -1,7 +1,7 @@
 10:36:15 settled
-🟠 pay in shop (prod-eu-1) has not been ready for three minutes. Cause not found yet: its node and registry are healthy and unchanged. It runs a single replica. To see the pods' state and events, run kubectl describe pods pay- -n shop
-🟠 pay in shop (prod-eu-1) has not been ready for three minutes.
-| 🟠 **pay** in **shop** (**prod-eu-1**) has not been ready for three minutes.
+🟠 pay in shop (prod-eu-1) has had no ready replicas (0 of 1) for three minutes. Cause not found yet: its node and registry are healthy and unchanged. It runs a single replica. To see the pods' state and events, run kubectl describe pods pay- -n shop
+🟠 pay in shop (prod-eu-1) has had no ready replicas (0 of 1) for three minutes.
+| 🟠 **pay** in **shop** (**prod-eu-1**) has had no ready replicas (0 of 1) for three minutes.
 | Cause not found yet: its node and registry are healthy and unchanged.
 | It runs a single replica.
 | To see the pods' state and events, run

@@ -67,6 +67,10 @@ type Facts struct {
 	Grouping *Grouping
 	Split    *ReplicaSplit
 	Users    *Users
+	// Replicas is how many replicas the root workload has ready, set
+	// on an announcement or an update; nil when unknown or none is
+	// short (ReplicaCountOf).
+	Replicas *ReplicaCount
 }
 
 // WakeContext is a cluster wake-up, as a message mentions it: the

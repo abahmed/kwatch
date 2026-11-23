@@ -111,6 +111,9 @@ func (a *announcer) announce(
 	a.collect.NoteQuietResolves(quiet)
 	a.collect.NoteDecisions(decisions)
 	decisions = a.inScope(decisions)
+	for i := range decisions {
+		decisions[i] = a.withReplicas(decisions[i])
+	}
 	c := a.collect
 	decisions, summarised := a.collected(ctx, now, "startup", decisions,
 		c.CollectStartup)

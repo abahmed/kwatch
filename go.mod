@@ -4,7 +4,7 @@ go 1.27.4
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0
-	github.com/chromedp/cdproto v0.160.5
+	github.com/chromedp/cdproto v0.160.8
 	github.com/chromedp/chromedp v0.24.0
 	github.com/go-logr/logr v1.4.4
 	github.com/google/go-github/v55 v55.0.0

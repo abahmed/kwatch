@@ -11,7 +11,7 @@
 | kubectl logs deploy/invoices -c app -n billing --previous
 | ```
 10:08:30 material change
-🟠 cni-agent in kube-system (prod-eu-1) has not been ready for three minutes. The last run of container app in pod invoices-bcf7f095-b in billing lasted ten seconds; two restarts since the pod was created about one hour ago.
-🟠 cni-agent in kube-system (prod-eu-1) has not been ready for three minutes.
-| 🟠 **cni-agent** in **kube-system** (**prod-eu-1**) has not been ready for three minutes.
+🟠 cni-agent in kube-system (prod-eu-1) has had only 2 of 3 replicas ready for three minutes. The last run of container app in pod invoices-bcf7f095-b in billing lasted ten seconds; two restarts since the pod was created about one hour ago.
+🟠 cni-agent in kube-system (prod-eu-1) has had only 2 of 3 replicas ready for three minutes.
+| 🟠 **cni-agent** in **kube-system** (**prod-eu-1**) has had only 2 of 3 replicas ready for three minutes.
 | The last run of container app in pod invoices-bcf7f095-b in **billing** lasted ten seconds; two restarts since the pod was created about one hour ago.

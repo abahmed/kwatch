@@ -42,6 +42,9 @@ type caseFacts struct {
 	causeState incident.CauseState
 	// reach is where users reach what is affected, set by the pipeline.
 	reach []incident.Reach
+	// replicas is how many replicas the root workload has ready, when
+	// known, set by the pipeline.
+	replicas *incident.ReplicaCount
 	// gathered are the checks whose read came back ok, and confirmed
 	// says why gathered evidence proves the cause (investigate confirms
 	// only an incident with a cause or a failing root); both empty in
@@ -73,6 +76,7 @@ func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
 		evidence: d.Facts.Evidence, changes: d.Facts.Changes,
 		window: d.Facts.Window, wake: d.Facts.Wake,
 		causeState: d.Facts.Cause, reach: d.Facts.Reach,
+		replicas: d.Facts.Replicas,
 		gathered: incident.GatheredChecks(d.Facts.Report)}
 	if c := d.Facts.Correlation; c != nil {
 		f.confirmed = c.Confirmed

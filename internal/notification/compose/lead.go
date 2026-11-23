@@ -337,7 +337,7 @@ func subjectWithState(f caseFacts, subject inventory.EntityID) string {
 		// Another object's finding is not subject's state.
 		return name + " " + f.othersState(subject)
 	}
-	return name + " " + leadState(f)
+	return name + " " + withReplicaCount(f, leadState(f))
 }
 
 // causePhrase states the cause relative to the subject: "node n1 is low
