@@ -7,17 +7,3 @@
 | - **api** in **shop** keeps crashing
 |
 | *It alerts on its own when it changes or resolves.*
-10:03:00 material change
-🟠 api in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "config key DATABASE_URL is missing". Its last run lasted ten seconds; six restarts since its pod was created nine minutes ago.
-Related alerts: 3 not-ready pods
-To read the output of the last crash, run kubectl logs deploy/api -c app -n shop --previous
-🟠 api in shop (prod-eu-1) keeps crashing.
-| 🟠 **api** in **shop** (**prod-eu-1**) keeps crashing.
-| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
-| It fails with `config key DATABASE_URL is missing`.
-| Its last run lasted ten seconds; six restarts since its pod was created nine minutes ago.
-| Related alerts: 3 not-ready pods
-| To read the output of the last crash, run
-| ```
-| kubectl logs deploy/api -c app -n shop --previous
-| ```

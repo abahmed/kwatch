@@ -114,3 +114,11 @@ func TestMovedPageSaysTheOldCauseRecovered(t *testing.T) {
 	assert.Contains(t, notification.Text(result.Messages[idx]),
 		"Node n1 has recovered")
 }
+
+// The startup summary lists a page that already went out on its own: it
+// is information, not a second page.
+func TestStartupSummaryOfAPagedNodeIsNotASecondPage(t *testing.T) {
+	_, result := judgedPaging(t, "kwatch-restart-during-node-loss")
+
+	assert.Equal(t, 1, pagesRaised(result))
+}

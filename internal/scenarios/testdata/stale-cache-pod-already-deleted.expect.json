@@ -3,6 +3,6 @@
   "description": "A crash-looping Deployment is deleted at 14:00 but the pod's DELETED notification is lost; the cache keeps the pod until a relist ten minutes later.",
   "root": "unknown",
   "tier": "notify",
-  "maxMessages": 1,
+  "maxMessages": 2,
   "tail": "15m0s"
 }

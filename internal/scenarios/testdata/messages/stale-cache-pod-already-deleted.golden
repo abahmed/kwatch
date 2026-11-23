@@ -10,11 +10,6 @@
 | ```
 | kubectl logs deploy/api -c app -n shop --previous
 | ```
-10:05:30 cause revised
-🟠 Cause now known: Replica set api-4dffe2cd in shop (prod-eu-1) keeps crashing. It fails with "boot failed".
-🟠 Cause now known: Replica set api-4dffe2cd in shop (prod-eu-1) keeps crashing.
-| 🟠 Cause now known: Replica set **api-4dffe2cd** in **shop** (**prod-eu-1**) keeps crashing.
-| It fails with `boot failed`.
 10:18:00 healthy for 3m0s
 ✅ Replica set api-4dffe2cd in shop (prod-eu-1) was deleted. It was failing for 15 minutes.
 ✅ Replica set api-4dffe2cd in shop (prod-eu-1) was deleted.

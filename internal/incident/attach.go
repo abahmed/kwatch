@@ -144,6 +144,7 @@ func (m *Manager) keepsMember(
 		!m.beganTooLate(previous, where.cause) &&
 		!m.sameChainFlip(previous, key, where.root) &&
 		!m.explanationLapsed(previous, where) &&
+		!m.deletionFinishing(previous, s, where) &&
 		!m.swingsBack(now, key, where.root) {
 		return false
 	}

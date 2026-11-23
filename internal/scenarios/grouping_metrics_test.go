@@ -27,7 +27,8 @@ func pagesRaised(result replay.Result) int {
 		switch {
 		case m.Resolved():
 			delete(open, key)
-		case m.IsPage() && len(m.Members) == 0 && !open[key]:
+		case m.IsPage() && !m.IsSummary() && len(m.Members) == 0 &&
+			!open[key]:
 			open[key] = true
 			pages++
 		}

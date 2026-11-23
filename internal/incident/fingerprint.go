@@ -321,9 +321,14 @@ func (p *Incident) rootReasonList() []string {
 
 // impactSize counts affected workloads, Services and Ingresses. Pods and
 // containers are excluded: replicas failing one by one are not news.
+// So are namespaces other than the root: a namespace stuck deleting
+// beside the API that blocks it is the same story, not a wider one.
 func impactSize(p *Incident) int {
 	n := 0
 	for _, id := range p.Impact {
+		if id.Kind == kube.KindNamespace && id != p.Root {
+			continue
+		}
 		if id.Kind != kube.KindPod && id.Kind != kube.KindContainer {
 			n++
 		}

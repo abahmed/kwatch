@@ -1,13 +1,14 @@
 10:13:15 settled
-🟠 api in shop (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (didn't match pod topology spread constraints (missing required label)). The scheduler says "0/3 nodes are available: 3 node(s) didn't match pod topology spread constraints (missing required label). preemption…". Replicas that do not depend on it are healthy. To see the pods' state and events, run kubectl describe pods api- -n shop
-🟠 api in shop (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (didn't match pod topology spread constraints (missing required label)).
-| 🟠 **api** in **shop** (**prod-eu-1**) has waited two minutes for a node because the scheduler rejects every node (**didn't match pod topology spread constraints (missing required label)**).
+🟠 api is failing in shop (prod-eu-1) after the 10:10 UTC scale-up. The replicas were scaled from 2 to 4. The scheduler says "0/3 nodes are available: 3 node(s) didn't match pod topology spread constraints (missing required label). preemption…". Fix: scale up deployment/api (now 4 replicas). To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api is failing in shop (prod-eu-1) after the 10:10 UTC scale-up.
+| 🟠 **api** is failing in **shop** (**prod-eu-1**) after the 10:10 UTC scale-up.
+| The replicas were scaled from 2 to 4.
 | The scheduler says
 | ```
 | 0/3 nodes are available: 3 node(s) didn't match pod topology spread constraints (missing required label). preemption…
 | ```
-| Replicas that do not depend on it are healthy.
-| To see the pods' state and events, run
+| Fix: scale up deployment/api (now 4 replicas).
+| To see the rollout state, run
 | ```
-| kubectl describe pods api- -n shop
+| kubectl rollout status deployment/api -n shop
 | ```

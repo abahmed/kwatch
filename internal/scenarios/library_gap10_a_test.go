@@ -163,13 +163,17 @@ func gap10RestartNodeLoss() scenario {
 				Key: "node.kubernetes.io/unreachable", Effect: "NoExecute"}}
 			c.list(c.node("worker-1", "zone-a"), c.node("worker-2",
 				"zone-a"), lost)
+			// The node controller evicts only after five minutes of the
+			// unreachable taint, so at three the pods are unready, not
+			// yet deleting.
+			lostPod := notReadySince(g10Ago(c, 3*time.Minute))
 			w := c.deployment("shop", "api", "registry.example.com/api:1", 3)
 			w.setReady(2)
 			c.list(w.objects())
 			c.list(w.pod(0, nodes[0]), w.pod(1, nodes[1]),
-				w.pod(2, nodes[2], g10Lost))
+				w.pod(2, nodes[2], lostPod))
 			sts := g10Sts(c, "data", "cache", []string{"worker-3"}, nil)
-			c.update(operatorBroker(c, sts, 0, "worker-3", g10Lost))
+			c.update(operatorBroker(c, sts, 0, "worker-3", lostPod))
 		},
 	}
 }

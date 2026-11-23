@@ -284,7 +284,9 @@ func gap10StaleCache() scenario {
 			Description: "A crash-looping Deployment is deleted at 14:00 " +
 				"but the pod's DELETED notification is lost; the cache " +
 				"keeps the pod until a relist ten minutes later.",
-			Root: rootUnknown, Tier: "notify", MaxMessages: 1,
+			// The resolve message counts toward the budget: the
+			// opening alert and the resolve.
+			Root: rootUnknown, Tier: "notify", MaxMessages: 2,
 			Tail: duration(15 * time.Minute)},
 		build: func(c *cluster) {
 			w := g10Fleet(c, "shop", "api", 1, gap10Nodes, nil)

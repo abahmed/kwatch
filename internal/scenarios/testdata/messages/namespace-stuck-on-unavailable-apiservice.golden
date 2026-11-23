@@ -6,25 +6,16 @@
 | ```
 | kubectl describe namespace old-shop
 | ```
-10:03:15 settled
-🟠 API service v1beta1.metrics.k8s.io (prod-eu-1) is not available (missing endpoints). It reports "endpoints for service/metrics-server in "kube-system" have no addresses with port name "https"". To see the object's state and events, run kubectl describe apiservice v1beta1.metrics.k8s.io
-🟠 API service v1beta1.metrics.k8s.io (prod-eu-1) is not available (missing endpoints).
-| 🟠 API service **v1beta1.metrics.k8s.io** (**prod-eu-1**) is not available (missing endpoints).
+10:02:30 cause revised
+🟠 Cause now known: API service v1beta1.metrics.k8s.io (prod-eu-1) is not available (missing endpoints). It reports "endpoints for service/metrics-server in "kube-system" have no addresses with port name "https"".
+🟠 Cause now known: API service v1beta1.metrics.k8s.io (prod-eu-1) is not available (missing endpoints).
+| 🟠 Cause now known: API service **v1beta1.metrics.k8s.io** (**prod-eu-1**) is not available (missing endpoints).
 | It reports
 | ```
 | endpoints for service/metrics-server in "kube-system" have no addresses with port name "https"
 | ```
-| To see the object's state and events, run
-| ```
-| kubectl describe apiservice v1beta1.metrics.k8s.io
-| ```
-10:43:00 healthy for 3m0s
-✅ API service v1beta1.metrics.k8s.io (prod-eu-1) is healthy again. It was failing for 38 minutes and recovered on its own.
+10:43:30 healthy for 3m0s
+✅ API service v1beta1.metrics.k8s.io (prod-eu-1) is healthy again. It was failing for 41 minutes and recovered on its own.
 ✅ API service v1beta1.metrics.k8s.io (prod-eu-1) is healthy again.
 | ✅ API service **v1beta1.metrics.k8s.io** (**prod-eu-1**) is healthy again.
-| It was failing for 38 minutes and recovered on its own.
-10:43:30 healthy for 3m0s
-✅ Namespace old-shop (prod-eu-1) was deleted. It was failing for 41 minutes.
-✅ Namespace old-shop (prod-eu-1) was deleted.
-| ✅ Namespace **old-shop** (**prod-eu-1**) was deleted.
-| It was failing for 41 minutes.
+| It was failing for 41 minutes and recovered on its own.
