@@ -75,7 +75,10 @@ func fixText(p detection.Place, valueSaid bool) string {
 		value = ""
 	}
 	if resource, ok := strings.CutPrefix(p.Path, "spec.hard."); ok {
-		return fixLabel + "raise " + resource + " in " + object +
+		if resource == "pods" {
+			resource = "pod"
+		}
+		return fixLabel + "raise the " + resource + " limit in " + object +
 			" or lower the requests of workloads in namespace " +
 			p.Object.Namespace + "."
 	}

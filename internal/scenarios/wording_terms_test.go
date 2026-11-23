@@ -82,7 +82,7 @@ var wordingTable = []wordingTerms{
 		not: []string{"delete", "logs filling"}},
 	{name: "wording-quota-forbids-pods",
 		contain: []string{"compute in shop", "requests.cpu",
-			"Fix: raise requests.cpu in resourcequota/compute|" +
+			"Fix: raise the requests.cpu limit in resourcequota/compute|" +
 				"lower the requests of workloads in namespace shop"},
 		not: []string{"cluster is full", "no nodes", "capacity"}},
 	{name: "wording-probe-port-mismatch",
