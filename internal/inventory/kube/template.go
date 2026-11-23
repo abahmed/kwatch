@@ -79,6 +79,16 @@ func imageChanges(
 	return fields
 }
 
+// TemplateImages lists the distinct images of a pod template's
+// containers, init containers included, sorted.
+func TemplateImages(template *corev1.PodTemplateSpec) []string {
+	set := map[string]string{}
+	for _, image := range containerImages(template) {
+		set[image] = image
+	}
+	return sortedKeys(set)
+}
+
 func containerImages(
 	template *corev1.PodTemplateSpec,
 ) map[string]string {

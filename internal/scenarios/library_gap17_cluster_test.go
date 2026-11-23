@@ -49,8 +49,10 @@ func g17InitPull(image string) podState {
 	}
 }
 
+// g17Injector is the sidecar injector: it injects the init container with
+// image into the pods of the namespaces labelled injection=scope.
 func g17Injector(
-	c *cluster, image string,
+	c *cluster, image, scope string,
 ) *admissionv1.MutatingWebhookConfiguration {
 	ignore, none := admissionv1.Ignore, admissionv1.SideEffectClassNone
 	meta := clusterMeta(c, "", "sidecar-injector", "hook")
@@ -62,6 +64,8 @@ func g17Injector(
 	return &admissionv1.MutatingWebhookConfiguration{ObjectMeta: meta,
 		Webhooks: []admissionv1.MutatingWebhook{{
 			Name: "inject.example.com", FailurePolicy: &ignore,
+			NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{
+				"injection": scope}},
 			SideEffects:             &none,
 			AdmissionReviewVersions: []string{"v1"},
 			ClientConfig: admissionv1.WebhookClientConfig{
@@ -83,11 +87,11 @@ func gap17InjectorMissingImage() scenario {
 			c.list(c.node("n1", "zone-a"))
 			good := "registry.example/proxy-init:1.0"
 			bad := "registry.example/proxy-init:9.9"
-			c.list(g17Injector(c, good))
+			c.list(g17Injector(c, good, "enabled"))
 			apps := []*workload{g17Up(c, "shop", "api", 4),
 				g17Up(c, "billing", "ledger", 4), g17Up(c, "jobs", "runner", 3)}
 			c.after(10 * time.Minute)
-			c.update(g17Injector(c, bad))
+			c.update(g17Injector(c, bad, "all"))
 			c.after(time.Minute)
 			g17Loop(c, 6, func(round int32) {
 				for _, app := range apps {

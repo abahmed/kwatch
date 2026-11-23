@@ -255,7 +255,7 @@ func TestTableRows(t *testing.T) {
 		schedulerNamesRowCases, peerRowCases, refusalRowCases,
 		serviceDefectRowCases, isolationRowCases, addressHolderRowCases,
 		dnsServingRowCases, memoryHogRowCases, resolverRowCases,
-		namedStorageRowCases, zoneSplitRowCases}
+		namedStorageRowCases, zoneSplitRowCases, injectedRowCases}
 	tested := map[string]bool{}
 	for _, group := range groups {
 		for _, tc := range group {

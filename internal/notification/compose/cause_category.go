@@ -143,6 +143,7 @@ var causeCategories = map[string]string{
 	"account-replaced":                      categoryPermissions,
 	"rbac-change":                           categoryPermissions,
 	"registry-refuses":                      categoryImagePull,
+	"webhook-injects-image":                 categoryImagePull,
 	"resource-claim-unallocated":            categoryShortage,
 	"rollout":                               categoryRollout,
 	"routed-missing":                        categoryMissingDep,

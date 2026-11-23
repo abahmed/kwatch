@@ -169,6 +169,7 @@ var causeWords = map[string]causeWording{
 	"admission-policy-denies":    {words: "denies the pods being created"},
 	"rbac-change":                {words: "no longer grants the access it needs"},
 	"registry-refuses":           {words: "refuses the image pulls"},
+	"webhook-injects-image":      {words: "injects an image the pods cannot pull"},
 	"rollout":                    {words: "rolled out a change shortly before"},
 	"routed-missing":             {words: "does not exist"},
 	"missing-service-called":     {words: "does not exist"},
