@@ -240,7 +240,9 @@ func (v *view) missingModes(
 	id, effect inventory.EntityID, link LinkType,
 ) []modeHealth {
 	if (link == LinkUses || link == LinkMounts || link == LinkRoutesTo) &&
-		!v.s.Model.Exists(id) && !v.schedulerSaysOtherwise(id, effect) && !v.namespaceTerminating(id.Namespace) &&
+		!v.s.Model.Exists(id) &&
+		!v.schedulerSaysOtherwise(id, effect) &&
+		!v.namespaceTerminating(id.Namespace) &&
 		kube.BootstrapPending(v.s.Model, id, v.s.Now) == 0 {
 		return pseudoFailing(ModeMissing)
 	}

@@ -47,7 +47,9 @@ var isolationRows = []Row{
 // effect: the admission webhooks for a controller that cannot create,
 // the metrics APIServices for an autoscaler, the entity itself when it
 // is one of them.
-func (v *view) calledByAPIServer(effect inventory.EntityID) []inventory.EntityID {
+func (v *view) calledByAPIServer(
+	effect inventory.EntityID,
+) []inventory.EntityID {
 	switch {
 	case isAdmissionKind(effect.Kind) || effect.Kind == kube.KindAPIService:
 		return []inventory.EntityID{effect}

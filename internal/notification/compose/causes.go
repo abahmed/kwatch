@@ -63,10 +63,12 @@ var causeWords = map[string]causeWording{
 		words: "is already bound to a different claim"},
 	"claim-pins-pod": {
 		words: "is bound to a volume in a zone with no node for the pod"},
-	"cluster-dns-failing":          {words: "is not resolving names"},
-	"dns-config-changed":           {words: "changed shortly before"},
-	"dns-service-changed":          {words: "changed shortly before"},
-	"dns-role-changed":             {words: "no longer grants the access it needs"},
+	"cluster-dns-failing": {words: "is not resolving names"},
+	"dns-config-changed":  {words: "changed shortly before"},
+	"dns-service-changed": {words: "changed shortly before"},
+	"dns-role-changed": {
+		words: "no longer grants the access it needs",
+	},
 	"cluster-dns-servers":          {words: "is not resolving names"},
 	"dns-servers-not-resolving":    {words: "is not resolving names"},
 	"cluster-dns-server-workload":  {words: "is not resolving names"},
@@ -123,7 +125,9 @@ var causeWords = map[string]causeWording{
 		words: "serves every pod on that node and is failing"},
 	"node-agent-named-by-error": {
 		words: "serves every pod on that node and is failing"},
-	"node-agent-absent":  {words: "has no pod on the node the failing pods run on"},
+	"node-agent-absent": {
+		words: "has no pod on the node the failing pods run on",
+	},
 	"node-not-ready":     {words: "is not ready"},
 	"node-overcommitted": {words: "is overcommitted on memory"},
 	"node-pid-pressure":  {words: "is short of process IDs"},

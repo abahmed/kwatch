@@ -8,9 +8,10 @@ import (
 )
 
 // blindToHiddenDNSConfig reports a cluster DNS whose servers keep
-// crashing, the DNS server workload itself, or an external endpoint, blamed for failing lookups while the
-// ConfigMaps the DNS servers read are unreadable to kwatch. Its Corefile may be the cause, so nothing is
-// stated: the message says the cause is unknown and names what is
+// crashing, the DNS server workload itself, or an external endpoint,
+// blamed for failing lookups while the ConfigMaps the DNS servers read
+// are unreadable to kwatch. Its Corefile may be the cause, so nothing
+// is stated: the message says the cause is unknown and names what is
 // unreadable. It records that on the failures it covers.
 func (v *view) blindToHiddenDNSConfig(c *candidate) bool {
 	if v.s.verifiable(kube.KindConfigMap) {

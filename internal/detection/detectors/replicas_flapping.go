@@ -19,7 +19,9 @@ const (
 )
 
 // targetEntity is the model's entity for id, or an empty one.
-func targetEntity(ctx detection.Context, id inventory.EntityID) inventory.Entity {
+func targetEntity(
+	ctx detection.Context, id inventory.EntityID,
+) inventory.Entity {
 	if ctx.Model == nil {
 		return inventory.Entity{}
 	}
