@@ -206,3 +206,20 @@ func TestLogSampleKeepsACappedWindowsCountUnknown(t *testing.T) {
 	_, known = quiet.Attributes[kube.AttrLogTopBaseline]
 	assert.True(t, known)
 }
+
+func TestLogSampleRoundIgnoresInfoLinesWithErrorWords(t *testing.T) {
+	h := newSampleHarness(t)
+	h.workload("orders", true)
+	lines := errorLines(3)
+	for i := range 40 {
+		lines = append(lines, fmt.Sprintf(
+			`level=info msg="admission denied open" error=null id=%d`, i))
+	}
+	h.reader.lines = lines
+
+	h.round.Round(context.Background())
+
+	require.Len(t, h.sent, 1)
+	errs, _ := h.sent[0].Attributes[kube.AttrLogErrors].AsNumber()
+	assert.EqualValues(t, 3, errs)
+}
