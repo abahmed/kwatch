@@ -8,7 +8,7 @@
 | kubectl describe pods trainer- -n ml
 | ```
 10:05:30 cause revised
-🟠 Cause changed: ResourceClaim gpu-claim in ml (prod-eu-1) is failing; two possible causes: it has no device allocated, so its pod cannot start or the scheduler rejects every node (cannot allocate all claims). The scheduler says "0/1 nodes are available: 1 cannot allocate all claims."
-🟠 Cause changed: ResourceClaim gpu-claim in ml (prod-eu-1) is failing; two possible causes: it has no device allocated, so its pod cannot start or the scheduler rejects every node (cannot allocate all claims).
-| 🟠 Cause changed: ResourceClaim **gpu-claim** in ml (**prod-eu-1**) is failing; two possible causes: it has no device allocated, so its pod cannot start or the scheduler rejects every node (cannot allocate all claims).
+🟠 Cause changed: ResourceClaim gpu-claim in ml (prod-eu-1) is failing; kwatch could not confirm a cause. The scheduler says "0/1 nodes are available: 1 cannot allocate all claims."
+🟠 Cause changed: ResourceClaim gpu-claim in ml (prod-eu-1) is failing; kwatch could not confirm a cause.
+| 🟠 Cause changed: ResourceClaim **gpu-claim** in ml (**prod-eu-1**) is failing; kwatch could not confirm a cause.
 | The scheduler says `0/1 nodes are available: 1 cannot allocate all claims.`

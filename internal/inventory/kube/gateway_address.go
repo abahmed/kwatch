@@ -25,7 +25,7 @@ type listener struct{ protocol, hostname string }
 func (s UnstructuredSchema) setAddressAttributes(
 	u *unstructured.Unstructured, attrs map[string]inventory.Value,
 ) {
-	if s.group != gatewayGroup {
+	if s.group != GatewayGroup {
 		return
 	}
 	switch s.kind {
@@ -65,7 +65,7 @@ func routeListeners(r inventory.Reader, route inventory.EntityID) []listener {
 	var out []listener
 	parents := r.Related(route, inventory.References, inventory.Outgoing)
 	for _, gw := range parents {
-		if gw.Kind != KindGateway || gw.Group != GroupFor(gatewayGroup) {
+		if gw.Kind != KindGateway || gw.Group != GroupFor(GatewayGroup) {
 			continue
 		}
 		attr, ok := r.Attribute(gw, AttrGatewayListeners)

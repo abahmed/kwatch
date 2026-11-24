@@ -89,6 +89,12 @@ type Options struct {
 	// ClusterNameSource is where the cluster name came from, for the
 	// kwatch page (see SetClusterNameSource).
 	ClusterNameSource string
+	// SessionLifetime is how long a sign-in lasts; 0 keeps
+	// sessionLifetime (12h).
+	SessionLifetime time.Duration
+	// SignInHelp is plain text the sign-in page shows above the link to
+	// the docs on getting the password; empty shows the link alone.
+	SignInHelp string
 }
 
 // sources holds what the running pipeline provides. The listener serves
@@ -154,13 +160,16 @@ func NewServer(opts Options, now clock.Clock) *Server {
 		opts:   opts,
 		now:    now,
 		auth:   newServerAuth(opts, now),
-		assets: mustAssets(),
+		assets: mustAssets().withSignInHelp(opts.SignInHelp),
 		live:   newLiveHub(),
 	}
 }
 
 func newServerAuth(opts Options, now clock.Clock) *Auth {
 	a := NewAuth(opts.Token, opts.Password, opts.shared(), now)
+	if opts.SessionLifetime > 0 {
+		a.sessions.lifetime = opts.SessionLifetime
+	}
 	trusted, errs := parseProxies(opts.TrustedProxies)
 	for _, err := range errs {
 		klog.ErrorS(err, "ignored", "component", "dashboard-server")
@@ -341,6 +350,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("/api/push/status", s.pushStatusHandler)
 	api.HandleFunc("/api/push/remove", s.pushRemoveHandler)
 	api.HandleFunc("/api/push/test", s.pushTestHandler)
+	api.HandleFunc("/api/releases", releasesGone)
+	api.HandleFunc("/api/releases/", releasesGone)
 	api.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
@@ -352,7 +363,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/login", s.auth.loginHandler)
 	mux.HandleFunc("/logout", s.auth.logoutHandler)
 	mux.Handle("/", s.assets)
-	return securityHeaders(accessLog(mux), s.sendHSTS)
+	return securityHeaders(accessLog(compress(mux)), s.sendHSTS)
 }
 
 // sendHSTS reports whether a response carries Strict-Transport-Security:

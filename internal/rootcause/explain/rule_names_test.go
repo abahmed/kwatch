@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -64,5 +65,39 @@ func TestRuleConstantsNameOneRowEach(t *testing.T) {
 			t.Errorf("%s and %s both name row %q", name, other, value)
 		}
 		named[value] = name
+	}
+}
+
+// TestRuleConstantsLiveInRuleNames keeps every Rule constant in
+// rule_names.go, the one file the test above reads: a constant declared
+// next to its row would escape the one-row check.
+func TestRuleConstantsLiveInRuleNames(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range files {
+		if name == "rule_names.go" ||
+			strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		for _, decl := range file.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.CONST {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				for _, id := range spec.(*ast.ValueSpec).Names {
+					if strings.HasPrefix(id.Name, "Rule") {
+						t.Errorf("%s declares %s outside "+
+							"rule_names.go", name, id.Name)
+					}
+				}
+			}
+		}
 	}
 }

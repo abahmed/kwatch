@@ -21,14 +21,12 @@ func resolveNote(f caseFacts) (string, []sentence) {
 	if p.SupersededBy != "" {
 		return marker(p), movedNote(f)
 	}
-	subject := leadSubject(f)
+	subject := resolveSubject(f)
 	if rest, ok := strings.CutPrefix(string(f.reason),
 		incident.StoppedTrackingPrefix); ok {
 		return notification.MarkerResolved, stoppedTracking(f, subject, rest)
 	}
-	lead := sentence{part: partLead, text: capitalName(subject,
-		f.leadName(subject)+" "+resolution(f, subject)+
-			stillClause(f, subject)+".")}
+	lead := sentence{part: partLead, text: resolveLead(f, subject)}
 	out := []sentence{lead}
 	out = append(out, causeStateSentences(f, subject)...)
 	out = append(out, resolveDetail(f, subject))
@@ -83,6 +81,11 @@ func endedWords(f caseFacts, subject inventory.EntityID) string {
 		}
 		return " and recovered on its own"
 	case incident.FixRollback:
+		if rollDirection(f.fix, f.p.Cause, f.p.Fix) == rollForward {
+			// The fix set the blamed fields to new values: a revert
+			// was followed by a new release.
+			return "; a new revision fixed it"
+		}
 		return "; a rollback fixed it"
 	case incident.FixConfig:
 		return "; a config change fixed it"
@@ -94,9 +97,12 @@ func endedWords(f caseFacts, subject inventory.EntityID) string {
 
 // lastAffected names the root an incident ended on when its resolve
 // speaks of the subject a listing announced and the root moved since:
-// "Last affected: deployment draftor in staging."
+// "Last affected: deployment draftor in staging." A shared error is no
+// object to name: its key is kwatch's own, and the lead already speaks
+// of its workloads.
 func lastAffected(f caseFacts, subject inventory.EntityID) string {
-	if !f.asAnnounced || zeroID(f.p.Root) || f.p.Root == subject {
+	if !f.asAnnounced || zeroID(f.p.Root) || f.p.Root == subject ||
+		sharedErrorGroup(f.p) {
 		return ""
 	}
 	return lastAffectedLead + describe(f.p.Root) + "."
@@ -189,9 +195,9 @@ func fixPhrase(f caseFacts) string {
 	who := actorOr(fix.Actor, "Someone")
 	at := " at " + clock(fix.At)
 	switch {
-	case fix.Revision != "" && p.Cause != nil &&
-		p.Cause.RollbackRevision == fix.Revision:
-		return who + " rolled back to revision " + fix.Revision + at
+	case fix.Revision != "" &&
+		rollDirection(fix, p.Cause, p.Fix) == rollBack:
+		return who + " " + rolledBackWords(fix, p.Cause) + at
 	case fix.Revision != "":
 		return who + " rolled out revision " + fix.Revision + at
 	case len(fix.Fields) > 0:

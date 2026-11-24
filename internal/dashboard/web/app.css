@@ -147,6 +147,20 @@ input:hover, select:hover { border-color: var(--text); }
 .tz-b:last-of-type { border-radius: 0 var(--radius-chip) var(--radius-chip) 0; border-left: 0; }
 .tz-b:hover { background: var(--surface); }
 .tz-b[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+/* The Settings page (js/settings.js): display, times and browser
+   alerts, two plain groups side by side. */
+.set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: var(--space-6); margin-top: var(--space-5); font-size: var(--t-small); }
+.set-g { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+.set-g h2 { font-size: var(--t-body); font-weight: 700; margin: 0; }
+.nav-ind { margin-left: 8px; font-size: var(--t-micro); font-weight: 600; color: var(--success); }
+.look-set { display: flex; flex-direction: column; gap: 8px; }
+.look-l { display: flex; align-items: center; gap: 6px; }
+.look-l select { min-height: var(--ctl); font-size: var(--t-micro); padding: 0 6px; }
+.look-c { display: flex; align-items: center; gap: 6px; min-height: 28px; }
+.look-c input { flex: none; width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; }
+.look-set .tz { flex-wrap: wrap; row-gap: 4px; }
+.look-set .tz > span { flex: 1 0 100%; }
+.look-set .tz-b { padding: 0 8px; }
 /* "Read-only dashboard" and "Sign out" share a left edge with the
    rest of the side bar, side by side or wrapped. */
 .who-acct { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; }
@@ -242,6 +256,14 @@ input:hover, select:hover { border-color: var(--text); }
 .step + .step { margin-top: 14px; }
 .runbook { margin-top: 14px; }
 .cmd { margin-top: 12px; background: var(--ink); color: var(--ink-text); border: 1px solid var(--ink-edge); border-radius: var(--radius-card); display: flex; align-items: flex-start; gap: 8px; padding: 10px 10px 10px 16px; }
+/* Which cluster a command is for (api.js KW.cmdCluster), on the line
+   above it; a list of steps says it once, above its first command. */
+.cmd-wrap { margin-top: 12px; }
+.cmd-wrap > .cmd.cmd { margin-top: 4px; }
+.cmd-ctx { font-size: var(--t-micro); line-height: 1.4; color: var(--text-muted); overflow-wrap: anywhere; }
+.cmd-ctx b { color: var(--text); }
+.cmd-ctx .mono { font-size: var(--t-micro); }
+li:has(> .cmd-wrap) ~ li > .cmd-wrap > .cmd-ctx, .cmd-wrap + .cmd-wrap > .cmd-ctx { display: none; }
 .cmd code { flex: 1; min-width: 0; font-size: var(--t-micro); line-height: 1.6; white-space: pre; overflow-x: auto; padding: 2px 0 6px; }
 .cmd .btn { color: var(--ink-text); border-color: var(--ink-muted); min-height: 36px; padding: 0 12px; font-size: var(--t-micro); flex: none; }
 .cmd .btn:hover { background: var(--ink-line); border-color: var(--ink-text); }
@@ -337,14 +359,10 @@ input:hover, select:hover { border-color: var(--text); }
     position: static; height: auto; overflow: visible; }
   .brand { margin: 0 6px 0 0; }
   .side-cluster { order: 2; flex-basis: 100%; margin: 0; }
-  /* One row that scrolls sideways, never a second line of links. */
-  .nav { flex-direction: row; flex-wrap: nowrap; gap: 4px 2px; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; flex: 1 1 100%; order: 3; }
-  .nav::-webkit-scrollbar { display: none; }
+  /* Every link shows, under the same names as on a wide screen: they
+     wrap to a second row rather than scroll out of sight. */
+  .nav { flex-direction: row; flex-wrap: wrap; gap: 4px 2px; min-width: 0; max-width: 100%; flex: 1 1 100%; order: 3; }
   .nav a { flex: none; white-space: nowrap; }
-  /* "kwatch health" reads "Health" here, so all four links fit at 390px. */
-  .nav-pre { display: none; }
-  .nav-end { display: inline-block; }
-  .nav-end::first-letter { text-transform: uppercase; }
   /* Live is its dot; "updated …" stays for screen readers. */
   .page-head > .updated { padding: 0 4px 0 10px; border-color: transparent; gap: 2px; }
   .updated:not(.stale) > span:not(.live) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

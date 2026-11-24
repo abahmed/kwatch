@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -38,6 +39,41 @@ func calledService(cause *rootcause.CauseRecord) (inventory.EntityID, bool) {
 		return inventory.EntityID{}, false
 	}
 	return inventory.CoreID(kube.KindService, ns, name), true
+}
+
+// causeFirst puts last the failures the cause does not reach: neither
+// the failing object nor the workload it is part of (incident.Belongs)
+// is on the cause's chain, and it sits in a namespace no link of the
+// chain is in. Such an object of another app, grouped beside the
+// cause's own, never leads ahead of what the cause explains: the
+// title names the group's own objects. Each group keeps its order.
+// Without a chain the order is kept, and so it is for a shared error,
+// which reaches every member by the error they share, not by a chain.
+func causeFirst(
+	p incident.Incident, failures []detection.Finding,
+) []detection.Finding {
+	if p.Cause == nil || len(p.Cause.Chain) == 0 ||
+		p.Cause.Root.Kind == explain.KindFailureSignature {
+		return failures
+	}
+	chain := p.Cause.Chain
+	unreached := func(m detection.Finding) bool {
+		w, ok := p.Belongs[m.Entity]
+		return !slices.Contains(chain, m.Entity) &&
+			!(ok && slices.Contains(chain, w)) &&
+			!slices.ContainsFunc(chain, func(id inventory.EntityID) bool {
+				return id.Namespace == m.Entity.Namespace
+			})
+	}
+	out := make([]detection.Finding, 0, len(failures))
+	for _, last := range []bool{false, true} {
+		for _, m := range failures {
+			if unreached(m) == last {
+				out = append(out, m)
+			}
+		}
+	}
+	return out
 }
 
 // leadFailure is the failure a note starts from when its root owns no

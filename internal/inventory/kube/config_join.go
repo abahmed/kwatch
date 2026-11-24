@@ -32,6 +32,13 @@ type ConfigJoin struct {
 	// unchanged pod update adds no observation.
 	told map[inventory.EntityID]string
 	said map[string]string
+	// model, when set, tells whether another source still describes
+	// an endpoint the join stops naming (withdrawEndpoint).
+	model inventory.Reader
+	// withdrawn are the endpoints the join stopped naming while
+	// another source described them, decided again on every pass
+	// (recheckWithdrawn).
+	withdrawn map[string]bool
 }
 
 // podConfig is how one pod reads ConfigMaps: whole, or single keys.
@@ -43,11 +50,12 @@ type podConfig struct {
 // NewConfigJoin returns an empty join.
 func NewConfigJoin() *ConfigJoin {
 	return &ConfigJoin{
-		maps:    map[inventory.EntityID][]configTarget{},
-		pods:    map[inventory.EntityID]podConfig{},
-		readers: map[inventory.EntityID]map[inventory.EntityID]bool{},
-		told:    map[inventory.EntityID]string{},
-		said:    map[string]string{},
+		maps:      map[inventory.EntityID][]configTarget{},
+		pods:      map[inventory.EntityID]podConfig{},
+		readers:   map[inventory.EntityID]map[inventory.EntityID]bool{},
+		told:      map[inventory.EntityID]string{},
+		said:      map[string]string{},
+		withdrawn: map[string]bool{},
 	}
 }
 
@@ -245,12 +253,13 @@ func (j *ConfigJoin) emit(
 			Entity: pod, Relation: inventory.Calls, Targets: targets,
 		})
 	}
-	return append(out, j.sourceObservations(touched, at)...)
+	out = append(out, j.sourceObservations(touched, at)...)
+	return append(out, j.recheckWithdrawn(at)...)
 }
 
 // sourceObservations says, for each touched endpoint, which ConfigMap
 // keys the pods read its address from. An endpoint nobody reads through
-// a ConfigMap any more gets an empty observation, which removes them.
+// a ConfigMap any more is withdrawn (withdrawEndpoint).
 func (j *ConfigJoin) sourceObservations(
 	touched map[string]bool, at time.Time,
 ) []inventory.Observation {
@@ -272,9 +281,10 @@ func (j *ConfigJoin) sourceObservations(
 		}
 		if text == "" {
 			delete(j.said, endpoint)
-		} else {
-			j.said[endpoint] = text
+			out = append(out, j.withdrawEndpoint(endpoint, at))
+			continue
 		}
+		j.said[endpoint] = text
 		out = append(out, inventory.Observation{
 			Kind: inventory.Observed, Source: ConfigSource, At: at,
 			Entity: endpointOf(endpoint), Attributes: attrs,

@@ -171,24 +171,28 @@ func quarantine(path, aside string) error {
 // It creates a missing file and the buckets of a new one. It returns an
 // *unusableError when the file should be reset.
 func openChecked(path string) (*bolt.DB, error) {
-	return openVerified(path, false, nil)
+	return openVerified(path, false, true, nil)
 }
 
 // openCheckedFree is openChecked whose backup before a migration checks
 // the room with free (the store's volume-limit-aware free space).
 func openCheckedFree(path string, free freeSpaceFunc) (*bolt.DB, error) {
-	return openVerified(path, false, free)
+	return openVerified(path, false, true, free)
 }
 
 // openForInspection opens the existing file at path read-only, for a
 // replica that does not hold the Lease yet. It checks the pages and the
 // schema version like openChecked but writes nothing: no file, no meta
-// and no buckets. absent is true when there is no file yet.
-func openForInspection(path string) (db *bolt.DB, absent bool, err error) {
+// and no buckets. absent is true when there is no file yet. A false
+// check skips the page walk, for a peek that reads a few values and
+// leaves the file to a full open later.
+func openForInspection(
+	path string, check bool,
+) (db *bolt.DB, absent bool, err error) {
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return nil, true, nil
 	}
-	db, err = openVerified(path, true, nil)
+	db, err = openVerified(path, true, check, nil)
 	return db, false, err
 }
 
@@ -214,7 +218,7 @@ func openWritable(path string, free freeSpaceFunc) (*bolt.DB, error) {
 }
 
 func openVerified(
-	path string, readOnly bool, free freeSpaceFunc,
+	path string, readOnly, check bool, free freeSpaceFunc,
 ) (db *bolt.DB, err error) {
 	db, err = bolt.Open(path, 0o600, &bolt.Options{
 		Timeout: openTimeout, ReadOnly: readOnly,
@@ -236,10 +240,9 @@ func openVerified(
 		}
 	}()
 	// Pages are checked before initialise writes to the file.
-	check := startStep("page check")
-	prefetch(path)
-	err = checkPages(db)
-	check.end()
+	if check {
+		err = timedPageCheck(db, path)
+	}
 	if err != nil {
 		_ = db.Close()
 		return nil, &unusableError{reason: ResetUnreadable, cause: err}
@@ -255,6 +258,14 @@ func openVerified(
 		return nil, err
 	}
 	return db, nil
+}
+
+// timedPageCheck reads every page of db once and logs how long it took.
+func timedPageCheck(db *bolt.DB, path string) error {
+	step := startStep("page check")
+	defer step.end()
+	prefetch(path)
+	return checkPages(db)
 }
 
 // checkPages walks every page of db. bbolt reads pages lazily and

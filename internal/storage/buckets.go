@@ -16,7 +16,11 @@ const (
 	// Changes: one log stream of full change records for workloads,
 	// config and policy, 7 days and at most DefaultChangesCap bytes.
 	Changes Bucket = "changes"
-	// Baselines: key workload or entity, rolling aggregates, no expiry.
+	// Baselines: key workload or entity, rolling aggregates. No expiry
+	// here: the pipeline's history writer deletes the baseline of a
+	// workload that is gone and got no sample for inventory.BaselineTTL
+	// (7 days), which it knows and the store does not. A write time
+	// would not do: a quiet, live workload is not rewritten for weeks.
 	Baselines Bucket = "baselines"
 	// Evidence: log per incident ID (log excerpts, termination
 	// messages), 30 days and at most DefaultEvidenceCap bytes.
@@ -24,7 +28,10 @@ const (
 	// Timeline: log per entity (health transitions, changes, events and
 	// decisions), 7 days and at most DefaultTimelineCap bytes.
 	Timeline Bucket = "timeline"
-	// Fingerprints: key object, value its last seen digest, no expiry.
+	// Fingerprints: key object, value its last seen digest. No expiry
+	// here: the pipeline saves the digests of the objects it watches as
+	// a complete snapshot (storage.Mirror), so an object that is gone
+	// is deleted by the next save, within 5 minutes.
 	Fingerprints Bucket = "fingerprints"
 	// State: small lifecycle values (cluster identity, version, session,
 	// telemetry and upgrade bookkeeping), no expiry.

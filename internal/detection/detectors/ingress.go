@@ -36,7 +36,7 @@ const DefaultClassGrace = 2 * time.Minute
 func ingressTLSSecrets(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
-	if ctx.Model == nil || !ctx.Synced(kube.KindSecret) {
+	if ctx.Model == nil {
 		return nil
 	}
 	var missing []string
@@ -48,7 +48,10 @@ func ingressTLSSecrets(
 			missing = append(missing, id.Name)
 		}
 	}
-	if len(missing) == 0 ||
+	// Secrets may be unwatched (watch.secrets off): then only this
+	// finding is unsure, never the Ingress's others.
+	if len(missing) == 0 || !ctx.SyncedFor(kube.KindSecret,
+		reasons.IngressTLSSecretMissing) ||
 		!sustained(ctx, "tls-secret", e.FirstSeen, DefaultTLSSecretGrace) {
 		return nil
 	}
@@ -74,11 +77,12 @@ func ingressClass(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	name := text(e, kube.AttrIngressClass)
-	if ctx.Model == nil || name == "" || !ctx.Synced(kube.KindIngressClass) {
+	if ctx.Model == nil || name == "" {
 		return nil
 	}
 	class := inventory.CoreID(kube.KindIngressClass, "", name)
-	if ctx.Model.Exists(class) ||
+	if ctx.Model.Exists(class) || !ctx.SyncedFor(kube.KindIngressClass,
+		reasons.IngressClassMissing) ||
 		!sustained(ctx, "ingress-class/"+name, time.Time{},
 			DefaultClassGrace) {
 		return nil

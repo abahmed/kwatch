@@ -188,10 +188,10 @@ func (e *Engine) SourcesSynced() {
 }
 
 // Run processes observations, rechecks and lifecycle deadlines until ctx
-// ends. The loop itself does no I/O: investigations and storage writes run
-// on workers Run owns, and Run waits for them, within bounded deadlines,
-// before it returns. Each iteration waits for something to do, then
-// steps: drain, evaluate, tick and announce. A fenced store ends it.
+// ends. Investigations and storage writes run on workers Run owns (only
+// an announcement's record is written first, handoff_save.go), and Run
+// waits for them, within bounded deadlines, before it returns. Each turn
+// drains, evaluates, ticks and announces; a fenced store ends it.
 func (e *Engine) Run(ctx context.Context) error {
 	e.started = e.deps.Clock.Now()
 	e.pauseLearningForGap()

@@ -9,9 +9,10 @@ metadata:
   labels:
     {{- include "kwatch.labels" . | nindent 4 }}
   annotations:
-    # Read-only dashboard: web UI and API. No write endpoints. Sign-in
-    # with the password, or the bearer token for API clients. To expose
-    # it, point your own Ingress, route or Service at this one.
+    # Read-only dashboard: web UI and API. It never writes to the cluster;
+    # browser notification subscriptions are stored in kwatch's own state.
+    # Sign-in with the password, or the bearer token for API clients. To
+    # expose it, point your own Ingress, route or Service at this one.
 spec:
   type: ClusterIP
   selector:

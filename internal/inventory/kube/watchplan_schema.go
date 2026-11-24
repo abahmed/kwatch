@@ -79,6 +79,29 @@ func setStatusAttributes(
 	if finished, ok := finishedAt(u); ok {
 		setDefault(attrs, AttrFinished, inventory.Time(finished))
 	}
+	setRunMessage(attrs, u)
+}
+
+// setRunMessage keeps the message a run-like object states with its
+// phase (an Argo Workflow's status.message, "child 'x' failed"): it is
+// why the run ended in Error or Failed. Only an object whose phase is
+// a failure carries it, so a progress note never reads as a failure.
+func setRunMessage(
+	attrs map[string]inventory.Value, u *unstructured.Unstructured,
+) {
+	phase, _, _ := unstructured.NestedString(u.Object, "status", "phase")
+	if !runFailedPhases[phase] {
+		return
+	}
+	if message, ok, _ := unstructured.NestedString(
+		u.Object, "status", "message"); ok && message != "" {
+		setDefault(attrs, AttrMessage, inventory.Text(evidenceText(message)))
+	}
+}
+
+// runFailedPhases are the phases in which a run-like object failed.
+var runFailedPhases = map[string]bool{
+	"Failed": true, "Error": true,
 }
 
 // runFinishFields are where run-like custom kinds record that a run

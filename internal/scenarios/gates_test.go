@@ -43,6 +43,8 @@ type card struct {
 	staging stagingResult
 	storms  []stormResult
 	multi   multiStormResult
+	// scheduled is the scheduled-operations replay of the noise budget.
+	scheduled scheduledOpsResult
 }
 
 // TestScorecardGates replays every labelled scenario, the storms and the
@@ -108,6 +110,10 @@ func measure(t *testing.T) card {
 		t.Run("multi", func(t *testing.T) {
 			t.Parallel()
 			c.multi = runMultiCauseStorm(t)
+		})
+		t.Run("scheduled", func(t *testing.T) {
+			t.Parallel()
+			c.scheduled = runScheduledOps(t)
 		})
 	})
 	c.verdicts = labelled.verdicts
@@ -185,9 +191,13 @@ func buildGates(c card) []scorecard.Gate {
 		scorecard.AtMost("Messages per incident (p95)",
 			float64(c.noise.PerIncidentP95),
 			scorecard.GoalMessagesPerIncidentP95, ""),
-		scorecard.AtMost("Messages per incident (most)",
+		scorecard.WithHeadroom(scorecard.AtMost(
+			"Messages per incident (most)",
 			float64(c.noise.MaxPerIncident),
 			scorecard.GoalMessagesPerIncident, ""),
+			float64(c.noise.MaxPerIncident),
+			scorecard.GoalMessagesPerIncident),
+		scheduledOpsGate(c.scheduled),
 	)
 	gates = append(gates, firstMessageGates(c.firstMessages)...)
 	gates = append(gates,

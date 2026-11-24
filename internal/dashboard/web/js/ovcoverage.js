@@ -71,13 +71,14 @@
     return s;
   }
 
-  /* kinds: "233 watched · all read · 2 more can't be read": the kinds
-     it can't read are not among those watched. */
+  /* kinds: "233 watched · all read · 2 blocked: can't be read", the
+     words of the card's line above: the kinds it can't read are not
+     among those watched. */
   function kinds(k, unread, perm) {
     var s = section("Kinds of objects");
     s.appendChild(KW.el("p", "", num(k.watched) + " watched · " +
       (k.synced >= k.watched ? "all read" : num(k.synced) + " read so far") +
-      (unread ? " · " + num(unread) + " more can't be read" + (perm ? " (permission)" : "") : "") + "."));
+      (unread ? " · " + num(unread) + " blocked: can't be read" + (perm ? " (permission)" : "") : "") + "."));
     return s;
   }
 
@@ -86,7 +87,10 @@
     var k = c.kinds || {};
     var line = c.syncedAt ? "Finished reading the cluster " : "Still reading the cluster for the first time.";
     var head = KW.el("p", "cov-lead", line);
-    if (c.syncedAt) head.appendChild(KW.timeEl(c.syncedAt));
+    if (c.syncedAt) {
+      head.appendChild(KW.timeEl(c.syncedAt));
+      head.appendChild(document.createTextNode("."));
+    }
     if (c.discoveryComplete === false) {
       head.appendChild(document.createTextNode(" The last look for new kinds was incomplete."));
     }

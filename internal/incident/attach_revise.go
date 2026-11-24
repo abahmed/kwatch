@@ -190,7 +190,7 @@ func (m *Manager) reroot(
 		p.Cause, p.CauseUnclear = target.Cause, target.CauseUnclear
 		p.Unverified = rootcause.MergeUnverified(
 			p.Unverified, target.Unverified)
-		delete(m.incidents, target.ID)
+		m.drop(target)
 	}
 	m.unindex(p)
 	m.leaveRoot(now, p)

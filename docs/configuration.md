@@ -598,6 +598,8 @@ listener, never on the health port. Everything about reaching it from outside
 | `dashboard.port` | `8061` | The dashboard port |
 | `dashboard.trustedProxies` | `[]` | CIDRs or addresses of the proxies that end TLS in front of kwatch. `X-Forwarded-For` and `X-Forwarded-Proto` count only from them; any entry (or own TLS) makes the dashboard https only |
 | `dashboard.tlsCertFile`, `dashboard.tlsKeyFile` | empty | Make kwatch serve TLS on the dashboard port itself. Set both or neither |
+| `dashboard.sessionLifetime` | `12h` | How long a sign-in lasts, from sign-in, as a duration between `15m` and `168h` (7 days). A value outside that range, or not a duration, is a configuration error |
+| `dashboard.signInHelp` | empty | Plain text the sign-in page shows above the link "How to get the password", for example where your team keeps the password. It is shown as text (escaped, never HTML); line breaks are kept. At most 500 characters, no control characters |
 | `investigation.logs` | `true` | Reads container logs as evidence (redacted, bounded). `false` reads no log at all, and the dashboard shows the log section as turned off |
 | `investigation.sampleLogs` | `true` | Samples a bounded slice of the log (the last 2 minutes, one pod per workload, at most 6 reads per 30 seconds) of Running and Ready pods and reports a burst of errors new against the workload's own earlier windows (`LogErrorBurst`: at least 20 error lines in the window, at least 5 times the earlier rate per window, with at least 10 minutes of earlier windows). The same samples report, as a low finding listed in the daily summary (`LogServiceMissing`), a workload whose log keeps failing to resolve a name shaped like a Service of the cluster (`name`, `name.namespace`, `name.namespace.svc…`) when no such Service exists in a namespace that does: the name must show in at least 3 sampled windows spread over at least 20 minutes, it clears when the Service appears or the lookups stop for 30 minutes, and a similar existing Service name is given as a hint. It never pages and reads no more logs. Reads nothing when `investigation.logs` is `false`. A refused log read pauses it quietly for 5 minutes |
 
@@ -635,6 +637,7 @@ letter case; an empty value counts as unset, and any other text fails startup
 | `KWATCH_DASHBOARD_TRUSTED_PROXIES` | Comma-separated list that overrides `dashboard.trustedProxies` in both directions; the chart always sets it |
 | `KWATCH_DASHBOARD_PORT` | Overrides `dashboard.port`; a value that is not a port is warned about and the file's setting stays |
 | `KWATCH_DASHBOARD_TLS_CERT`, `KWATCH_DASHBOARD_TLS_KEY` | Override `dashboard.tlsCertFile` and `dashboard.tlsKeyFile` |
+| `KWATCH_DASHBOARD_SESSION_LIFETIME`, `KWATCH_DASHBOARD_SIGNIN_HELP` | Override `dashboard.sessionLifetime` and `dashboard.signInHelp` when set; the chart sets them from `dashboard.sessionLifetime` and `dashboard.signInHelp` |
 | `KWATCH_DASHBOARD_TOKEN` | The dashboard bearer token (API requests); the chart fills it from a Secret |
 | `KWATCH_DASHBOARD_PASSWORD` | The dashboard sign-in password; the chart fills it from a Secret |
 | `KWATCH_DEPLOYMENT_NAME` | The name of kwatch's own Deployment (default `kwatch`); the dashboard Service is `<name>-dashboard`, which is how kwatch finds the Ingress or HTTPRoute that exposes it. The chart sets it |

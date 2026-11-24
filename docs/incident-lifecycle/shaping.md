@@ -69,6 +69,48 @@ another that closed), and then nobody would be told.
   node are expected, not failures (`detectors/boot.go`). A digest-tier
   incident is promoted (`escalate` in `worsen.go`) only when it has lasted
   `BootWindow` and a crash keeps going or the workload is down.
+- **Shared dependency removed**
+  (`rootcause/explain/virtual_removed_service.go`). A job that deletes
+  a shared cache or database (its Service and pods) breaks every
+  workload that uses it within minutes, and each says so in its own
+  client's words. When at least `RemovedDependencyMinWorkloads` (3)
+  workloads begin to fail within `RemovedDependencyWindow` (5m) of the
+  deletion, on either side, of a Service their own errors or log lines
+  name (`cache.data:6379`, `cache.data.svc.cluster.local`), the
+  `dependency-removed` row roots them all at that Service: one incident,
+  one root message ("Service cache in data was removed at 10:15 UTC; 27
+  workloads that use it are not ready"), at most one page, one recovery.
+  Members join the open incident as they fail. A workload that also fails
+  for a reason of its own keeps its own incident, and a Service that only
+  a configuration names never outranks the one the errors name. Fewer
+  users, or a deletion long before they failed, fall back to the missing
+  Service rows.
+- **Leftovers of a removed controller** (`incident/leftover.go`,
+  `incident/leftover_link.go`). What a removed or stopped controller left
+  behind is one Low incident rooted at that controller, not one per
+  object. A detector marks what it sees (a webhook calling an absent
+  backend, the expired certificate named after it); `linkLeftovers` then
+  links the low findings of other detectors that name the same
+  controller: an autoscaler whose target is gone, a budget that selects
+  nothing by the gone workload's labels, a Helm release stuck
+  uninstalling, an expired certificate named after it (same anchor or
+  `kube.NamedAfter`, in the anchor's namespace), and objects stuck on a
+  finalizer of the API domain its webhooks serve. The root is the best
+  anchor: the workload, else its Service, else its release. Workloads of
+  one namespace parked at zero replicas while routes still reach them are
+  one Low incident for the namespace that lists them. A live failure is
+  never a leftover. An old group stays Low when a younger object stuck
+  on the same controller joins it, after a restart too: its age is that
+  of its oldest leftover (`chronicAge`), and a leftover that flips
+  between Info and Warning is not a rise (`rose`).
+- **Young-node network setup** (`detectors/event_young_node.go`,
+  `incident/young_node_page.go`). Pods on a node younger than
+  `kube.BootWindow` that cannot set up their sandbox are held and dropped
+  if they start; the node's own sandbox finding is held the same way.
+  What still fails when the node is no longer young is one incident for
+  the node (its network plugin is not ready), not one per workload. A
+  pod network setup failure on a node younger than `kube.YoungNodeWindow`
+  never pages (level `young-node-network`).
 - **Wake-up and scale-down.** A cluster put to sleep at night wakes up all
   at once: five workloads (`kube.WakeMinWorkloads`) set from 0 replicas to
   some, or three nodes (`WakeMinNodes`) joining, each start less than
@@ -84,7 +126,40 @@ another that closed), and then nobody would be told.
   all recovered"); one without is not mentioned. The mirror image, five
   workloads set to 0 within `ScaleDownSpan` (15m), is a planned scale-down:
   those workloads raise no "scaled to 0 but still routed" finding, and a
-  cordoned node that leaves is a drain (`NodeDraining`), not a loss.
+  cordoned node that leaves is a drain (`NodeDraining`), not a loss. Once
+  the scale-up that followed brought at least five of its workloads back
+  and `kube.LeftBehindGrace` (15m) has passed since that wake-up was
+  over, a routed workload it left at zero is told as usual
+  (`kube.LeftBehind`).
+- **Scheduled operations.** kwatch keeps a short history of the mass
+  scale-downs (five workloads set to 0 and/or three nodes that stopped
+  reporting or were removed, each within `kube.ScaleDownSpan` of the one
+  before) and mass scale-ups (wake-ups) it saw: at most
+  `plannedMaxOps` (32) of them, for at most five days, saved with the
+  digest state (`DigestState.Planned`) so a restart keeps it
+  (`incident/planned_ops.go`). One that begins within `PlannedTolerance`
+  (30m) of the time of day of the same kind of operation on at least
+  `PlannedMinDays` (2) of the previous `PlannedDays` (3) days is
+  scheduled: a cluster put to sleep every evening and woken every
+  morning. Nothing is predicted: only operations seen are compared, so
+  the first days (and a schedule that moves by more than the tolerance,
+  such as a local-time schedule on the day clocks change) are treated as
+  before. While a scheduled scale-down's effect lasts, until
+  `PlannedGrace` (15m) after the scale-up that followed it was over, or
+  24h when none follows, an incident whose every failure it explains
+  settles without a message (`incident/planned_hold.go`): a node it
+  switched off or removed, a workload it scaled to zero or what depends
+  on one (the incident's root or cause), or a scaling side effect
+  (`scaleSideModes`) on one of its workloads or on pods of its nodes.
+  One that clears meanwhile closes silently; what still fails when the
+  effect ends did not come back and is told as usual. A crash or any
+  other failure the operation does not explain is told at once. The
+  morning's wake-up hold is unchanged. Each scheduled operation costs one
+  low-priority digest line, instead of the wake-up line for a scale-up:
+  "Scheduled scale-down at 18:02 UTC (seen at this time on 3 of the last
+  3 days): 27 workloads, 4 nodes." The dashboard shows a held incident
+  as held while the cluster scales (`Timers.ScalingHeld`). Community
+  keeps the history only while kwatch runs.
 - **Restart.** Incidents are saved and restored. Until its model is
   rebuilt (the sync, a 2m settle, its kinds synced; at most `restoreGrace`,
   10m) a restored incident without members does not recover, because
@@ -111,8 +186,12 @@ another that closed), and then nobody would be told.
   threaded under the listing, and never paging by itself; once sent, the
   startup marker records it with its told fingerprint
   (`StartupState.Spoke`, `NoteSpoke`) until the incident is over, so a
-  later restart does not introduce it again. The audit entry names the
-  news first, then the counted ones. On a
+  later restart does not introduce it again. The incident record keeps
+  the decided introduction too (`Marks.Introduced`), so an incident is
+  introduced at most once in its whole life, also after it resolved and
+  reopened under the same ID. A told, unchanged incident the restart only
+  counted was not named by it and is owed nothing (`restoredNews`). The
+  audit entry names the news first, then the counted ones. On a
   cold start the first `StartupWindow` (2m) collects existing incidents into
   one startup summary, and an active page still reaches the pagers at once
   (Pro; Community announces each still-failing one after the startup
@@ -146,8 +225,11 @@ another that closed), and then nobody would be told.
   cause, the evidence and the confirmation the checks give
   (`incident.ReasonIntroduced`, `pipeline/introduce.go`). It goes to chat
   only, never to the pagers (so it opens no alert a later resolve would
-  close), never twice, and not for a member that already spoke on its
-  own. A member a namespace outage still holds waits for that listing to
+  close), never twice (`Marks.Introduced`, saved with the record), not
+  for a member that already spoke on its own, and never with the
+  fingerprint the incident's last own message already told
+  (`Marks.SaidDigest`, `Manager.NoteSaid`): that would be the same
+  message again. A member a namespace outage still holds waits for that listing to
   go out, within the same bound. Without it, a failure that just goes on (a crash
   loop) never changes enough to send an update, and its cause would stay
   untold. A member without an investigation, or whose investigation is not

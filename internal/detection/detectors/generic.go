@@ -98,7 +98,7 @@ func badConditions(
 			}
 		}
 		key := "cond/" + rule.Type + "/" + rule.Bad
-		if status != rule.Bad ||
+		if status != rule.Bad || !rule.Applies(e.ID.Group) ||
 			!sustained(ctx, key, since, conditionGrace(rule)) {
 			continue
 		}
@@ -246,21 +246,33 @@ func badPhase(
 ) (detection.Finding, bool) {
 	phase := text(e, kube.AttrPhase)
 	since := valueSince(e, kube.AttrPhase)
+	finished := timestamp(e, kube.AttrFinished)
+	if failedPhases[phase] && !finished.IsZero() {
+		// The run ended then, by the object's own record; kwatch's
+		// first sight of the phase may be months later.
+		since = finished
+	}
 	evidence := []detection.Evidence{{Label: "phase", Value: phase}}
-	if message := text(e, kube.AttrMessage); message != "" {
+	message := text(e, kube.AttrMessage)
+	if message != "" {
 		evidence = append(evidence,
 			detection.Evidence{Label: "message", Value: message})
 	}
 	switch {
 	case failedPhases[phase]:
 		severity := detection.Warning
-		if finished := timestamp(e, kube.AttrFinished); !finished.IsZero() {
+		if !finished.IsZero() {
 			severity = failedJobSeverity(ctx, finished)
+		}
+		summary := "Reports phase " + phase
+		if message != "" {
+			// What the object states is why it failed.
+			summary += ": " + message
 		}
 		return detection.Finding{
 			Reason: reasons.PhaseFailed, Severity: severity,
 			Health: detection.Failing, Since: since,
-			Summary: "Reports phase " + phase, Evidence: evidence,
+			Summary: summary, Evidence: evidence,
 		}, true
 	case phase == "Pending" &&
 		sustained(ctx, "phase-pending", since, DefaultPendingGrace):

@@ -225,7 +225,7 @@
   }
 
   function command(t, value) {
-    return "kubectl " + (t.ns ? "-n " + t.ns + " " : "") + "annotate " + t.obj + " " + ACK + value;
+    return "kubectl annotate " + t.obj + (t.ns ? " -n " + t.ns : "") + " " + ACK + value;
   }
 
   /* KW.ackCommand: the kubectl command that acknowledges the issue,
@@ -260,14 +260,9 @@
         KW.el("p", "ev-cap", "kwatch starts reminding again once it is gone.")]));
       return;
     }
-    // The one place the page says nobody has acknowledged it.
-    p.appendChild(KW.el("b", "", "Not acknowledged"));
-    p.appendChild(document.createTextNode(" · nobody has marked it as seen yet."));
-    box.appendChild(how("How to acknowledge it", [
-      KW.el("p", "", "Run this where you use kubectl. kwatch posts one update and stops reminding while the annotation is there:"),
-      KW.cmd(command(t, '="on it"')),
-      KW.el("p", "ev-cap", "To take it back: " + command(t, "-")),
-      KW.el("p", "ev-cap", "This page only reads your cluster, so it can't do this for you.")]));
+    // Not acknowledged: Who was alerted? says so once, with the
+    // command (incsum.js ackLine); this box does not repeat it.
+    box.hidden = true;
   }
 
   /* KW.alertBox fills "What's going on with this alert"; it hides when

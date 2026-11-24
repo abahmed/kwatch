@@ -34,8 +34,6 @@ mark.hl { background: var(--surface); color: var(--text); text-decoration: under
   .drw-bar .btn { min-width: var(--hit); justify-content: center; }
   .drw-bar { flex-wrap: nowrap; }
 }
-@media (prefers-color-scheme: dark) {
-}
 /* The drawer is narrower than the page: a smaller title. */
 .drw-body .d-sum h1 { font-size: 1.75rem; line-height: 1.2; }
 .drw-full .drw-i { display: none; transform: rotate(45deg); }

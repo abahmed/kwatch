@@ -19,9 +19,11 @@ func (e *Engine) observeResult(
 ) []detection.Transition {
 	current := result.Findings
 	// An evaluation that could not run fully proves nothing cleared: a
-	// detector panicked, or one needed a kind not synced yet. A gone
-	// entity's findings still clear.
-	unsynced := len(result.UnsyncedBy) > 0 && e.deps.Model.Exists(id)
+	// detector panicked, or one needed a kind not synced yet (for all its
+	// findings or for some reasons). A gone entity's findings still
+	// clear.
+	unsynced := (len(result.UnsyncedBy) > 0 ||
+		len(result.UnsureReasons) > 0) && e.deps.Model.Exists(id)
 	if len(result.Panicked) > 0 || unsynced {
 		current = result.Keeping(e.tracker.Active(id))
 	}

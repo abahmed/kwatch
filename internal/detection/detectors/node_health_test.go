@@ -112,3 +112,26 @@ func TestNodeSandboxFailuresBelowThreshold(t *testing.T) {
 	assert.Equal(t, sandboxRecheck, evaluation.RecheckAfter,
 		"pending pods keep the node under watch")
 }
+
+// The node's finding begins with the first failure of its pods, not
+// with the latest retry: the pods were never failing before it.
+func TestNodeSandboxFindingBeginsAtTheFirstFailure(t *testing.T) {
+	model := newTestModel()
+	sandboxPods(model, cniNotReadyMessage, cniNotReadyMessage,
+		cniNotReadyMessage)
+	first := podNodeNow.Add(-time.Minute)
+	for i := range 3 {
+		id := inventory.EntityID{Kind: kube.KindPod, Namespace: "default",
+			Name: fmt.Sprintf("app-%d", i)}
+		noteEntity(model, id, "FailedCreatePodSandBox",
+			cniNotReadyMessage, 3, podNodeNow.Add(-10*time.Second))
+	}
+	var node []detection.Finding
+	for _, f := range detectNode(model) {
+		if f.Reason == reasons.NodeCNINotReady {
+			node = append(node, f)
+		}
+	}
+	require.Len(t, node, 1)
+	assert.Equal(t, first, node[0].Since)
+}

@@ -263,11 +263,13 @@ func backendFinding(
 		"has no ready pods")), true
 }
 
-// leftover marks the finding of a dead backend that blocks nothing a
+// leftover dates the finding of a dead backend from the cluster's
+// record (backendDownSince) and marks it, when it blocks nothing, a
 // leftover of its namespace's absent backend; see leftoverOf.
 func (b backend) leftover(
 	ctx detection.Context, f detection.Finding,
 ) detection.Finding {
+	f.Since = backendDownSince(ctx, b.service)
 	if f.Severity > detection.Info {
 		return f
 	}

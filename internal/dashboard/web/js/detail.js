@@ -243,13 +243,40 @@
     lead.hidden = !cut;
     if (cut) KW.hideMarks(lead, full);
     var said = !core(w, inc) || core(w, inc) === short || (cut && core(w, inc) === core(full, inc));
+    // The whole title under the heading only when it says more than
+    // the plain sentence of What's wrong? does: never the same thing
+    // three times.
+    if (cut && !said && !addsWords(core(full, inc), core(w, inc) + " " + short)) lead.hidden = true;
     var dd = KW.summaryRow(root, "what", T.ask.what, true);
     KW.usersLine(dd, inc);
     if (!said) KW.hideMarks(dd.appendChild(KW.el("p", "ds-what")), w);
-    else if (!(inc.leftoverObjects > 0)) dd.appendChild(KW.el("p", "ds-sub", T.ask.asTitle));
+    else if (!(inc.leftoverObjects > 0)) k8sSays(dd, inc);
     KW.leftoverLine(dd, root, inc);
     KW.groupedLine(dd, inc);
     KW.replicaLines(dd, inc);
+    // Nothing to add to the title: the question is left out.
+    dd.parentNode.hidden = !dd.firstChild;
+  }
+
+  /* addsWords: whether text has at least three words that said does
+     not (both already bare, lower-case words). */
+  function addsWords(text, said) {
+    var have = {};
+    said.split(" ").forEach(function (x) { have[x] = true; });
+    return text.split(" ").filter(function (x) { return x && !have[x]; }).length >= 3;
+  }
+
+  /* k8sSays: when kwatch has no sentence beyond the title, what
+     Kubernetes said last about it (the latest warning event); nothing
+     when there is none. */
+  function k8sSays(dd, inc) {
+    var last = (inc.warnings || []).filter(function (x) { return x.reason || x.message; })
+      .sort(function (a, b) { return Date.parse(b.lastSeen) - Date.parse(a.lastSeen); })[0];
+    if (!last) return;
+    var p = dd.appendChild(KW.el("p", "ds-what"));
+    p.appendChild(document.createTextNode("Kubernetes says: "));
+    if (last.reason) p.appendChild(KW.el("b", "", last.reason));
+    if (last.message) KW.hideMarks(p.appendChild(KW.el("span")), (last.reason ? " — " : "") + last.message);
   }
 
   /* KW.summaryTop draws the summary card. */

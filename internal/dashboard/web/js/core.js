@@ -115,9 +115,12 @@
     }
     if (s < 3600) return Math.floor(s / 60) + " min ago";
     if (KW.isToday(d)) return Math.floor(s / 3600) + " h ago";
-    if (KW.isYesterday(d)) return "yesterday at " + KW.hhmm(d);
-    return KW.dayMonth(d) + ", " + KW.hhmm(d);
+    if (KW.isYesterday(d)) return "yesterday at " + KW.hhmm(d) + zone();
+    return KW.dayMonth(d) + ", " + KW.hhmm(d) + zone();
   };
+  /* zone: " UTC" while times show in UTC, so a short time never reads
+     as local; nothing in local time. */
+  function zone() { return KW.utc ? " UTC" : ""; }
 
   /* full: the exact time in both zones, each with its date (they can
      fall on different days), the zone shown on the page first. */
@@ -172,12 +175,13 @@
   };
 
   /* when: a clock time that says which day when it isn't today:
-     "14:02", "yesterday 14:02", "12 Oct, 14:02". */
+     "14:02", "yesterday 14:02", "12 Oct, 14:02", and "14:02 UTC" while
+     times show in UTC. */
   KW.when = function (iso) {
     var d = new Date(iso);
-    if (KW.isToday(d)) return KW.hhmm(d);
-    if (KW.isYesterday(d)) return "yesterday " + KW.hhmm(d);
-    return KW.stamp(iso);
+    if (KW.isToday(d)) return KW.hhmm(d) + zone();
+    if (KW.isYesterday(d)) return "yesterday " + KW.hhmm(d) + zone();
+    return KW.stamp(iso) + zone();
   };
 
   /* lasted: "12 min", "3 h 10 min", "2 days". */
@@ -308,7 +312,9 @@
     return words + " " + (ns ? ns + "/" : "") + name;
   };
 
-  KW.shortTitle = function (title, item) {
+  /* whole: never cut at SHORT characters; a list that shows two lines
+     (CSS .clamp2, -webkit-line-clamp) cuts it there instead. */
+  KW.shortTitle = function (title, item, whole) {
     var s = String(title || "");
     var ns = item && item.namespace;
     if (ns) {
@@ -324,7 +330,7 @@
     });
     if (at > 0) s = s.slice(0, at);
     s = s.replace(/[\s.,;:]+$/, "");
-    if (s.length > SHORT) {
+    if (s.length > SHORT && !whole) {
       var cut = s.lastIndexOf(" ", SHORT - 1);
       s = s.slice(0, cut > 24 ? cut : SHORT - 1) + "…";
     }

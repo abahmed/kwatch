@@ -47,12 +47,18 @@ func TestStepsDescribePodForUnknownWaitingReasons(t *testing.T) {
 	}
 }
 
+// No step reads a Secret: not its values, not its keys. The step reads
+// the pods' specs for where they name it instead.
 func TestStepsNeverPrintSecretValues(t *testing.T) {
 	got := stepsFor(inventory.CoreID(kube.KindSecret, "ns", "db"))
-	if strings.Contains(got, "-o yaml") || strings.Contains(got, "-o json ") {
-		t.Fatalf("secret values exposed: %q", got)
+	for _, read := range []string{"secret ", "secrets ", "secret/"} {
+		if strings.Contains(got, "get "+read) ||
+			strings.Contains(got, "describe "+read) {
+			t.Fatalf("a step reads the Secret: %q", got)
+		}
 	}
-	want := "kubectl describe secret db -n ns"
+	want := "kubectl get pods -o yaml -n ns | " +
+		"grep -n -B2 -E '(name|secretName): db$'"
 	if got != want {
 		t.Errorf("steps = %q want %q", got, want)
 	}

@@ -76,7 +76,7 @@ func TestBrowserIssueRound(t *testing.T) {
 		}
 		for _, want := range []string{"What kwatch found",
 			"(from ConfigMap api-config, DB_HOST)",
-			"9 of 10 failing pods read it", "Chain of events",
+			"9 of 10 failing pods use this address", "Chain of events",
 			"started failing 4 s apart"} {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s: missing %q in:\n%s", name, want, text)

@@ -79,7 +79,7 @@ func TestBrowserIssuesKeepNamespaceAtMidWidth(t *testing.T) {
 }
 
 // Activity's time column keeps a stamp on one line, even for an older
-// day ("1 Oct, 15:00").
+// day ("1 Oct, 15:00"), with how long ago under it.
 func TestBrowserActivityTimeStaysOnOneLine(t *testing.T) {
 	var evs []any
 	for i := 0; i < 3; i++ {
@@ -94,11 +94,14 @@ func TestBrowserActivityTimeStaysOnOneLine(t *testing.T) {
 	for _, w := range []int64{1280, 390} {
 		text, done := polishPage(t, srv.URL, "/activity?since=24h",
 			".act-at", w)
-		got := text(`(() => { const a = document.querySelector(".act-at");
+		got := text(`(() => {
+		  const a = document.querySelector(".act-at time");
+		  const ago = document.querySelector(".act-ago");
 		  return Math.round(a.getBoundingClientRect().height /
-		    parseFloat(getComputedStyle(a).lineHeight)) + "|" + a.textContent;
+		    parseFloat(getComputedStyle(a).lineHeight)) + "|" +
+		    /^\d+ days ago$/.test(ago.textContent) + "|" + a.textContent;
 		})()`)
-		if got[:2] != "1|" {
+		if got[:7] != "1|true|" {
 			t.Errorf("%dpx: time wraps: %q", w, got)
 		}
 		done()

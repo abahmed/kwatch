@@ -6,6 +6,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
@@ -44,10 +45,12 @@ func archSteps(
 			Command: "kubectl get nodes -L " + archLabel,
 		})
 		good := healthyArch(evidence(m, detection.EvidenceArchHealthy))
-		if pin, ok := archPin(p.Root, good); ok {
+		app := workloadApp(p)
+		if pin, ok := archPin(p.Root, good, app); ok {
 			steps = append(steps, pin)
 		}
-		return append(steps, multiArchStep(image, arch, good))
+		return append(steps, multiArchSteps(p.Root, m.Entity, image,
+			arch, good, app)...)
 	}
 	return nil
 }
@@ -65,12 +68,24 @@ func healthyArch(healthy string) string {
 }
 
 // archPin keeps a workload's pods on nodes of the CPU arch, which its
-// replicas there prove the image runs on.
+// replicas there prove the image runs on. A workload a GitOps controller
+// or Helm deploys (app, see managedWhere) gets its nodeSelector changed
+// there, as a patch in the cluster is undone by the next sync or
+// upgrade; any other is patched with kubectl.
 func archPin(
-	workload inventory.EntityID, arch string,
+	workload inventory.EntityID, arch, app string,
 ) (notification.Step, bool) {
 	if arch == "" || !incident.IsWorkload(workload.Kind) {
 		return notification.Step{}, false
+	}
+	if where, managed := managedWhere(app); managed {
+		return notification.Step{
+			Text: "Run it only on " + arch + " nodes, where its " +
+				"replicas work, until the image is built for every " +
+				"CPU: set nodeSelector " + archLabel + "=" + arch +
+				" in " + where + ": a change made in the cluster is " +
+				"undone by the next sync or upgrade",
+		}, true
 	}
 	patch := `{"spec":{"template":{"spec":{"nodeSelector":{"` +
 		archLabel + `":"` + arch + `"}}}}}`
@@ -85,10 +100,23 @@ func archPin(
 	}, true
 }
 
-// multiArchStep rebuilds the image for the failing CPU as well as the
-// one it works on, from its build directory. When that one is not
-// known it is the other common CPU: amd64, or arm64 for an amd64 node.
-func multiArchStep(image, arch, good string) notification.Step {
+// multiArchSteps rebuild the image for the failing CPU as well as the
+// one it works on, from its build directory, under a new tag: the tag
+// the workload runs now is never overwritten, so every node that pulled
+// it keeps what it has and the change can be undone by pointing back.
+// When the CPU it works on is not known it is the other common CPU:
+// amd64, or arm64 for an amd64 node. A workload whose container is known
+// is then pointed at the new tag: in Git or the Helm values when a
+// GitOps controller or Helm deploys it (app, see managedWhere), with
+// kubectl otherwise. Without the image there is no tag to derive, and
+// no step.
+func multiArchSteps(
+	workload, container inventory.EntityID, image, arch, good, app string,
+) []notification.Step {
+	tag, ok := multiArchTag(image)
+	if !ok {
+		return nil
+	}
 	if good == "" || good == arch {
 		good = "amd64"
 		if arch == good {
@@ -96,16 +124,66 @@ func multiArchStep(image, arch, good string) notification.Step {
 		}
 	}
 	platforms := "linux/" + good + ",linux/" + arch
-	tag := quote(image)
-	if image == "" {
-		tag = "<image>"
-	}
-	return notification.Step{
+	steps := []notification.Step{{
 		Text: "Build and push the image for " + good + " and " + arch +
-			", from its build directory (replaces the image in the " +
-			"registry)",
+			" under the new tag " + tag + ", from its build directory " +
+			"(adds a tag to the registry; the current one is left as it " +
+			"is)",
 		Command: "docker buildx build --platform " + platforms +
-			" -t " + tag + " --push .",
+			" -t " + quote(tag) + " --push .",
 		Mutating: true,
+	}}
+	name, found := containerName(container)
+	if !incident.IsWorkload(workload.Kind) || !found {
+		return steps
 	}
+	if where, managed := managedWhere(app); managed {
+		return append(steps, notification.Step{
+			Text: "Then change the image of container " + name + " to " +
+				tag + " in " + where + ": a change made in the cluster " +
+				"is undone by the next sync or upgrade"})
+	}
+	return append(steps, notification.Step{
+		Text: "Then run the new tag (changes the cluster)",
+		Command: "kubectl set image " + string(workload.Kind) + "/" +
+			quote(workload.Name) + " " + quote(name+"="+tag) +
+			namespaceFlag(workload.Namespace),
+		Mutating: true,
+	})
+}
+
+// workloadApp is the GitOps application or Helm release that deploys
+// the incident's root, as the blamed change of it recorded; "" when no
+// change of the root is blamed.
+func workloadApp(p incident.Incident) string {
+	if p.Cause == nil || p.Cause.Change == nil ||
+		p.Cause.Change.Entity != p.Root {
+		return ""
+	}
+	return p.Cause.Change.App
+}
+
+// multiArchSuffix marks the tag a multi-CPU rebuild is pushed under.
+const multiArchSuffix = "-multiarch"
+
+// multiArchTag is the new tag for a rebuild of image: its tag with
+// multiArchSuffix, "multiarch" for an untagged image. A digest pins the
+// old content and is dropped. false for no image.
+func multiArchTag(image string) (string, bool) {
+	ref, _, _ := strings.Cut(image, "@")
+	if ref == "" {
+		return "", false
+	}
+	slash := strings.LastIndex(ref, "/")
+	if colon := strings.LastIndex(ref, ":"); colon > slash {
+		return ref + multiArchSuffix, true
+	}
+	return ref + ":" + strings.TrimPrefix(multiArchSuffix, "-"), true
+}
+
+// containerName is the container part of a container entity's name
+// ("api-1-x/app" is app).
+func containerName(id inventory.EntityID) (string, bool) {
+	_, name, ok := strings.Cut(id.Name, "/")
+	return name, ok && name != "" && id.Kind == kube.KindContainer
 }

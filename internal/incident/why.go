@@ -50,8 +50,8 @@ func (m *Manager) noteTimers(
 		if p.Tier == Page && !burst && !m.foundAtStart(p) {
 			t.Settle = m.cfg.PageSettle
 		}
-		t.Settle = m.scaleSettle(p, t.Settle)
-		t.ScalingHeld = m.scaleHeld(p, now)
+		t.Settle = m.plannedSettle(p, m.scaleSettle(p, t.Settle))
+		t.ScalingHeld = m.scaleHeld(p, now) || m.plannedHeld(p, now)
 	case Flapping:
 		t.Hold = m.cfg.MaxHold
 	default:

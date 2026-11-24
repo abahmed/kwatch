@@ -71,8 +71,7 @@ var schedulerNamesRowCases = []rowCase{
 	{row: "scheduler-names-cordoned-node", want: "node//n3",
 		build: func(f *fixture) inventory.EntityID {
 			node := f.nodes("zone-a", "n3")[0]
-			f.attrs(node, map[string]inventory.Value{
-				kube.AttrUnschedulable: inventory.Bool(true)})
+			cordonWithRoom(f, node, 2)
 			pod := f.workload("shop", "web", 1)[0]
 			pendingWith(f, pod, "0/3 nodes are available: 1 node(s) were "+
 				"unschedulable, 2 Insufficient cpu.")

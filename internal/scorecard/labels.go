@@ -49,10 +49,23 @@ type Case struct {
 	// separate the root from a rival, which is the only case a hedge
 	// is tolerated for.
 	Ambiguous bool `json:"ambiguous,omitempty"`
+	// Unconfirmed is true when the blamed cause is not
+	// rootcause.Confirmed: the message says kwatch could not confirm a
+	// cause and names the candidate only as a possibility.
+	Unconfirmed bool `json:"unconfirmed,omitempty"`
 }
 
-// Stated reports whether the engine stated a cause for the case.
-func (c Case) Stated() bool { return c.Confidence > 0 }
+// Stated reports whether the engine stated a cause for the case: one
+// was blamed and rootcause.Confirmed lets a message name it as the
+// cause.
+func (c Case) Stated() bool { return c.Confidence > 0 && !c.Unconfirmed }
+
+// WrongCauseStated reports a wrong root whose cause a message states
+// (Stated), at any confidence. A hedge on an ambiguous label is not
+// counted, because it names the rival too.
+func (c Case) WrongCauseStated() bool {
+	return c.Stated() && !c.Correct && !(c.Hedged && c.Ambiguous)
+}
 
 // WrongStated reports a wrong root stated at LikelyConfidence or above:
 // the engine told people a cause it could not support. A hedge on an
@@ -109,6 +122,12 @@ type Accuracy struct {
 	// WrongStated counts wrong roots stated at likely confidence or
 	// above (see Case.WrongStated). The goal is none.
 	WrongStated int `json:"wrongStated"`
+	// WrongCauseStated and NoCauseStated show the trade-off of
+	// confirming causes: a wrong cause a message states
+	// (Case.WrongCauseStated), and a case whose messages state no cause
+	// (not Case.Stated). They are reported, not gated.
+	WrongCauseStated int `json:"wrongCauseStated"`
+	NoCauseStated    int `json:"noCauseStated"`
 	// ToleratedHedges counts the wrong roots at that level that an
 	// ambiguous label tolerates because the cause names its rival.
 	ToleratedHedges int `json:"toleratedHedges"`
@@ -193,6 +212,12 @@ func ScoreCases(cases []Case) Accuracy {
 
 // countRoot adds one case to the correctness counters.
 func (a *Accuracy) countRoot(c Case, level string) {
+	if !c.Stated() {
+		a.NoCauseStated++
+	}
+	if c.WrongCauseStated() {
+		a.WrongCauseStated++
+	}
 	if c.Correct {
 		a.Correct++
 		switch {

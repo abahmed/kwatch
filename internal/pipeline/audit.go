@@ -7,6 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/audit"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/redact"
 )
 
 var auditActions = map[incident.Action]audit.Action{
@@ -62,7 +63,7 @@ func AuditEntry(
 		summaryEntry(&entry, m)
 	}
 	if p.Cause != nil {
-		entry.RootCause = p.Cause.Summary
+		entry.RootCause = redact.Stored(p.Cause.Summary)
 	}
 	if !p.Subject.IsZero() && p.Subject != p.Root {
 		entry.Subject = p.Subject.String()

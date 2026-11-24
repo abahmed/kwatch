@@ -208,5 +208,5 @@ func bootNoise(
 // Events about kinds kwatch does not watch have no object to check and
 // still count.
 func deleted(ctx detection.Context, e inventory.Entity) bool {
-	return ctx.Synced(e.ID.Kind) && !ctx.Model.Exists(e.ID)
+	return ctx.Readable(e.ID.Kind) && !ctx.Model.Exists(e.ID)
 }

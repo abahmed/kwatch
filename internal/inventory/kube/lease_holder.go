@@ -2,6 +2,7 @@ package kube
 
 import (
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/inventory"
 )
@@ -16,19 +17,18 @@ func HolderPodName(holder string) string {
 
 // holderRelation links a Lease to the pod that holds it, when that pod
 // is known, so a failing holder is found as the cause of a stale Lease.
+// It is sent on every scan, with no target when the holder's pod is
+// unknown: the edge to a former holder must not outlive the hand-over.
 func (p *Prober) holderRelation(
-	lease inventory.EntityID, holder string,
-) (inventory.Observation, bool) {
-	if p.cfg.Model == nil {
-		return inventory.Observation{}, false
+	lease inventory.EntityID, holder string, now time.Time,
+) inventory.Observation {
+	out := inventory.Observation{
+		Kind: inventory.Related, Source: ProbeSource, At: now,
+		Entity: lease, Relation: inventory.References,
 	}
 	pod := inventory.CoreID(KindPod, lease.Namespace, HolderPodName(holder))
-	if !p.cfg.Model.Exists(pod) {
-		return inventory.Observation{}, false
+	if p.cfg.Model != nil && p.cfg.Model.Exists(pod) {
+		out.Targets = []inventory.EntityID{pod}
 	}
-	return inventory.Observation{
-		Kind: inventory.Related, Source: ProbeSource, At: p.cfg.Now(),
-		Entity: lease, Relation: inventory.References,
-		Targets: []inventory.EntityID{pod},
-	}, true
+	return out
 }

@@ -250,7 +250,7 @@ subjects:
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: {{ .Release.Name }}-control-plane-leases
+  name: {{ include "kwatch.controlPlaneLeasesName" . }}
   namespace: kube-system
   labels:
     {{- include "kwatch.labels" . | nindent 4 }}
@@ -263,14 +263,14 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: {{ .Release.Name }}-control-plane-leases
+  name: {{ include "kwatch.controlPlaneLeasesName" . }}
   namespace: kube-system
   labels:
     {{- include "kwatch.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: {{ .Release.Name }}-control-plane-leases
+  name: {{ include "kwatch.controlPlaneLeasesName" . }}
 subjects:
 - kind: ServiceAccount
   name: {{ .Release.Name }}

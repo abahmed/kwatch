@@ -87,8 +87,8 @@ func TestSecretSteps(t *testing.T) {
 	if len(steps) == 0 {
 		t.Error("no secret steps generated")
 	}
-	if !strings.Contains(steps[0].Command, "kubectl describe secret") {
-		t.Errorf("secret describe command not found: %s",
+	if !strings.Contains(steps[0].Command, "kubectl get pods -o yaml") {
+		t.Errorf("pod spec command not found: %s",
 			steps[0].Command)
 	}
 }

@@ -57,6 +57,7 @@ func (e *Engine) restore() error {
 		startup.WarmAt = time.Time{}
 	}
 	e.deps.Incidents.Restore(records, grace)
+	e.storage.last = records
 	e.announcer.collect.RestoreDigest()
 	saved, err := e.deps.Store.LoadFingerprints()
 	if err != nil {
@@ -112,6 +113,7 @@ func (e *Engine) restoreAnnounced() error {
 		return nil
 	}
 	e.deps.Incidents.Restore(kept, e.deps.Clock.Now().Add(restoreGrace))
+	e.storage.last = kept
 	klog.InfoS("restored announced incidents", "component", "pipeline",
 		"operation", "restore", "incidents", len(kept), "coldStart", true)
 	return nil
@@ -161,6 +163,7 @@ func (e *Engine) saveAt(now time.Time, force bool) {
 		records = openAnnounced(records,
 			e.announcer.collect.Startup.Baselined)
 	}
+	e.storage.last = records
 	snapshot := storeSnapshot{incidents: records, hasIncidents: true}
 	if !e.storage.openOnly && e.storage.reconciled &&
 		(force || e.storage.fingerprintsDue(now)) {

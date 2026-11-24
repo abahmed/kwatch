@@ -33,7 +33,7 @@ func neverReady(
 	ctx detection.Context, e inventory.Entity,
 ) (detection.Finding, bool) {
 	if e.ID.Kind == kube.KindDaemonSet || ctx.Model == nil ||
-		!ctx.Synced(kube.KindPod) {
+		!ctx.SyncedFor(kube.KindPod, reasons.WorkloadNeverReady) {
 		return detection.Finding{}, false
 	}
 	desired, ok := desiredReplicas(e)

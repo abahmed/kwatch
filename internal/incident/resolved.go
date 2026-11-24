@@ -127,6 +127,14 @@ func (m *Manager) forgetID(id string) {
 // forget drops an incident, its root index entry and its place in the
 // resolved index.
 func (m *Manager) forget(p *Incident) {
+	m.drop(p)
+	m.dropResolved(p.ID, p.Root.String())
+}
+
+// drop is forget without the resolved index, for a live incident: it
+// removes p, its node-outage groups, its gap and its root index entry,
+// so nothing keeps pointing at an ID that is gone.
+func (m *Manager) drop(p *Incident) {
 	for _, root := range p.Merged {
 		if m.groups[root.String()] == p.ID {
 			delete(m.groups, root.String())
@@ -135,7 +143,6 @@ func (m *Manager) forget(p *Incident) {
 	delete(m.incidents, p.ID)
 	delete(m.gaps, p.ID)
 	m.unindex(p)
-	m.dropResolved(p.ID, p.Root.String())
 }
 
 // dropResolved removes id from its root's resolved list. The order list

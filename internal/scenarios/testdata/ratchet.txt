@@ -372,6 +372,7 @@ own-volume-wait-at-start quiet
 own-volume-wait-too-long self
 owner-routed found-high
 page-flaps-reopens found-high
+parked-routes-one-line self
 pdb-overlap-eviction-refused self,self
 planned-scale-down-quiet quiet
 pod-cgroup-create-fails self
@@ -452,6 +453,11 @@ release-seccomp-profile-missing found-high
 release-source-invalid found-high
 release-source-linked found-high
 release-steady quiet
+removed-mesh-beside-live-failure self,self
+removed-mesh-leftovers self
+removed-operator-one-group found-high
+removed-policy-engine-leftovers found-high
+removed-runner-leftovers self
 replicas-fail-on-mixed-nodes self
 replicas-fail-only-on-arm64 self
 resolve-cause-recovered found-high
@@ -569,6 +575,7 @@ young-and-old-nodes-fail found-high
 young-node-address-warm-up quiet
 young-node-persists found-high
 young-node-transient quiet
+young-stuck-peer-joins-old-group found-high
 zone-failure found-likely
 zone-nodes-lost-staggered found-likely
 zone-outage-healthy-node-crash found-high,self

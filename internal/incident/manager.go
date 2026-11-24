@@ -59,8 +59,10 @@ type Manager struct {
 	// sooner (grace_rebuilt.go).
 	restoreGrace time.Time
 	graceSettled time.Time
-	// started is when the manager first ran (own_start.go).
-	started time.Time
+	// started is when the manager first ran (own_start.go), latest
+	// the time of the latest Apply or Tick: decisions date their news
+	// with it (noteNews).
+	started, latest time.Time
 	// gaps are the recovering incidents whose workload kept crashing
 	// while they recovered (crash_gap.go).
 	gaps map[string]bool
@@ -104,6 +106,9 @@ type Manager struct {
 	// the settling pages it holds (scale_wave.go).
 	wave       scaleWave
 	scaleHolds map[string]bool
+	// plan is the history of mass scale-downs and scale-ups and what
+	// the latest look found (planned_ops.go).
+	plan plannedOps
 	// scaled are the autoscaler findings joined to their target's
 	// incident, with since when the target has ready replicas again
 	// (attach_scaled.go).
@@ -175,6 +180,7 @@ func (m *Manager) Apply(
 	m.nodesDirty = m.nodesDirty || touchesNode(dirty, transitions)
 	m.wave.noteSync(s.Synced)
 	m.observeNodes(s.Model, s.Now)
+	s, transitions = linkLeftovers(s, transitions)
 	m.noteLeftovers(s)
 	touched := append([]inventory.EntityID(nil), dirty...)
 	for _, t := range transitions {

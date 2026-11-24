@@ -88,9 +88,9 @@ func selectorMatchesNothing(
 // labelsSynced reports whether every kind that can carry pod labels is
 // watched. It asks about each kind, so all the missing ones are noted.
 func labelsSynced(ctx detection.Context) bool {
-	synced := ctx.Synced(kube.KindPod)
+	synced := ctx.SyncedFor(kube.KindPod, reasons.ServiceNoEndpoints)
 	for _, kind := range kube.TemplateKinds() {
-		synced = ctx.Synced(kind) && synced
+		synced = ctx.SyncedFor(kind, reasons.ServiceNoEndpoints) && synced
 	}
 	return synced
 }
@@ -101,7 +101,8 @@ func labelsSynced(ctx detection.Context) bool {
 func allSelectedPending(
 	ctx detection.Context, e inventory.Entity,
 ) bool {
-	if ctx.Model == nil || !ctx.Synced(kube.KindPod) {
+	if ctx.Model == nil ||
+		!ctx.SyncedFor(kube.KindPod, reasons.ServiceNoEndpoints) {
 		return false
 	}
 	pods := kube.SelectedPods(ctx.Model, e)

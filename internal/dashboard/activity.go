@@ -25,6 +25,9 @@ var activityWindows = map[string]time.Duration{
 	"":    time.Hour,
 	"1h":  time.Hour,
 	"24h": 24 * time.Hour,
+	// A week: as far back as kwatch keeps resolved issues. The events
+	// are bounded by maxSimilarScan issues and ?limit=.
+	"7d": 7 * 24 * time.Hour,
 }
 
 // Activity event kinds, in the order events of one moment are listed.
@@ -86,7 +89,7 @@ type ActivityEvent struct {
 }
 
 // activityHandler serves GET
-// /api/activity?since=1h|24h&untold=1&limit=N, with an ETag like the
+// /api/activity?since=1h|24h|7d&untold=1&limit=N, with an ETag like the
 // list.
 func (s *Server) activityHandler(w http.ResponseWriter, r *http.Request) {
 	if !onlyGet(w, r) {
@@ -97,7 +100,7 @@ func (s *Server) activityHandler(w http.ResponseWriter, r *http.Request) {
 	window, ok := activityWindows[since]
 	if !ok || len(q["since"]) > 1 {
 		writeBadQuery(w, badQuery("since", since,
-			"Unknown activity window: %q. Use 1h or 24h.", since))
+			"Unknown activity window: %q. Use 1h, 24h or 7d.", since))
 		return
 	}
 	untold := q.Get("untold")

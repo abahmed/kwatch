@@ -47,17 +47,49 @@ var reclaimMin int64 = 64 << 20
 // half-full pages are worth a rewrite.
 const sparseFactor = 2
 
-// reclaimDue reports whether a file of size bytes is worth a rewrite:
-// its free pages are at least reclaimMin and half of it, or it is at
-// least sparseFactor times its logical data (0: not measured yet) and
-// that excess is at least reclaimMin. lastCopy, the size the previous
-// rewrite left (0: none), must be outgrown sparseFactor times too.
-func reclaimDue(size, free, logical, lastCopy int64) bool {
+// reclaimDue reports whether a file of size bytes is worth a rewrite,
+// and when it is not, why (for the log). A file is due when its free
+// pages are at least reclaimMin and half of it, or when it is at least
+// sparseFactor times its logical data (0: not measured yet) and that
+// excess is at least reclaimMin. lastCopy, the size the previous rewrite
+// left (0: none), must be outgrown sparseFactor times too, but only
+// while the data is as large as it was then (lastLogical, 0: unknown): a
+// copy of less data would be smaller, so the guard shrinks with the data.
+// Without that, a file a rewrite left large could never be rewritten
+// after its data shrank.
+func reclaimDue(
+	size, free, logical, lastCopy, lastLogical int64,
+) (bool, string) {
 	if free >= reclaimMin && free >= size/2 {
-		return true
+		return true, "free pages are most of the file"
 	}
-	return logical > 0 && size >= sparseFactor*logical &&
-		size-logical >= reclaimMin && size >= sparseFactor*lastCopy
+	switch {
+	case logical <= 0:
+		return false, "logical size not measured yet"
+	case size < sparseFactor*logical:
+		return false, "file is under twice its data"
+	case size-logical < reclaimMin:
+		return false, "excess over the data is under the minimum"
+	}
+	guard := copyGuard(lastCopy, lastLogical, logical)
+	if size < sparseFactor*guard {
+		return false, "file has not outgrown the last copy"
+	}
+	return true, "file is at least twice its data"
+}
+
+// copyGuard is the size a file must be twice of after the last rewrite:
+// lastCopy, scaled down when the data shrank since (a copy of less data
+// is smaller). An unknown lastLogical (a file from before it was kept)
+// gives no guard, which allows one extra copy that then records it.
+func copyGuard(lastCopy, lastLogical, logical int64) int64 {
+	if lastCopy <= 0 || lastLogical <= 0 {
+		return 0
+	}
+	if logical >= lastLogical {
+		return lastCopy
+	}
+	return int64(float64(lastCopy) * float64(logical) / float64(lastLogical))
 }
 
 // openCopy opens a rewrite's copy; a variable so tests can fail it.
@@ -107,10 +139,20 @@ func (s *Store) Reclaim() (bool, error) {
 		return false, nil
 	}
 	size, free := s.fileUsage()
-	if !reclaimDue(size, free, s.counters.logicalBytes.Load(),
-		s.lastCopy) {
+	logical := s.counters.logicalBytes.Load()
+	due, reason := reclaimDue(size, free, logical, s.lastCopy,
+		s.lastCopyLogical)
+	if !due {
+		klog.V(2).InfoS("state file rewrite: not due: "+reason,
+			"component", "state", "operation", "reclaim",
+			"fileBytes", size, "freeBytes", free, "logicalBytes", logical,
+			"lastCopyBytes", s.lastCopy,
+			"lastCopyLogicalBytes", s.lastCopyLogical)
 		return false, nil
 	}
+	klog.V(2).InfoS("state file rewrite: due: "+reason,
+		"component", "state", "operation", "reclaim",
+		"fileBytes", size, "freeBytes", free, "logicalBytes", logical)
 	err := db.View(func(tx *bolt.Tx) error {
 		if readUint(tx.Bucket(metaBucket).Get(epochKey)) != epoch {
 			return ErrFenced
@@ -141,8 +183,7 @@ func (f *file) swapInCopy(db *bolt.DB) (bool, error) {
 	after, _ := fileSize(tmp)
 	if after >= before {
 		_ = os.Remove(tmp)
-		f.lastCopy = after
-		noteCopy(db, after)
+		f.keepCopy(db, after)
 		if !f.copyNoGain {
 			f.copyNoGain = true
 			klog.InfoS("state file rewrite would not make it smaller; "+
@@ -172,8 +213,7 @@ func (f *file) swapInCopy(db *bolt.DB) (bool, error) {
 	}
 	// Only a copy that went live sets the size the next rewrite waits
 	// for; a failed open or swap must not delay the retry.
-	f.lastCopy = after
-	noteCopy(copied, after)
+	f.keepCopy(copied, after)
 	f.copyNoGain = false
 	f.retry.reset()
 	f.counters.rewrites.Add(1)
@@ -207,13 +247,26 @@ func (f *file) swap(copied *bolt.DB, tmp string) (*bolt.DB, bool) {
 	return old, true
 }
 
-// noteCopy keeps the size a rewrite left (lastCopy) in db, so a file
-// that can't shrink is not copied again after every restart. A failed
-// write is only logged: the next rewrite measures again.
-func noteCopy(db *bolt.DB, size int64) {
+// keepCopy remembers a copy of size bytes made of the data measured last,
+// in memory and in db.
+func (f *file) keepCopy(db *bolt.DB, size int64) {
+	f.lastCopy = size
+	f.lastCopyLogical = f.counters.logicalBytes.Load()
+	noteCopy(db, f.lastCopy, f.lastCopyLogical)
+}
+
+// noteCopy keeps the size a rewrite left (lastCopy) and the data it held
+// (logical) in db, so a file that can't shrink is not copied again after
+// every restart. A failed write is only logged: the next rewrite
+// measures again.
+func noteCopy(db *bolt.DB, size, logical int64) {
 	err := db.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(metaBucket).Put(lastCopyKey,
-			writeUint(uint64(size)))
+		meta := tx.Bucket(metaBucket)
+		err := meta.Put(lastCopyKey, writeUint(uint64(size)))
+		if err != nil {
+			return err
+		}
+		return meta.Put(lastCopyLogicalKey, writeUint(uint64(logical)))
 	})
 	if err != nil {
 		klog.ErrorS(err, "state file rewrite size not kept",

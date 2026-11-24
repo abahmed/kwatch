@@ -12,6 +12,19 @@
   var reg = null;
   var state = { on: false, endpoint: "", failing: "" };
 
+  /* On an iPhone or iPad, Safari shows notifications only for a page
+     added to the Home Screen and opened from there. */
+  KW.IOS_HOME = "On iPhone: Share → Add to Home Screen, open kwatch from " +
+    "there, then turn on alerts.";
+  KW.iosBrowserTab = function () {
+    var ua = navigator.userAgent || "";
+    var ios = /iPhone|iPad|iPod/.test(ua) ||
+      (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    var home = navigator.standalone === true ||
+      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    return ios && !home;
+  };
+
   function supported() {
     return "serviceWorker" in navigator && "PushManager" in window &&
       window.isSecureContext !== false;

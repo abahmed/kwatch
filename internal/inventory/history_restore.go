@@ -17,20 +17,43 @@ const ChangeRetention = 24 * time.Hour
 // observations, so nothing marks the entities touched. It returns how
 // many it kept. The rings keep their usual bounds.
 func (m *Model) RestoreChanges(changes []Change) int {
-	sorted := append([]Change(nil), changes...)
+	return m.RestoreHistory(changes, nil)
+}
+
+// RestoreHistory is RestoreChanges with pinned changes: older changes
+// of the entities restored open incidents are about. They go to a ring
+// of their own and outlive ChangeRetention (see PinnedRetention), so
+// an incident that opened more than a day after its change still finds
+// it, and its revert, after a restart. Both lists are put back in time
+// order. It returns how many changes it kept.
+func (m *Model) RestoreHistory(changes, pinned []Change) int {
+	type restored struct {
+		change Change
+		pin    bool
+	}
+	sorted := make([]restored, 0, len(changes)+len(pinned))
+	for _, change := range changes {
+		sorted = append(sorted, restored{change: change})
+	}
+	for _, change := range pinned {
+		sorted = append(sorted, restored{change: change, pin: true})
+	}
 	sort.SliceStable(sorted, func(i, j int) bool {
-		return sorted[i].At.Before(sorted[j].At)
+		return sorted[i].change.At.Before(sorted[j].change.At)
 	})
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	kept := 0
-	for _, change := range sorted {
-		if change.Entity.IsZero() || change.At.IsZero() {
+	for _, r := range sorted {
+		if r.change.Entity.IsZero() || r.change.At.IsZero() {
 			continue
 		}
-		m.change(Observation{
-			Entity: change.Entity, At: change.At, Change: change,
-		})
+		if r.pin {
+			m.pinChange(r.change)
+		} else {
+			m.change(Observation{Entity: r.change.Entity,
+				At: r.change.At, Change: r.change})
+		}
 		kept++
 	}
 	return kept

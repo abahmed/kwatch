@@ -10,7 +10,7 @@ import (
 // have no finding of their own.
 var pseudoModes = []detection.Mode{
 	ModeChanged, ModeSpecChanged, ModeScaled, ModeCreated, ModeDeleted,
-	ModeMissing, ModeMembersFailing, ModeRejectsNodes, ModeResolution,
+	ModeMissing, ModeRemoved, ModeMembersFailing, ModeRejectsNodes, ModeResolution,
 	ModeMetricsUnserved, ModeWebhookTimeout, ModeWebhookCallFailed,
 	ModeEndpointFailing, ModeSharedSignature, ModeMemoryTooLow,
 	ModeProbePortMismatch, ModeStartupBudgetShort, ModeSharedFactor,

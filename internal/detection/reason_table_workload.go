@@ -6,12 +6,14 @@ import (
 )
 
 // workloadReasons lists the workload, autoscaler, job and resource reasons.
+// An entry marked trial() is new in the unreleased version and waits for
+// the digest until it is promoted (docs/contributing-detector.md).
 var workloadReasons = []ReasonInfo{
 	reason(reasons.ProgressDeadlineExceeded, ModeRolloutStuck),
 	reason(reasons.DeploymentUnavailable, ModeUnavailable),
 	// Someone paused it on purpose and replicas keep serving: worth a
 	// look in the digest, never an interruption.
-	reason(reasons.DeploymentPausedEdit, ModePausedEdit).digest(),
+	reason(reasons.DeploymentPausedEdit, ModePausedEdit).digest().trial(),
 	reason(reasons.DeploymentReplicaFailure, ModeReplicaFailure),
 	reason(reasons.ReplicaSetFailure, ModeReplicaFailure),
 	reason(reasons.DaemonSetUnavailable, ModeUnavailable),
@@ -19,7 +21,7 @@ var workloadReasons = []ReasonInfo{
 		digest(),
 	reason(reasons.StsUnavailable, ModeUnavailable),
 	// A pod made by hand holds the name its controller needs.
-	reason(reasons.PodNameTaken, ModeNameTaken).digest(),
+	reason(reasons.PodNameTaken, ModeNameTaken).digest().trial(),
 	reason(reasons.ScalingDisabled, ModeScalingDisabled),
 	reason(reasons.FailedGetResourceMetric, ModeScalingNoMetrics).digest().
 		shown(kube.KindHPA),
@@ -37,7 +39,8 @@ var workloadReasons = []ReasonInfo{
 	reason(reasons.HPATargetMissing, ModeScalingTargetMissing).digest(),
 	reason(reasons.WorkloadNeverReady, ModeNeverReady),
 	reason(reasons.ReadinessFlapping, ModeReadinessFlapping),
-	reason(reasons.ReplicasFlapping, ModeReplicasFlapping).digest(),
+	reason(reasons.ReplicasFlapping, ModeReplicasFlapping).digest().
+		trial(),
 	reason(reasons.KubeletUnreachable, ModeKubeletUnreachable).digest(),
 	reason(reasons.KwatchNetworkRestricted, ModeKwatchNetwork),
 	reason(reasons.JobRunningLong, ModeJobRunningLong),
@@ -54,7 +57,8 @@ var workloadReasons = []ReasonInfo{
 	reason(reasons.ReleaseRegression, ModeReleaseRegression),
 	reason(reasons.LogErrorBurst, ModeErrorBurst),
 	// Pods stay Ready: worth a look, never a page.
-	reason(reasons.LogServiceMissing, ModeLogServiceMissing).digest(),
+	reason(reasons.LogServiceMissing, ModeLogServiceMissing).digest().
+		trial(),
 	reason(reasons.LeaseStale, ModeLeaseStale),
 	reason(reasons.HelmReleaseFailed, ModeHelmReleaseFailed),
 	reason(reasons.HelmReleaseStuck, ModeHelmReleaseStuck),
@@ -85,12 +89,12 @@ var workloadReasons = []ReasonInfo{
 	reason(reasons.PriorityClassMissing, ModeReferencePriorityClassMissing),
 	reason(reasons.RuntimeClassMissing, ModeReferenceRuntimeClassMissing),
 	// A budget selecting no pods protects nothing, but on a cluster that
-	// scales workloads to zero it is the normal night.
-	reason(reasons.PdbSelectsNothing, ModeBudgetSelectsNothing),
+	// scales workloads to zero it is the normal night: a digest line.
+	reason(reasons.PdbSelectsNothing, ModeBudgetSelectsNothing).digest(),
 	reason(reasons.PdbOverlap, ModeBudgetOverlap),
 	reason(reasons.PdbSyncFailed, ModeBudgetSyncFailed),
 	reason(reasons.PdbBlocksDrain, ModeBudgetBlocksDrain),
-	reason(reasons.PodBlocksDrain, ModePodBlocksDrain).digest(),
+	reason(reasons.PodBlocksDrain, ModePodBlocksDrain).digest().trial(),
 	reason(reasons.ResourceClaimUnallocated, ModeDeviceUnallocated),
 	reason(reasons.FailedPrepareDynamicResources, ModeDevicePrepareFailed).
 		event(Critical),

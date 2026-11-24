@@ -140,3 +140,19 @@ func TestChangedAndUnchangedOngoingProblemsShareADigest(t *testing.T) {
 		".")+"\n", "a digest bullet has no closing period")
 	assert.Contains(t, msg.Plain(), "- Still failing and unchanged: db")
 }
+
+// A scheduled operation is one line that says when, how often it was
+// seen at that time and what it scaled; the digest leads with it.
+func TestScheduledOperationLine(t *testing.T) {
+	at := time.Date(2026, 10, 8, 18, 2, 0, 0, time.UTC)
+	down := WakeLine{Started: 27, Nodes: 4, From: at, To: at,
+		Down: true, Seen: 3, Days: 3}
+	assert.Equal(t, "Scheduled scale-down at 18:02 UTC (seen at this "+
+		"time on 3 of the last 3 days): 27 workloads, 4 nodes.",
+		down.Text())
+	assert.Equal(t, "a scheduled scale-down", down.Kind())
+	up := WakeLine{Nodes: 1, From: at, To: at, Seen: 2, Days: 3}
+	assert.Equal(t, "Scheduled scale-up at 18:02 UTC (seen at this "+
+		"time on 2 of the last 3 days): 1 node.", up.Text())
+	assert.Equal(t, "a cluster wake-up", WakeLine{Started: 1}.Kind())
+}

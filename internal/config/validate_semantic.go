@@ -193,6 +193,7 @@ func validateDashboard(cfg *Config) []error {
 		))
 	}
 	errs = append(errs, validateDashboardTLS(cfg.Dashboard)...)
+	errs = append(errs, validateDashboardSession(cfg.Dashboard)...)
 	return errs
 }
 

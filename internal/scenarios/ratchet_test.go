@@ -63,7 +63,9 @@ func rootModes(v verdict) string {
 	modes := make([]string, 0, len(v.cases))
 	for _, c := range v.cases {
 		switch {
-		case c.Stated():
+		// The ratchet pins the level a cause was scored at, confirmed
+		// or not: Case.Stated would read an unconfirmed one as lost.
+		case c.Confidence > 0:
 			modes = append(modes, "found-"+
 				scorecard.ConfidenceLevel(c.Confidence))
 		case c.ExpectsRoot:

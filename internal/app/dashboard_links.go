@@ -3,6 +3,8 @@ package app
 import (
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"k8s.io/klog/v2"
 
@@ -27,6 +29,13 @@ type dashboardLinks struct {
 	// HTTPRoutes; nil when unknown.
 	forbidden func() bool
 	sink      linkSink
+	// settled reports that the routes the address comes from were
+	// listed; nil when always. wait bounds the first messages' wait
+	// for them, linkWait when zero (dashboard_links_wait.go).
+	settled  func() bool
+	wait     time.Duration
+	waitOnce sync.Once
+	waited   atomic.Bool
 
 	mu   sync.Mutex
 	last health.LinkStatus
@@ -34,8 +43,10 @@ type dashboardLinks struct {
 	known bool
 }
 
-// address is the dashboard address now, "" when there is none.
+// address is the dashboard address now, "" when there is none. The
+// first call waits for the routes to be listed (awaitRoutes).
 func (l *dashboardLinks) address() string {
+	l.awaitRoutes()
 	return l.Status().Address
 }
 
@@ -48,6 +59,10 @@ func (l *dashboardLinks) Status() health.LinkStatus {
 	}
 	now := health.LinkStatus{
 		On: address != "", Address: address, Reason: reason,
+	}
+	if !now.On && !l.routesKnown() {
+		// Not listed yet: off is not known, so it is not reported.
+		return now
 	}
 	l.mu.Lock()
 	changed := !l.known || now != l.last

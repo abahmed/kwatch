@@ -16,11 +16,18 @@ Messages per incident, unchanged updates, re-created incidents (an
 announced incident whose audit entry links a `previous` resolved
 incident, or a resolved ID announced again) and repeated recoveries are
 measured over the labelled scenarios and the staging day together. The
-staging day holds every labelled scenario once, spaced 9 minutes apart
-(so the day is 9 minutes longer for each scenario: 12 hours when the
-library had 79 of them), each fixed 45 minutes later, plus healthy
-rollouts every 15 minutes, scale events every 25 minutes and the
-explicit non-events below, each run twice. A scenario that lasts more
+staging day holds every labelled scenario once, each fixed 45 minutes
+later, in a day of 1,024 slots of 9 minutes (the spacing the gates were
+set on: 12 hours when the library had 79 scenarios). A scenario takes
+the slot its name hashes to, or the next free one when a scenario
+earlier in name order took it, so adding a scenario moves no other one
+unless both want the same slot. Scenarios that fail the same shared
+part of the cluster that kwatch probes (its DNS, scheduler, API server)
+are at least 20 slots (three hours) apart: unrelated outages of one
+part come at unrelated hours. The library may fill 95% of the slots
+before the day must grow. The day also has healthy rollouts every 15
+minutes, scale events every 25 minutes and the explicit non-events
+below, each run twice. A scenario that lasts more
 than a day (a problem that is known needs two earlier days of history)
 has no place in a day and is left out of it; the labelled scenarios
 still include it.
@@ -65,6 +72,7 @@ other target was relaxed. The current value of every gate is in
 | Scenarios blaming a must-not-blame entity | 0 | 4 | 0 |
 | Quiet scenarios that alerted | 0 | 0 | 0 |
 | Scenarios over their message budget | 0 | 7 | 0 |
+| Messages per day (scheduled-operations replay) | <= 4 (added 2026-11-24, measured 3 + 1) | - | 3 (16 messages in 7 days) |
 
 The `boot-endpoints-still-down` scenario is held on purpose by the node
 boot grace, so it is measured by its own gate (see Time to first
@@ -582,23 +590,24 @@ here verbatim and checked by `TestScorecardGates`.
 | --- | --- | --- | --- |
 | Correct root cause (labelled) | >= 90% | 99.4% | pass |
 | Correct root cause (held-out) | >= 80% | 100% | pass |
-| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 454 high-confidence cases, labelled and held-out) | pass |
+| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 459 high-confidence cases, labelled and held-out) | pass |
 | Wrong root stated at likely confidence or higher (labelled) | <= 0 | 0 | pass |
 | Scenarios whose first message stated a wrong root | <= 0 | 0 | pass |
-| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (441 of 441 right) | pass |
+| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (446 of 446 right) | pass |
 | Calibration: likely confidence | 50-95% (at least 10 cases) | 91.7% (55 of 60 right) | pass |
 | Calibration: high-confidence boundary | 0.55-0.75 (committed 0.70) | 0.55 | pass |
-| Calibration: precision at the high boundary | >= 92% (at least 10 cases) | 100.0% (441 of 441 right) | pass |
+| Calibration: precision at the high boundary | >= 92% (at least 10 cases) | 100.0% (446 of 446 right) | pass |
 | Messages per incident (p95) | <= 3 | 3 | pass |
-| Messages per incident (most) | <= 5 | 5 | pass |
+| Messages per incident (most) | <= 5 | 5 (at the limit) | pass |
+| Messages per day (scheduled-operations replay) | <= 4 | 3 (1 left); busiest day 2026-10-06, 16 messages in 7 days | pass |
 | Time to first message (page tier) | max <= 2m0s | p95 1m45s, max 1m45s (69 scenarios) | pass |
-| Time to first message (notify tier) | max <= 5m0s | p95 4m15s, max 5m0s (621 scenarios) | pass |
-| Time to first message (boot-held) | max <= 15m0s | p95 12m0s, max 12m0s (7 scenarios) | pass |
+| Time to first message (notify tier) | max <= 5m0s | p95 4m15s, max 5m0s (622 scenarios) | pass |
+| Time to first message (boot-held) | max <= 15m0s | p95 12m0s, max 12m0s (8 scenarios) | pass |
 | Time to first message (episode-held) | max <= 15m0s | p95 11m15s, max 11m15s (1 scenarios) | pass |
 | Notifications from non-events (staging day) | <= 0 | 0 | pass |
 | Notifications per hour (staging day peak) | <= 30/h | 25/h | pass |
 | Unchanged updates | <= 0% | 0% | pass |
-| Re-created incidents | <= 5% | 1.9% | pass |
+| Re-created incidents | <= 5% | 2.2% | pass |
 | Repeated recoveries | <= 0 | 0 | pass |
 | Storm messages in 2 minutes (shared node) | <= 3 | 1 | pass |
 | Storm messages in 2 minutes (shared registry) | <= 3 | 1 | pass |
@@ -612,15 +621,17 @@ here verbatim and checked by `TestScorecardGates`.
 | Recoveries said while members still fail | <= 0 | 0 | pass |
 | Scenarios that passed and no longer do (ratchet) | <= 0 | 0 | pass |
 
-31 of 31 gates pass. 828 labelled root cases in 878 scenarios; first-incident tier matches in 878 of 878 scenarios.
-Staging day: 1824 notifications in 130h44m0s (14.0/h mean, peak hour 25); 0 from non-events, 0 of them notify or page.
+32 of 32 gates pass. 839 labelled root cases in 889 scenarios; first-incident tier matches in 889 of 889 scenarios.
+Staging day: 1856 notifications in 156h34m0s (11.9/h mean, peak hour 25); 0 from non-events, 0 of them notify or page.
 Storm shared node: 1000 pods, 2 messages in total, 1 in the loudest 2 minutes.
 Storm shared registry: 1000 pods, 1 messages in total, 1 in the loudest 2 minutes.
 Storm multi-cause: 1000 pods from 10 causes, 10 of them reported, 9 messages in total, 6 in the loudest 2 minutes.
-Slowest first messages: scale-down-moved-pod-never-starts page 12m0s, etcd-path-intermittent-during-maintenance notify 11m15s, node-join-never-ready page 10m15s, young-node-persists notify 10m0s, drain-beside-stuck-replacement page 10m0s.
+Slowest first messages: scale-down-moved-pod-never-starts page 12m0s, morning-sandbox-one-node-stuck notify 11m15s, etcd-path-intermittent-during-maintenance notify 11m15s, node-join-never-ready page 10m15s, young-node-persists notify 10m0s.
 Calibration: the labelled cases put high confidence at 0.55 (committed 0.70).
-Right roots: 507 with a stated cause, 288 by falling back to the failing entity with no stated cause, 28 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 18 scenarios, 10 of them labelled as legitimate revisions.
-Time to first correct root: p95 4m15s, max 47m0s over 752 scenarios; slowest: sporadic-probe-timeouts-no-event 47m0s, sporadic-connection-reset-no-cause 42m15s, deployment-paused-with-pending-edit 31m15s, hpa-metrics-outlive-recovery 25m30s, log-missing-service 21m15s. Never stated: coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
+Right roots: 495 with a stated cause, 311 by falling back to the failing entity with no stated cause, 28 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 18 scenarios, 10 of them labelled as legitimate revisions.
+Wrong cause stated: 0 of 839 labelled cases.
+No cause stated: 344 of 839 labelled cases.
+Time to first correct root: p95 4m15s, max 47m0s over 761 scenarios; slowest: sporadic-probe-timeouts-no-event 47m0s, sporadic-connection-reset-no-cause 42m15s, deployment-paused-with-pending-edit 31m15s, hpa-metrics-outlive-recovery 25m30s, log-missing-service 21m15s. Never stated: coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
 
 ## Scenarios
 
@@ -989,6 +1000,10 @@ Time to first correct root: p95 4m15s, max 47m0s over 752 scenarios; slowest: sp
 | pressure-sustained-settled-node | `node//n1` | `node//n1 (no cause)` | none | digest/digest | 0 (2) | pass |
 | spot-node-reclaimed-pods-move-quietly | quiet | - | - | -/- | 0 (0) | pass |
 | spot-reclaim-after-notify | `deployment/shop/mailer` | `deployment/shop/mailer (no cause)` | none | notify/notify | 2 (2) | pass |
+| shared-dependency-removed-overnight | `service/data/cache`, `deployment/shop/reports` | `service/data/cache`, `deployment/shop/reports (no cause)` | high 1.00 | notify/notify | 4 (4) | pass |
+| shared-dependency-removed-unused | quiet | - | - | -/- | 0 (0) | pass |
+| morning-sandbox-settles | quiet | - | - | -/- | 0 (0) | pass |
+| morning-sandbox-one-node-stuck | `node//m5` | `node//m5` | high 1.00 | notify/notify | 1 (2) | pass |
 | ambiguous-init-secret-edited | `secret/shop/orders-db` | `secret/shop/orders-db` | high 0.85 | notify/notify | 1 (3) | pass |
 | ambiguous-init-no-change | `deployment/shop/orders` | `deployment/shop/orders` | high 0.80 | notify/notify | 1 (3) | pass |
 | ambiguous-cron-secret-edited | `secret/reports/export-creds` | `secret/reports/export-creds` | high 0.80 | notify/notify | 1 (2) | pass |
@@ -1256,7 +1271,7 @@ Time to first correct root: p95 4m15s, max 47m0s over 752 scenarios; slowest: sp
 | daemonset-pod-pending-node-full | `node//n4` | `node//n4` | high 0.75 | notify/notify | 1 (2) | pass |
 | daemonset-pod-pending-briefly-quiet | quiet | - | - | -/- | 0 (0) | pass |
 | daemonset-failed-pod-recreated-loop | `node//n2` | `node//n2` | high 0.75 | notify/notify | 1 (2) | pass |
-| pdb-selector-matches-no-pods | `poddisruptionbudget/shop/search-pdb` | `poddisruptionbudget/shop/search-pdb (no cause)` | none | notify/notify | 1 (2) | pass |
+| pdb-selector-matches-no-pods | `poddisruptionbudget/shop/search-pdb` | `poddisruptionbudget/shop/search-pdb (no cause)` | none | digest/digest | 0 (2) | pass |
 | pdb-percentage-on-unmanaged-pods | `poddisruptionbudget/shop/queue-pdb` | `poddisruptionbudget/shop/queue-pdb (no cause)` | none | digest/digest | 0 (2) | pass |
 | job-max-failed-indexes-exceeded | `job/batch/import-shards` | `job/batch/import-shards` | high 0.85 | notify/notify | 1 (2) | pass |
 | job-pod-failure-policy-fail-job | `job/batch/migrate` | `job/batch/migrate` | high 0.85 | notify/notify | 1 (2) | pass |
@@ -1504,6 +1519,13 @@ Time to first correct root: p95 4m15s, max 47m0s over 752 scenarios; slowest: sp
 | wording-first-message-ongoing-chronic | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
 | wording-quota-forbids-pods | `resourcequota/shop/compute` | `resourcequota/shop/compute` | high 1.00 | notify/notify | 1 (1) | pass |
 | wording-registry-rate-limited | `registry//docker.io` | `registry//docker.io` | high 1.00 | notify/notify | 1 (1) | pass |
+| removed-mesh-leftovers | `deployment/mesh-system/mesh-control` | `deployment/mesh-system/mesh-control (no cause)` | none | digest/digest | 1 (1) | pass |
+| removed-policy-engine-leftovers | `service/guard-system/guard-svc` | `service/guard-system/guard-svc` | high 0.95 | digest/digest | 1 (1) | pass |
+| removed-runner-leftovers | `service/runner-system/runner-webhook` | `service/runner-system/runner-webhook (no cause)` | none | digest/digest | 1 (1) | pass |
+| removed-operator-one-group | `service/ops-system/data-operator-conversion` | `service/ops-system/data-operator-conversion` | high 0.85 | digest/digest | 1 (1) | pass |
+| parked-routes-one-line | `namespace//demo` | `namespace//demo (no cause)` | none | digest/digest | 1 (1) | pass |
+| removed-mesh-beside-live-failure | `deployment/mesh-system/mesh-gateway`, `deployment/mesh-system/mesh-control` | `deployment/mesh-system/mesh-gateway (no cause)`, `deployment/mesh-system/mesh-control (no cause)` | none | notify/notify | 2 (3) | pass |
+| young-stuck-peer-joins-old-group | `finalizer/batch/jobs.example.com/cleanup` | `finalizer/batch/jobs.example.com/cleanup` | high 0.70 | digest/digest | 1 (1) | pass |
 
 ## Held-out scenarios
 

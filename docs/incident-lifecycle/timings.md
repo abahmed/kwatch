@@ -16,9 +16,11 @@ read the header there for how they relate.
 | `DefaultHeldMax` | 6h | longest a resolve waits for sight of an object kwatch cannot observe; then it resolves as unconfirmed and is not rechecked |
 | `DefaultFlapWindow`, `DefaultFlapCycles` | 30m, 3 | how far back recoveries count as flaps; how many make a flapper |
 | `ChronicWindow`, `ChronicOccurrences`, `ChronicFactor` | 1h, 2, x4 | a fast flapper must not say "healthy" and "failing" in turn |
-| `RepageWindow` | 2h | the same outage must not page twice, and reopens, not restarts |
+| `RepageWindow` | 2h | the same outage must not page twice |
+| `ReopenWindow` | 1h | a quick return reopens the incident; a later outage is a new incident linked to it |
 | `PageRemindAfter` | 6h | a long outage does not go quiet |
-| `RemindEvery` / `ChronicRemindEvery` | 7d / 24h, then 3d, 7d | still-open reminders; low ones back off |
+| `RemindEvery` / `ChronicRemindEvery` | 7d / 24h, then 3d, 7d | still-open reminders; ones with no message of their own back off |
+| `UnchangedFor` | 30d | a problem unchanged this long is reminded at most this often |
 | `MaterialGap` | 10m | at most one material update per 10 minutes |
 | `CauseHold` | 30s | a cause new to the incident is news once it holds this long |
 | `FixWatch` | 10m | when to say a fix attempt did not work |
@@ -37,6 +39,9 @@ read the header there for how they relate.
 | `kube.BootWindow` | 10m | a node pool still booting is not an incident; `coverage.After` is longer |
 | `kube.WakeQuiet` / `WakeMax` | 10m / 30m | a wake-up ends this long after its last start, or at most this long after its first |
 | `kube.ScaleDownSpan` | 15m | workloads set to 0 this close together are one planned scale-down |
+| `kube.LeftBehindGrace` | 15m | a routed workload a planned scale-down set to 0 and the following wake-up left at 0 is told this long after that wake-up was over |
+| incident `PlannedDays` / `PlannedMinDays` / `PlannedTolerance` | 3 / 2 / 30m | a mass scale-down or scale-up seen at the same time of day (± the tolerance) on this many of the previous days is a scheduled operation |
+| incident `PlannedGrace` | 15m | what a scheduled scale-down explains stays held until this long after the scale-up that followed it was over (24h when none does) |
 | announce `OngoingEvery` | 6h | an open digest problem that came back is listed again after this long, even when no other digest is due |
 
 ---

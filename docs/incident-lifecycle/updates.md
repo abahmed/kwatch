@@ -137,7 +137,8 @@ it.
 listing (a roll-up, the startup summary) announced, and that has sent
 nothing of its own since, may be revised to a new cause whose rival is
 the cause the listing stated (`hedgesTold`, `open_steps.go`). The update
-would only say "two possible causes: X or what you were told", as the
+would only say that kwatch could not confirm a cause between X and
+what you were told (`rootcause.Confirmed`), as the
 incident's first message of its own: a new conversation, and later a
 resolve of its own, for a solver that re-ranked two answers within the
 margin (the told one often still scoring higher). Nothing observed

@@ -93,7 +93,7 @@ func failingConditions(e inventory.Entity) []failingCondition {
 	var failing []failingCondition
 	for _, rule := range kube.ConditionRules {
 		status, reason, at := condition(e, rule.Type)
-		if status != rule.Bad {
+		if status != rule.Bad || !rule.Applies(e.ID.Group) {
 			continue
 		}
 		label := rule.Type + "=" + status
@@ -102,7 +102,8 @@ func failingConditions(e inventory.Entity) []failingCondition {
 		}
 		failing = append(failing, failingCondition{
 			label: label, since: at, unknown: rule.Bad == "Unknown",
-			unclaimed: rule.Bad == "Unknown" && gatewayAcceptance(rule.Type),
+			unclaimed: rule.Bad == "Unknown" &&
+				gatewayAcceptance(e.ID.Group, rule.Type),
 			message: text(e, kube.ConditionKey(rule.Type)+
 				kube.AttrConditionMessage),
 		})
@@ -141,9 +142,10 @@ func failingGrace(failing []failingCondition) time.Duration {
 const DefaultGatewayUnclaimed = 2 * time.Minute
 
 // gatewayAcceptance reports the condition types a Gateway API controller
-// sets first when it takes an object over.
-func gatewayAcceptance(conditionType string) bool {
-	return conditionType == "Accepted" || conditionType == "Programmed"
+// sets first when it takes an object of its API group over.
+func gatewayAcceptance(group, conditionType string) bool {
+	return group == kube.GatewayGroup &&
+		(conditionType == "Accepted" || conditionType == "Programmed")
 }
 
 // unclaimed reports failing conditions that are all a Gateway API

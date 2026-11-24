@@ -155,7 +155,7 @@
         etag: !user && q === etagQuery ? etag : "" })];
       // The badge counts the whole active list: a filtered or other
       // list reads it on its own (an unchanged one costs a 304).
-      calls.push(f.status !== "active" || LQ.used(f) ? KW.refreshBadge() : null);
+      calls.push(f.status !== "active" || LQ.used(f) || f.bucket !== "all" ? KW.refreshBadge() : null);
       return Promise.all(calls).then(function (out) {
         if (mine === seq) busy = false;
         if (stopped || mine !== seq) return 0;
@@ -218,7 +218,7 @@
       data.facets = data.facets || {};
       data.total = data.total || 0;
       filters.paint(data);
-      if (f.status === "active" && !LQ.used(f) && data.facets.severity) {
+      if (f.status === "active" && !LQ.used(f) && f.bucket === "all" && data.facets.severity) {
         KW.updateBadge(data.facets.severity);
       }
       // No count in the title: the badge and the favicon say how many
@@ -291,6 +291,10 @@
         return empty.appendChild(p);
       }
       if (f.status === "resolved") return empty.appendChild(KW.resolvedEmpty());
+      var other = KW.listNotes.emptyTab(f, page, main, function () {
+        setView(LQ.copy(f, { bucket: "all", page: 1 }));
+      });
+      if (other) return empty.appendChild(other);
       var resolved = ((page.facets || {}).state || {}).resolved || 0;
       KW.api("/api/status").then(function (res) {
         if (stopped || !wrap.hidden) return;
@@ -352,7 +356,10 @@
     /* ---- the pager ---- */
     var pager = KW.pager($("[data-pager]"), {
       onPage: function (to) { setView(LQ.copy(f, { page: to })); },
-      onSize: function (size) { setView(LQ.copy(f, { pageSize: size, page: 1 })); }
+      onSize: function (size) {
+        KW.prefs.set("size", size);
+        setView(LQ.copy(f, { pageSize: size, page: 1 }));
+      }
     });
 
     /* "Skip to issues" goes to the first row (or the table). */

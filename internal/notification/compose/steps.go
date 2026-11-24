@@ -45,6 +45,9 @@ func causeSteps(
 	if m, ok := orphanedAttachment(p.Root, members); ok {
 		return orphanedAttachmentSteps(p.Root, m)
 	}
+	if steps := orphanFinalizerSteps(p, members); steps != nil {
+		return steps
+	}
 	if root := p.Root; dependencyLogCause(p.Cause) &&
 		incident.IsWorkload(root.Kind) {
 		return append(dependencySteps(p.Cause, root.Namespace,
@@ -53,7 +56,8 @@ func causeSteps(
 	if steps := kindOnlySteps(p, members); steps != nil {
 		return append(steps, rootSteps(p, members)...)
 	}
-	return rootSteps(p, members)
+	return append(rootSteps(p, members),
+		webhookLeftoverSteps(p, members)...)
 }
 
 // rootSteps suggests the steps for the incident's root.
@@ -72,10 +76,7 @@ func rootKindSteps(
 ) []notification.Step {
 	root := p.Root
 	switch {
-	case p.Cause != nil && p.Cause.Change != nil &&
-		!p.Cause.Change.Created && incident.IsWorkload(root.Kind):
-		// A creation is no change to revert: the workload never ran,
-		// and its own error is where to look (symptomSteps).
+	case rolloutCause(p, members):
 		return rolloutSteps(root, p.Cause, pullFailure(members),
 			knownOwners(p))
 	case root.Kind == kube.KindNode && !nodeRemoved(p):
@@ -161,6 +162,19 @@ func rolloutSteps(
 		steps = containerSteps(append(known, workload), *pull)
 	}
 	return append(steps, undoSteps(workload, cause)...)
+}
+
+// rolloutCause reports an incident of a workload blamed on a change of
+// it that still explains its members: a creation is no change to
+// revert (the workload never ran, and its own error is where to look),
+// and members that only say it is scaled to zero or paused are no
+// longer what the change broke (staleChange).
+func rolloutCause(
+	p incident.Incident, members []detection.Finding,
+) bool {
+	return p.Cause != nil && p.Cause.Change != nil &&
+		!p.Cause.Change.Created && incident.IsWorkload(p.Root.Kind) &&
+		!staleChange(members)
 }
 
 // pullFailure is the first failing member that cannot pull its image.

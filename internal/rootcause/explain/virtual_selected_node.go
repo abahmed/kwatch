@@ -6,10 +6,6 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
-// RuleClaimSelectedNodeGone names the row that blames a claim whose
-// selected node no longer exists.
-const RuleClaimSelectedNodeGone = "claim-selected-node-gone"
-
 // ModeSelectedNodeGone is a claim that still waits on the node the
 // scheduler picked for it, which is not in the cluster any more.
 const ModeSelectedNodeGone detection.Mode = "SelectedNodeGone"

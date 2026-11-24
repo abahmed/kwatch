@@ -39,15 +39,21 @@ type DigestState struct {
 	// Listed are the incidents a digest listed and that have not spoken
 	// since: their first own message must introduce them in full.
 	Listed []string `json:",omitempty"`
-	// Shown are the ongoing problems a digest listed in full today, so a
-	// restart does not list them in full again (see ongoing_compact.go).
+	// Shown are the ongoing problems a digest listed in full today, or
+	// this week for one listed weekly, so a restart does not list them
+	// in full again (see ongoing_compact.go).
 	Shown []ShownLine `json:",omitempty"`
 	// Risks are the risks a digest already named (riskKey), so a
 	// restart does not name them again. Absent in older files.
 	Risks []string `json:",omitempty"`
+	// Planned are the mass scale-downs and scale-ups kwatch saw, so a
+	// restart still knows which operations recur at the same time
+	// every day (incident.PlannedOp). Absent in older files.
+	Planned []incident.PlannedOp `json:",omitempty"`
 }
 
-// ShownLine is how one ongoing problem was last listed in full.
+// ShownLine is how one ongoing problem was last listed in full. Day is
+// the UTC date, or the ISO week ("2026-W48") of a weekly listing.
 type ShownLine struct {
 	ID, Day, Sig string
 }
@@ -58,6 +64,7 @@ func (s DigestState) clone() DigestState {
 	s.Listed = slices.Clone(s.Listed)
 	s.Shown = slices.Clone(s.Shown)
 	s.Risks = slices.Clone(s.Risks)
+	s.Planned = incident.ClonePlanned(s.Planned)
 	return s
 }
 
@@ -65,7 +72,8 @@ func (s DigestState) equal(o DigestState) bool {
 	return s.Since.Equal(o.Since) && slices.Equal(s.Told, o.Told) &&
 		slices.Equal(s.Resolved, o.Resolved) &&
 		slices.Equal(s.Listed, o.Listed) && slices.Equal(s.Shown, o.Shown) &&
-		slices.Equal(s.Risks, o.Risks)
+		slices.Equal(s.Risks, o.Risks) &&
+		incident.EqualPlanned(s.Planned, o.Planned)
 }
 
 func linesOf(decisions []incident.Decision, told func(
@@ -83,8 +91,9 @@ func linesOf(decisions []incident.Decision, told func(
 func (c *Collector) pendingState() DigestState {
 	g := &c.Low
 	state := DigestState{Since: g.Since, Listed: c.digested,
-		Shown: c.shownLines(),
-		Risks: slices.Sorted(maps.Keys(c.mentionedRisks))}
+		Shown:   c.shownLines(),
+		Risks:   slices.Sorted(maps.Keys(c.mentionedRisks)),
+		Planned: c.plannedOps()}
 	state.Told = linesOf(g.Opened, func(d incident.Decision) bool {
 		return d.Reason == incident.ReasonReminder ||
 			d.Reason == incident.ReasonFailingAgain
@@ -111,6 +120,9 @@ func (c *Collector) saveDigest() {
 func (c *Collector) RestoreDigest() {
 	state := c.Startup.Summary.Digest
 	c.digested = slices.Clone(state.Listed)
+	if c.env.Incidents != nil {
+		c.env.Incidents.RestorePlannedOps(state.Planned)
+	}
 	c.restoreShown(state.Shown)
 	for _, key := range state.Risks {
 		c.mentionedRisks[key] = true

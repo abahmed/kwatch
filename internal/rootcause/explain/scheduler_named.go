@@ -298,22 +298,33 @@ func schedulerNamesRows() []Row {
 	return rows
 }
 
-// cordonedNodes are the nodes marked unschedulable. The scheduler
-// checks the cordon first, so it counts every cordoned node it saw. When
-// more nodes are cordoned than the verdict counts, it was given before
-// some of the cordons and cannot say which node left the pod without a
-// place: none is named.
+// cordonedNodes are the nodes marked unschedulable that the pod would
+// fit were the cordon lifted. The scheduler checks the cordon first, so
+// it counts every cordoned node it saw. When more nodes are cordoned
+// than the verdict counts, it was given before some of the cordons and
+// cannot say which node left the pod without a place: none is named. A
+// cordoned node without room for the pod, or one its taints or labels
+// keep the pod off, would not take it either: the cordon is not why.
 func (v *view) cordonedNodes(
-	_ inventory.EntityID, verdict string,
+	podID inventory.EntityID, verdict string,
 ) []inventory.EntityID {
+	pod, found := v.s.Model.Entity(podID)
+	if !found {
+		return nil
+	}
+	cordoned := 0
 	var out []inventory.EntityID
 	for _, id := range v.s.Model.Entities(kube.KindNode) {
-		if node, ok := v.s.Model.Entity(id); ok &&
-			attrBool(node, kube.AttrUnschedulable) {
+		node, ok := v.s.Model.Entity(id)
+		if !ok || !attrBool(node, kube.AttrUnschedulable) {
+			continue
+		}
+		cordoned++
+		if v.cordonWouldFit(pod, node) {
 			out = append(out, id)
 		}
 	}
-	if seen, ok := unschedulableCount(verdict); ok && len(out) > seen {
+	if seen, ok := unschedulableCount(verdict); ok && cordoned > seen {
 		return nil
 	}
 	return out

@@ -44,9 +44,6 @@ func classReferences(
 func missingClass(
 	ctx detection.Context, e inventory.Entity, kind inventory.Kind,
 ) (detection.Finding, bool) {
-	if !ctx.Synced(kind) {
-		return detection.Finding{}, false
-	}
 	var missing []string
 	for _, id := range ctx.Model.Related(
 		e.ID, inventory.References, inventory.Outgoing,
@@ -55,7 +52,9 @@ func missingClass(
 			missing = append(missing, id.Name)
 		}
 	}
-	if len(missing) == 0 {
+	// Only an absent class needs its kind synced, and then only this
+	// finding is unsure: the workload's other findings still clear.
+	if len(missing) == 0 || !ctx.SyncedFor(kind, classReason[kind]) {
 		return detection.Finding{}, false
 	}
 	if !classRefused(ctx, e, kind, missing) && !sustained(ctx,

@@ -36,6 +36,12 @@ type WakeLine struct {
 	// Blips counts the workloads that had startup failures, and Failing
 	// those that still do.
 	Blips, Failing int
+	// Days, when set, makes it the line of a scheduled operation: Seen
+	// of the last Days days had the same operation at about the same
+	// time. Down is a scale-down (Started counts the workloads it set
+	// to zero), and Nodes counts the nodes it removed or added.
+	Days, Seen, Nodes int
+	Down              bool
 }
 
 // DigestExtras is what a digest says beyond the incidents that opened
@@ -60,6 +66,9 @@ func (x DigestExtras) Empty() bool {
 // started between 06:51 and 07:03; 5 had brief startup failures, all
 // recovered."
 func (l WakeLine) Text() string {
+	if l.Days > 0 {
+		return l.scheduledText()
+	}
 	text := "Cluster waking up: " + countFact(l.Started, "workload") +
 		" started " + startedWhen(l.From, l.To)
 	if l.Blips == 0 {
@@ -74,6 +83,40 @@ func (l WakeLine) Text() string {
 	}
 	return text + strconv.Itoa(l.Blips-l.Failing) + " recovered, " +
 		strconv.Itoa(l.Failing) + " still failing."
+}
+
+// scheduledText words a scheduled operation: "Scheduled scale-down at
+// 18:02 UTC (seen at this time on 3 of the last 3 days): 27
+// workloads, 4 nodes."
+func (l WakeLine) scheduledText() string {
+	var counts []string
+	if l.Started > 0 {
+		counts = append(counts, countFact(l.Started, "workload"))
+	}
+	if l.Nodes > 0 {
+		counts = append(counts, countFact(l.Nodes, "node"))
+	}
+	return "Scheduled " + l.operation() + " at " + clock(l.From) +
+		" (seen at this time on " + strconv.Itoa(l.Seen) + " of the " +
+		"last " + strconv.Itoa(l.Days) + " days): " +
+		strings.Join(counts, ", ") + "."
+}
+
+// operation names what the line is about.
+func (l WakeLine) operation() string {
+	if l.Down {
+		return "scale-down"
+	}
+	return "scale-up"
+}
+
+// Kind is the digest's lead phrase for the line: "a cluster wake-up"
+// or "a scheduled scale-down".
+func (l WakeLine) Kind() string {
+	if l.Days > 0 {
+		return "a scheduled " + l.operation()
+	}
+	return "a cluster wake-up"
 }
 
 func startedWhen(from, to time.Time) string {

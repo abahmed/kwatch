@@ -8,13 +8,13 @@ import (
 )
 
 // ReasonFailingAgain is the audit reason of the update that tells an
-// announced incident re-opened within RepageWindow of its resolve.
+// announced incident re-opened within ReopenWindow of its resolve.
 const ReasonFailingAgain Reason = "failing again"
 
 // reopenable reports whether the resolved incident p is the announced
 // incident that a failure of the same root and mode just continued: it
 // notified or paged, it was told about, it ended on its own less than
-// RepageWindow ago. Such an outage is flapping, so it comes back as the
+// ReopenWindow ago. Such an outage is flapping, so it comes back as the
 // same incident, and not as a new one with a new thread and, for a
 // page, a new paging alert. A finding with no
 // mode, or an incident without one, matches any mode. One closed
@@ -23,16 +23,16 @@ func reopenable(
 	p *Incident, now time.Time, mode detection.Mode,
 ) bool {
 	return p.State == Resolved && !p.quiet && p.CanReopen() &&
-		now.Sub(p.Resolved) <= RepageWindow &&
+		now.Sub(p.Resolved) <= ReopenWindow &&
 		p.hasMode(mode)
 }
 
-// CanReopen reports whether a failure within RepageWindow of this
+// CanReopen reports whether a failure within ReopenWindow of this
 // incident's resolve would continue it: people were told about it (an
 // announcement that was only decided, held and dropped, or out of scope
 // does not count), it notified, paged or was listed by a digest, and it
 // was not superseded. The resolve message carries
-// RepageWindow when this holds, so chat threads stay open for the reopen.
+// ReopenWindow when this holds, so chat threads stay open for the reopen.
 func (p Incident) CanReopen() bool {
 	return p.SupersededBy == "" && p.sent.told &&
 		(p.Tier >= Notify || p.Tier == Digest || p.Delivery.PageHeld())

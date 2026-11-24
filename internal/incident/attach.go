@@ -107,7 +107,7 @@ func (m *Manager) attach(
 	if revised && !rerooted {
 		p.note(now, "cause revised: now explained by "+describe(where.root))
 	}
-	if _, known := p.Members[key]; !known {
+	if _, known := p.Members[key]; !known && !rejoined(p, s) {
 		about := s.Entity
 		p.noteAbout(now, memberNote(s), &about)
 	}
@@ -201,8 +201,7 @@ func (m *Manager) refresh(model inventory.Reader, now time.Time) {
 			p.Mode = incidentMode(p)
 			p.Impact = impact(model, p)
 			p.Belongs = belongsOf(model, p)
-			p.trafficLost = trafficLost(model, p)
-			p.servingDown = servingDown(model, p)
+			p.noteServing(model, now)
 			p.PreviousServes = previousServes(model, p)
 			p.admissionBlocked = admissionBlocked(model, p)
 			p.noteRejection(now)

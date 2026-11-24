@@ -127,7 +127,9 @@ func TestCommunityOmitsInvestigationOutput(t *testing.T) {
 	assert.Empty(t, community.Write(d, at(4, 0)).Output)
 }
 
-func TestCommunityNamesOneCauseWhereProNamesTwo(t *testing.T) {
+// Two causes that scored alike confirm none: Pro names them only as
+// possibilities, and Community tells no cause or category at all.
+func TestCommunityTellsNoCauseWhereProConfirmsNone(t *testing.T) {
 	p := secretCause(0.74)
 	p.Cause.Rival = &rootcause.CauseRecord{
 		Root:  inventory.CoreID("configmap", "default", "cfg"),
@@ -137,11 +139,12 @@ func TestCommunityNamesOneCauseWhereProNamesTwo(t *testing.T) {
 	pro := full.Write(announce(p), writerNow)
 	got := community.Write(announce(p), writerNow)
 
-	assert.Contains(t, pro.Title, "two possible causes")
-	assert.NotContains(t, got.Title, "two possible causes")
+	assert.Contains(t, pro.Title, "kwatch could not confirm a cause")
+	assert.Contains(t, pro.Note, "Possibilities kwatch could not confirm")
 	assert.NotContains(t, got.Note, "configmap cfg")
-	assert.NotContains(t, got.Note, "secret db", "only the category shows")
-	assert.Equal(t, 1, strings.Count(got.Note, teaserLabel))
+	assert.NotContains(t, got.Note, "secret db")
+	assert.NotContains(t, got.Note, teaserLabel)
+	assert.NotContains(t, got.Note, teaserPossible)
 	require.NotNil(t, p.Cause.Rival, "the incident keeps its rival")
 }
 

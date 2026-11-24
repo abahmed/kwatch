@@ -326,6 +326,24 @@ grep -A8 'kind: ClusterRole$' <<<"$OUT_A" |
   grep -Fq 'app.kubernetes.io/instance: same' || {
   echo "FAIL: ClusterRole must carry the chart labels"; exit 1;
 }
+# Namespaced objects in kube-system and the PriorityClass are shared too.
+OUT_PA=$(helm template same . --namespace team-a \
+  --set priorityClass.create=true 2>&1)
+OUT_PB=$(helm template same . --namespace team-b \
+  --set priorityClass.create=true 2>&1)
+for pair in "team-a:$OUT_PA" "team-b:$OUT_PB"; do
+  ns=${pair%%:*}
+  out=${pair#*:}
+  for want in "name: same-kwatch-$ns-control-plane-leases" \
+    "name: same-kwatch-$ns" "priorityClassName: \"same-kwatch-$ns\""; do
+    grep -Fq "$want" <<<"$out" || {
+      echo "FAIL: missing $want"; exit 1;
+    }
+  done
+done
+if grep -Fq 'name: same-control-plane-leases' <<<"$OUT_PA$OUT_PB"; then
+  echo "FAIL: kube-system leases objects must include the namespace"; exit 1;
+fi
 echo "PASS: rbac modes"
 
 echo "=== KwatchConfig RBAC is namespaced ==="

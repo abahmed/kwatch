@@ -45,8 +45,8 @@ const tabRoles = `(() => {
 })()`
 
 // The header card holds only the header; the questions are in the
-// Summary tab, which opens first; What's wrong? and What should I do?
-// always answer; the tab is kept in the address across a reload; the
+// Summary tab, which opens first; What should I do? always answers and
+// What's wrong? is left out when it adds nothing to the title; the tab is kept in the address across a reload; the
 // arrow keys move along the tabs.
 func TestBrowserIssueQuestionsInSummaryTab(t *testing.T) {
 	actx, srv := browserSetup(t)
@@ -61,7 +61,7 @@ func TestBrowserIssueQuestionsInSummaryTab(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := evalString(t, tab, tabsState); got !=
-		"summary||0|what,why,next|true|true" {
+		"summary||0|why,next|true|true" {
 		t.Errorf("layout: %q, want the questions in Summary only", got)
 	}
 	if got := evalString(t, tab, tabRoles); got !=
@@ -97,17 +97,18 @@ func TestBrowserIssueQuestionsInSummaryTab(t *testing.T) {
 }
 
 // checkPlainAnswers: an issue whose sentence only repeats its title
-// has no description line, What's wrong? says so, and What should I
-// do? gives the read-only commands to start with.
+// has no description line, What's wrong? is left out (nothing to add
+// and no Kubernetes warning to quote), and What should I do? gives the
+// read-only commands to start with.
 func checkPlainAnswers(t *testing.T, tab context.Context) {
 	t.Helper()
 	got := evalString(t, tab, `[
 	  document.querySelector("[data-ds-lead]").hidden,
-	  document.querySelector(".ds-r-what dd").textContent,
+	  document.querySelector(".ds-r-what").hidden,
 	  document.querySelector(".ds-r-next dd").textContent].join("|")`)
-	for _, want := range []string{"true|What the title says",
-		"kubectl -n web describe deployment/app-inc-002",
-		"kubectl -n web logs deployment/app-inc-002"} {
+	for _, want := range []string{"true|true|",
+		"kubectl describe deployment/app-inc-002 -n web",
+		"kubectl logs deployment/app-inc-002 -n web"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("answers lack %q: %q", want, got)
 		}

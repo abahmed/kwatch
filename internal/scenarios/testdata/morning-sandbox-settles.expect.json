@@ -1,0 +1,7 @@
+{
+  "name": "morning-sandbox-settles",
+  "description": "Five nodes join at once in the morning; 40 pods and the node agents fail sandbox network setup for up to 90 seconds, then all start.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "15m0s"
+}

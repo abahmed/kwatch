@@ -163,6 +163,25 @@
 
   /* KW.issueNotFound: the issue page of an issue the API no longer
      has, with links back to the lists. */
+  /* KW.pageNotFound: an address the dashboard has no page for (the
+     server answers such an address with its own 404 page; this is for
+     one reached inside the page). */
+  KW.pageNotFound = function (main) {
+    KW.title("Page not found");
+    KW.setNav("");
+    main.textContent = "";
+    main.appendChild(KW.el("h1", "", "Page not found"));
+    main.appendChild(KW.el("p", "lead-404", "There is no page at this address."));
+    var links = main.appendChild(KW.el("p", "links-404"));
+    [["/", "Go to the Overview"], ["/issues", "see the Issues"]].forEach(function (l, i) {
+      if (i) links.appendChild(document.createTextNode(" or "));
+      var a = links.appendChild(KW.el("a", "ulink", l[1]));
+      a.href = l[0];
+      a.dataset.link = "";
+    });
+    return { stop: function () {} };
+  };
+
   KW.issueNotFound = function (main) {
     KW.title("Issue not found");
     main.textContent = "";

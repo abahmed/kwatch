@@ -1,0 +1,8 @@
+{
+  "name": "parked-routes-one-line",
+  "description": "Three Deployments of one namespace were scaled to zero weeks ago while Ingresses still route to them: one digest incident for the namespace.",
+  "root": "namespace//demo",
+  "tier": "digest",
+  "maxMessages": 1,
+  "tail": "1h0m0s"
+}

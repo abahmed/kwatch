@@ -59,7 +59,7 @@ func scaledToZeroRouted(
 		return detection.Finding{}, false
 	}
 	// A twin serving the Service shows only in its EndpointSlices.
-	if !ctx.Synced(kube.KindEndpointSlice) {
+	if !ctx.SyncedFor(kube.KindEndpointSlice, reasons.ScaledToZeroRouted) {
 		return detection.Finding{}, false
 	}
 	exposed := exposures(ctx, e)
@@ -67,8 +67,7 @@ func scaledToZeroRouted(
 		return detection.Finding{}, false
 	}
 	scaled := scaledBy(ctx, e.ID)
-	if kube.ScaledDownInBatch(ctx.Model, e.ID, scaled.At) {
-		// A planned scale-down put it at zero on purpose.
+	if plannedZero(ctx, e.ID, scaled.At) {
 		return detection.Finding{}, false
 	}
 	since, known := scaledSince(e, scaled)
@@ -86,6 +85,22 @@ func scaledToZeroRouted(
 		f = asLeftover(ctx, f, e.ID, e.ID.Namespace)
 	}
 	return f, true
+}
+
+// plannedZero reports a workload a planned scale-down put at zero on
+// purpose (kube.ScaledDownInBatch), until the scale-up that brought
+// its peers back left it behind (kube.LeftBehind).
+func plannedZero(
+	ctx detection.Context, id inventory.EntityID, at time.Time,
+) bool {
+	if !kube.ScaledDownInBatch(ctx.Model, id, at) {
+		return false
+	}
+	left, recheck := kube.LeftBehind(ctx.Model, id, at, ctx.Now)
+	if recheck > 0 {
+		ctx.RecheckAfter(recheck)
+	}
+	return !left
 }
 
 // scaledSince is when the workload was scaled to zero, from the cluster

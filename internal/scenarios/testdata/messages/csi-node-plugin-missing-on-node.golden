@@ -1,9 +1,10 @@
 10:11:15 settled
-🟠 ebs-csi-node in kube-system (prod-eu-1) is failing; it has no pod on the node the failing pods run on, which might be related. Affected: api in shop. To see the pods' state and events, run kubectl describe pods api- -n shop
-🟠 ebs-csi-node in kube-system (prod-eu-1) is failing; it has no pod on the node the failing pods run on, which might be related.
-| 🟠 **ebs-csi-node** in **kube-system** (**prod-eu-1**) is failing; it has no pod on the node the failing pods run on, which might be related.
-| Affected: **api** in **shop**.
+🟠 api in shop (prod-eu-1) is failing; kwatch could not confirm a cause. To see the pods' state and events, run kubectl describe pods api- -n shop
+A possibility kwatch could not confirm: ebs-csi-node in kube-system has no pod on the node the failing pods run on.
+🟠 api in shop (prod-eu-1) is failing; kwatch could not confirm a cause.
+| 🟠 **api** in **shop** (**prod-eu-1**) is failing; kwatch could not confirm a cause.
 | To see the pods' state and events, run
 | ```
 | kubectl describe pods api- -n shop
 | ```
+| *A possibility kwatch could not confirm: ebs-csi-node in kube-system has no pod on the node the failing pods run on.*

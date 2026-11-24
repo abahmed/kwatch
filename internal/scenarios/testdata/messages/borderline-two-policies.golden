@@ -1,15 +1,17 @@
 10:03:35 settled
-🟠 api in payments (prod-eu-1) keeps crashing; two possible causes: network policy allow-cache or network policy restrict-egress blocks its traffic. It fails with "FATAL: failed to connect to `host=10.0.3.4 user=payments database=payments`: dial error (dial tcp 10.0.3.4:5432: i/o…". Every app that uses it is failing. To read the output of the last crash, run kubectl logs deploy/api -c app -n payments --previous
-Proof: both replicas fail, on 2 nodes.
-🟠 api in payments (prod-eu-1) keeps crashing; two possible causes: network policy allow-cache or network policy restrict-egress blocks its traffic.
-| 🟠 **api** in **payments** (**prod-eu-1**) keeps crashing; two possible causes: network policy **allow-cache** or network policy restrict-egress blocks its traffic.
+🟠 api in payments (prod-eu-1) keeps crashing; kwatch could not confirm a cause. It fails with "FATAL: failed to connect to `host=10.0.3.4 user=payments database=payments`: dial error (dial tcp 10.0.3.4:5432: i/o…". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs deploy/api -c app -n payments --previous
+kwatch checked: both replicas fail, on 2 nodes.
+Possibilities kwatch could not confirm: network policy allow-cache or network policy restrict-egress blocks its traffic.
+🟠 api in payments (prod-eu-1) keeps crashing; kwatch could not confirm a cause.
+| 🟠 **api** in **payments** (**prod-eu-1**) keeps crashing; kwatch could not confirm a cause.
 | It fails with
 | ```
 | FATAL: failed to connect to `host=10.0.3.4 user=payments database=payments`: dial error (dial tcp 10.0.3.4:5432: i/o…
 | ```
-| Every app that uses it is failing.
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
 | To read the output of the last crash, run
 | ```
 | kubectl logs deploy/api -c app -n payments --previous
 | ```
-| *Proof: both replicas fail, on 2 nodes.*
+| *kwatch checked: both replicas fail, on 2 nodes.*
+| *Possibilities kwatch could not confirm: network policy allow-cache or network policy restrict-egress blocks its traffic.*

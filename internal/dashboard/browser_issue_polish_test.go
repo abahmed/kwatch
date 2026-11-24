@@ -181,7 +181,7 @@ func TestBrowserAlertsTabShowsAckCommand(t *testing.T) {
 	  return r.textContent.includes("Not acknowledged yet") + "|" +
 	    (c ? c.textContent : "") + "|" +
 	    r.querySelectorAll("button").length; })()`)
-	if !strings.HasPrefix(got, "true|kubectl -n shop annotate deployment/api ") {
+	if !strings.HasPrefix(got, "true|kubectl annotate deployment/api -n shop ") {
 		t.Errorf("top card has no acknowledge command: %q", got)
 	}
 	d := stubDetail()

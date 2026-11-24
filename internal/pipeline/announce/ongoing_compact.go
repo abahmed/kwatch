@@ -1,6 +1,7 @@
 package announce
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"strconv"
@@ -13,12 +14,20 @@ import (
 // An ongoing problem is listed in full at most once a day: in the first
 // digest of the day that names it, or in a later one when it changed.
 // Every other digest says "N more still failing, unchanged (a, b, c +K)"
-// instead of repeating the same lines. The audit log still lists them
-// all.
+// instead of repeating the same lines. A problem that began more than
+// WeeklyAfter ago and did not change is listed in full at most once a
+// week (ISO week, UTC): the first digest of the week lists it with the
+// others still open, and the other digests only count it. The audit log
+// still lists them all.
+
+// WeeklyAfter is how long a problem must have lasted before an
+// unchanged one is listed in full once a week instead of once a day.
+const WeeklyAfter = 7 * 24 * time.Hour
 
 // shown is how a problem was last listed in full.
 type shown struct {
-	// day is the UTC date of the digest, sig what it said (see
+	// day is the UTC date of the digest, or its ISO week for a problem
+	// listed weekly (periodOf); sig is what it said (see
 	// ongoingSignature).
 	day, sig string
 }
@@ -49,6 +58,21 @@ func ongoingSignature(p incident.Incident) string {
 
 func dayOf(now time.Time) string { return now.UTC().Format("2006-01-02") }
 
+// weekOf is the ISO week of now, UTC: "2026-W48".
+func weekOf(now time.Time) string {
+	year, week := now.UTC().ISOWeek()
+	return fmt.Sprintf("%d-W%02d", year, week)
+}
+
+// periodOf is how often item is listed in full: the day, or the week
+// for a problem that began more than WeeklyAfter ago.
+func periodOf(item ongoingItem, now time.Time) string {
+	if !item.Since.IsZero() && now.Sub(item.Since) > WeeklyAfter {
+		return weekOf(now)
+	}
+	return dayOf(now)
+}
+
 // splitOngoing separates the problems to list in full from the ones
 // this day's digests already listed and that did not change.
 func (c *Collector) splitOngoing(
@@ -57,7 +81,8 @@ func (c *Collector) splitOngoing(
 	for _, item := range items {
 		last, ok := c.ongoingShown[item.p.ID]
 		sig := ongoingSignature(item.p)
-		if ok && last.day == dayOf(now) && (sig == "" || last.sig == sig) {
+		if ok && last.day == periodOf(item, now) &&
+			(sig == "" || last.sig == sig) {
 			unchanged = append(unchanged, item)
 			continue
 		}
@@ -66,18 +91,20 @@ func (c *Collector) splitOngoing(
 	return changed, unchanged
 }
 
-// markShown remembers that a digest listed the problem in full.
-func (c *Collector) markShown(p incident.Incident, now time.Time) {
+// markShown remembers that a digest listed the problem in full, in
+// its period (periodOf). Records of a past day or week are dropped.
+func (c *Collector) markShown(item ongoingItem, now time.Time) {
 	if c.ongoingShown == nil {
 		c.ongoingShown = map[string]shown{}
 	}
-	today := dayOf(now)
+	today, week := dayOf(now), weekOf(now)
 	for id, last := range c.ongoingShown {
-		if last.day != today {
+		if last.day != today && last.day != week {
 			delete(c.ongoingShown, id)
 		}
 	}
-	c.ongoingShown[p.ID] = shown{day: dayOf(now), sig: ongoingSignature(p)}
+	c.ongoingShown[item.p.ID] = shown{day: periodOf(item, now),
+		sig: ongoingSignature(item.p)}
 }
 
 // ongoingExtras are the digest's ongoing problems: in full, and as the
@@ -94,9 +121,9 @@ func ongoingExtras(
 	return full, same
 }
 
-// shownLines is the record of what today's digests listed, in ID order,
-// for the saved digest state: a restart must not make every ongoing
-// problem new again.
+// shownLines is the record of what this day's and week's digests
+// listed, in ID order, for the saved digest state: a restart must not
+// make every ongoing problem new again.
 func (c *Collector) shownLines() []ShownLine {
 	var out []ShownLine
 	for _, id := range slices.Sorted(maps.Keys(c.ongoingShown)) {

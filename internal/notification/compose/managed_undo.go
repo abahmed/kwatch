@@ -60,6 +60,25 @@ func managedAction(
 	return "", false
 }
 
+// managedWhere says where a workload a GitOps controller or Helm deploys
+// (app, as managedUndo reads it) is changed so the change lasts: "Git
+// (argocd/shop)" or "the values of Helm release api". A change made in
+// the cluster is undone by the next sync or overwritten by the next
+// upgrade. false for a workload deployed by other means.
+func managedWhere(app string) (string, bool) {
+	tool, name, _ := strings.Cut(app, "/")
+	switch tool {
+	case "argocd", "flux":
+		return "Git (" + app + ")", true
+	case "helm":
+		if _, release, ok := strings.Cut(name, "/"); ok {
+			name = release
+		}
+		return "the values of Helm release " + name, true
+	}
+	return "", false
+}
+
 // helmUndo rolls the Helm release that deploys the workload back to
 // revision, the newest earlier one Helm recorded as deployed. A bare
 // "helm rollback" goes to the revision just before, which may have

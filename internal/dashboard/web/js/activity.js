@@ -1,7 +1,8 @@
 /* kwatch dashboard: the Activity page (/activity), what changed
    recently: from /api/activity, the issues that are new, got more
-   urgent, came back or were resolved in the last hour (or 24 hours,
-   ?since=24h), newest first, at most what the server sends, each a
+   urgent, came back or were resolved in the last 24 hours (or the last
+   hour, ?since=1h, or 7 days, ?since=7d; the last choice is kept in
+   this browser), newest first, at most what the server sends, each a
    link to its issue page. One line counts them by kind. Changes nobody
    was told about (an issue that settled on its own, and its
    resolve) are left out unless the reader shows them (?untold=1); a
@@ -12,7 +13,11 @@
   var KW = window.KW;
   var T = KW.TERMS.activity;
   var ORDER = ["new", "urgent", "reopened", "resolved"];
-  var WINDOWS = { "1h": "the last hour", "24h": "the last 24 hours" };
+  var WINDOWS = { "1h": "the last hour", "24h": "the last 24 hours", "7d": "the last 7 days" };
+  var BUTTONS = { "1h": "Last hour", "24h": "Last 24 hours", "7d": "Last 7 days" };
+  /* DEFAULT is the window shown without ?since= and without a choice
+     kept in this browser (view option actSince). */
+  var DEFAULT = "24h";
   /* TALLY: each kind counted in words, "25 issues started". */
   var TALLY = {
     "new": function (n) { return KW.num(n) + (n === 1 ? " issue" : " issues") + " started"; },
@@ -47,23 +52,35 @@
     return e.untold ? say + "; " + lower(KW.TERMS.notAlerted) : say;
   }
 
-  /* row: time, one sentence saying what happened to which workload,
-     the issue's own title under it, and how urgent it is. */
+  /* ago: how long ago, in whole units: "4 min ago", "3 h ago",
+     "2 days ago". */
+  function ago(iso) {
+    var m = Math.max(0, Math.floor((KW.now() - Date.parse(iso)) / 60000));
+    if (m < 1) return "just now";
+    if (m < 60) return m + " min ago";
+    if (m < 1440) return Math.floor(m / 60) + " h ago";
+    var d = Math.floor(m / 1440);
+    return d + (d === 1 ? " day ago" : " days ago");
+  }
+
+  /* row: when (the clock time and how long ago), one sentence saying
+     what happened to which workload, and how urgent it is. The
+     issue's own title is the row's tooltip: under the sentence it
+     mostly said the same again. */
   function row(e) {
     var li = KW.el("li");
     var a = li.appendChild(KW.el("a", "act-row"));
     a.href = "/issues/" + encodeURIComponent(e.id);
     a.dataset.link = "";
     a.dataset.rowlink = "";
-    a.appendChild(KW.hm(e.at)).className = "act-at";
+    var at = a.appendChild(KW.el("span", "act-at"));
+    at.appendChild(KW.hm(e.at));
+    at.appendChild(KW.el("span", "act-ago", ago(e.at)));
     var body = a.appendChild(KW.el("span", "act-body"));
     var line = body.appendChild(KW.el("span", "act-line"));
     line.appendChild(KW.el("b", "act-who", who(e)));
     line.appendChild(KW.el("span", "act-verb", ": " + verb(e)));
-    var title = KW.shortTitle(e.title, e);
-    if (title && title !== e.workload) {
-      KW.clampTitle(body.appendChild(KW.el("span", "act-title", title)));
-    }
+    if (e.title) a.title = e.title;
     var chips = a.appendChild(KW.el("span", "act-chips"));
     // "Was Urgent" only for a resolved issue people were alerted about;
     // one that settled on its own shows its level greyed (the verb
@@ -134,7 +151,8 @@
 
   KW.activityView = function (main) {
     var query = new URLSearchParams(location.search);
-    var since = query.get("since") === "24h" ? "24h" : "1h";
+    var since = WINDOWS[query.get("since")] ? query.get("since") :
+      WINDOWS[KW.store.get("actSince")] ? KW.store.get("actSince") : DEFAULT;
     var untold = query.get("untold") === "1";
     var etag = "", seq = 0, limit = STEP, open = {};
     var pg = KW.pageView(main, { title: "Activity", tab: "Activity · kwatch", read: load,
@@ -142,8 +160,8 @@
     var sw = pg.body.appendChild(KW.el("div", "tz act-sw"));
     sw.setAttribute("role", "group");
     sw.setAttribute("aria-label", "Show changes from");
-    var buttons = ["1h", "24h"].map(function (w) {
-      var b = sw.appendChild(KW.el("button", "tz-b", w === "1h" ? "Last hour" : "Last 24 hours"));
+    var buttons = ["1h", "24h", "7d"].map(function (w) {
+      var b = sw.appendChild(KW.el("button", "tz-b", BUTTONS[w]));
       b.type = "button";
       b.dataset.actSince = w;
       return b;
@@ -191,7 +209,7 @@
     /* place keeps the window and the untold choice in the address. */
     function place() {
       var q = new URLSearchParams();
-      if (since === "24h") q.set("since", "24h");
+      if (since !== DEFAULT) q.set("since", since);
       if (untold) q.set("untold", "1");
       var s = q.toString();
       history.replaceState(null, "", "/activity" + (s ? "?" + s : ""));
@@ -215,6 +233,9 @@
     buttons.forEach(function (b) {
       b.addEventListener("click", function () {
         since = b.dataset.actSince;
+        // Kept in this browser: the next visit opens the same window
+        // (KW.store survives a browser that refuses to keep it).
+        KW.store.set("actSince", since);
         etag = "";
         limit = STEP;
         mark();
@@ -234,6 +255,8 @@
       pg.now();
     });
     mark();
+    // A window kept from an earlier visit shows in the address too.
+    if (!query.get("since") && since !== DEFAULT) place();
     return { stop: pg.stop };
   };
 })();

@@ -125,3 +125,31 @@ func TestProbeLeadLeavesAContainerThatExitsOnItsOwn(t *testing.T) {
 	msg := Writer{}.Write(announce(p), writerNow)
 	assert.NotContains(t, msg.Title, "keeps being restarted")
 }
+
+// A node is never told as failing a pod's health check: a probe
+// finding that names the node (a kubelet event read before its pod was
+// known) does not make the probe the node's, and the title keeps to
+// the node's own state.
+func TestProbeLeadNeverTitlesANode(t *testing.T) {
+	node := inventory.CoreID(kube.KindNode, "", "ip-10-0-1-5")
+	p := incident.Incident{
+		ID: "node-1", Root: node, Tier: incident.Page,
+		State: incident.Open, Opened: writerNow.Add(-10 * time.Minute),
+		Members: members(detection.Finding{Entity: node,
+			Reason: reasons.ReadinessProbeFailed, Severity: detection.Critical,
+			Since:   writerNow.Add(-10 * time.Minute),
+			Summary: "Readiness probe failed",
+			Evidence: []detection.Evidence{
+				{Label: detection.EvidenceProbeCheck,
+					Value: "http /readyz :8081"},
+				{Label: detection.EvidenceProbeResult, Value: "HTTP 500"},
+				{Label: detection.EvidenceProbeLog,
+					Value: "webhook certs not ready"}}}),
+	}
+	msg := Writer{}.Write(announce(p), writerNow)
+	assert.Contains(t, msg.Title, "Node ip-10-0-1-5")
+	for _, text := range append([]string{msg.Title}, msg.Lines...) {
+		assert.NotContains(t, text, "readiness check")
+		assert.NotContains(t, text, "/readyz")
+	}
+}

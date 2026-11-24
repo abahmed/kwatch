@@ -85,3 +85,15 @@ func TestNotifyReminderCadenceIsUnchanged(t *testing.T) {
 	wantNone(t, r.tick(start.Add(2*RemindEvery-time.Second)))
 	wantAction(t, r.tick(start.Add(2*RemindEvery)), Update, ReasonReminder)
 }
+
+// An incident only a listing announced has no message of its own until
+// one reaches chat. A decision nobody hears in chat (a lowered tier
+// goes to the pagers only) bumps the revision but says nothing, so it
+// keeps the chronic back-off.
+func TestSilentRevisionKeepsTheChronicBackoff(t *testing.T) {
+	p := Incident{Tier: Notify, Revision: 2,
+		Delivery: Delivery{rolledUp: true}}
+	assert.Equal(t, chronicBackoff(0), reminderEvery(&p))
+	p.marks.SaidDigest = "said"
+	assert.Equal(t, RemindEvery, reminderEvery(&p))
+}

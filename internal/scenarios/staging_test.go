@@ -31,12 +31,12 @@ const (
 	scaleEvery   = 25 * time.Minute
 )
 
-// stagingDay is the length of the staging day. It grows with the scenario
-// library, one stagingSpacing per scenario (twelve hours for the 79
-// scenarios the gate was set on), so the alert density the peak gate
-// measures does not depend on how many scenarios the library holds.
+// stagingDay is the length of the staging day: stagingSlots slots of
+// stagingSpacing, the spacing the peak gate was set on (twelve hours for
+// the 79 scenarios of then). It does not change with the library, so no
+// scenario moves when another is added.
 func stagingDay() time.Duration {
-	return stagingSpacing * time.Duration(len(stagingScenarios())+1)
+	return stagingSpacing * time.Duration(stagingSlots+1)
 }
 
 // multiDay is how long a scenario may last and still be part of the
@@ -95,25 +95,28 @@ func runStagingDay(t *testing.T) stagingResult {
 	}
 }
 
-// stagingLog interleaves one instance of every scenario with the
-// background churn and the non-events.
+// stagingLog interleaves one instance of every scenario, each in its
+// own slot (stagingSlotsOf), with the background churn and the
+// non-events.
 func stagingLog() replay.Log {
 	scenarios := stagingScenarios()
 	logs := append([]replay.Log{backgroundChurn()}, nonEventLogs()...)
+	slots := stagingSlotsOf(stagingPlaces(scenarios))
 	spacing := stagingSpacing
-	for i, s := range scenarios {
-		slot := stagingSlot(i, len(scenarios))
+	for _, s := range scenarios {
+		slot := slots[s.expect.Name]
 		start := stagingStart.Add(spacing*time.Duration(slot+1) +
 			jitter(s.expect.Name, spacing/3))
-		logs = append(logs, stagingInstance(s, start, i))
+		logs = append(logs, stagingInstance(s, start, slot))
 	}
 	return merge(stagingStart, logs...)
 }
 
-// stagingInstance records one scenario with its own names, then the fix:
-// everything it created is deleted and probed services recover.
-func stagingInstance(s scenario, start time.Time, i int) replay.Log {
-	c := newCluster(start, fmt.Sprintf("-s%d", i))
+// stagingInstance records one scenario with its own names, suffixed by
+// its slot, then the fix: everything it created is deleted and probed
+// services recover.
+func stagingInstance(s scenario, start time.Time, slot int) replay.Log {
+	c := newCluster(start, fmt.Sprintf("-s%d", slot))
 	s.build(c)
 	c.after(stagingFix)
 	for _, id := range c.probed {

@@ -13,8 +13,8 @@ import (
 const fleetSilentGrace = 4 * time.Minute
 
 // fleetSilent reports whether two or more nodes exist, every one of them
-// reads Ready=Unknown and no pod has been affected: with pods unready or
-// failed the outage is real and pages at the usual pace.
+// reads Ready=Unknown and no pod has been affected: with pods unready
+// the outage is real and pages at the usual pace.
 func fleetSilent(ctx detection.Context) bool {
 	if ctx.Model == nil {
 		return false
@@ -35,17 +35,16 @@ func fleetSilent(ctx detection.Context) bool {
 	return !podsAffected(ctx)
 }
 
-// podsAffected reports whether any pod is not ready or has failed.
+// podsAffected reports whether a running pod is not ready. A pod that
+// finished (a completed Job run, an evicted pod) is never ready again,
+// so it says nothing about the outage now.
 func podsAffected(ctx detection.Context) bool {
 	for _, id := range ctx.Model.Entities(kube.KindPod) {
 		pod, ok := ctx.Model.Entity(id)
-		if !ok {
+		if !ok || kube.PodFinished(pod) {
 			continue
 		}
 		if status, _, _ := condition(pod, "Ready"); status == "False" {
-			return true
-		}
-		if text(pod, kube.AttrPhase) == "Failed" {
 			return true
 		}
 	}

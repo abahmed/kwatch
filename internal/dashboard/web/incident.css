@@ -50,12 +50,14 @@
 .ds-note.n-ok .ds-note-ico { color: var(--success); }
 .ds-notes .d-looked .ds-note-ico { color: var(--resolved); }
 .ds-grid { margin: 14px 0 0; }
-.ds-row { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.ds-row { display: grid; grid-template-columns: 9.5rem minmax(0, 1fr); gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
 .ds-row dt { font-size: var(--t-micro); font-weight: 600; color: var(--text-muted); padding-top: 2px; }
 .ds-row dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .ds-what { font-size: 1.0625rem; font-weight: 600; }
 .ds-unknown { font-weight: 600; }
 .ds-sub { margin-top: 2px; font-size: var(--t-small); color: var(--text-soft); }
+/* What kwatch's own check between two causes decided (incsum.js). */
+.ds-why-check { margin-top: 4px; font-size: var(--t-small); font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
 .ds-meter { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; cursor: help; }
 .mt-bars { display: inline-flex; gap: 3px; }
 .mt { width: 18px; height: 8px; border: 1.5px solid var(--control-border); border-radius: var(--radius-chip); }

@@ -178,6 +178,9 @@ type sizeReport struct {
 	buckets map[Bucket]int64
 	// evictable is the part of the total the size cap may delete.
 	evictable int64
+	// oldestTimeline is the time of the oldest timeline entry, zero
+	// when there is none.
+	oldestTimeline time.Time
 }
 
 func (r sizeReport) total() int64 { return total(r.buckets) }
@@ -221,8 +224,19 @@ func (r *sizeReport) add(
 		if _, ok := evictableAt(b, k, v); ok {
 			r.evictable += size
 		}
+		if b == Timeline {
+			r.noteTimeline(k)
+		}
 	}
 	return nil
+}
+
+// noteTimeline keeps the oldest timeline entry time seen so far.
+func (r *sizeReport) noteTimeline(key []byte) {
+	if at, ok := logTime(key); ok &&
+		(r.oldestTimeline.IsZero() || at.Before(r.oldestTimeline)) {
+		r.oldestTimeline = at
+	}
 }
 
 // LogicalSize returns the key and value bytes stored per bucket. It is

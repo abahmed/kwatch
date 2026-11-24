@@ -3,6 +3,7 @@ package announce
 import (
 	"time"
 
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/notification/compose"
 )
@@ -28,12 +29,17 @@ func (c *Collector) noteWake(now time.Time) {
 	if c.env.History == nil {
 		return
 	}
+	c.notePlanned(now)
 	w, ok := kube.LatestWake(c.env.History, now)
 	if !ok || w.Remaining(now) > 0 || w.Start.Equal(c.wakeDone) ||
 		w.Start.Before(c.seenAt) {
 		return
 	}
 	c.wakeDone = w.Start
+	if incident.ScheduledUp(c.plannedOps(), w.Start) {
+		// Its scheduled line says it (notePlanned).
+		return
+	}
 	report := kube.ReportWake(c.env.History, w)
 	if report.Blips == 0 || len(w.Workloads) == 0 {
 		return
@@ -59,4 +65,32 @@ func freshWake(line *compose.WakeLine, now time.Time) *compose.WakeLine {
 		return nil
 	}
 	return line
+}
+
+// notePlanned remembers the line of a scheduled operation that is
+// over, for the next digest: one line per operation, never one begun
+// before kwatch looked, and only one that recurs (incident.PlannedOp).
+// Nothing is said of an operation seen for the first time.
+func (c *Collector) notePlanned(now time.Time) {
+	op, ok := incident.LatestScheduled(c.plannedOps(), now)
+	if !ok || !op.At.After(c.plannedDone) || op.At.Before(c.seenAt) {
+		return
+	}
+	c.plannedDone = op.At
+	c.wake = &compose.WakeLine{
+		Started: op.Scaled, From: op.At, To: op.Last, Nodes: op.Nodes,
+		Down: op.Down, Seen: op.Seen, Days: incident.PlannedDays,
+	}
+	if c.Low.Since.IsZero() {
+		c.Low.Since = now
+	}
+}
+
+// plannedOps is the history of mass scale-downs and scale-ups; none
+// without an incident manager.
+func (c *Collector) plannedOps() []incident.PlannedOp {
+	if c.env.Incidents == nil {
+		return nil
+	}
+	return c.env.Incidents.PlannedOps()
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/redact"
 )
 
@@ -78,6 +79,14 @@ func leftoverWhat(p incident.Incident) (string, bool) {
 	n := len(groupObjects(p))
 	if n < 2 || p.Root.Name == "" {
 		return "", false
+	}
+	if p.Root.Kind == kube.KindNamespace {
+		verb := "are scaled to 0 while routes still send"
+		if p.State == incident.Resolved {
+			verb = "were scaled to 0 while routes still sent"
+		}
+		return fmt.Sprintf("%d workloads of namespace %s %s them "+
+			"traffic.", n, p.Root.Name, verb), true
 	}
 	now, was := "is gone or has nothing ready",
 		"was gone or had nothing ready"

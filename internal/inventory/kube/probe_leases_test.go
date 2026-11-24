@@ -71,7 +71,7 @@ func leaseProber(t *testing.T, s *leaseServer) *Prober {
 func leaseNames(observations []inventory.Observation) map[string]string {
 	out := map[string]string{}
 	for _, o := range observations {
-		if o.Entity.Kind == KindLease {
+		if o.Entity.Kind == KindLease && o.Kind != inventory.Related {
 			out[o.Entity.Name] = o.Kind.String()
 		}
 	}

@@ -117,17 +117,27 @@ func tierWhy(p *Incident) (Tier, string) {
 	}
 	if worst == detection.Critical || p.criticalRoot() {
 		if rule := pageRuleOf(p); rule != "" {
-			if p.Delivery.PageHeld() {
-				// A repeat of a page that just resolved: no new page.
-				return Notify, levelPageHeld
-			}
-			return Page, levelPagePrefix + rule
+			return pageTier(p, rule)
 		}
 	}
 	if chronicLow(p, worst) {
 		return Digest, chronicLevel(p)
 	}
 	return Notify, levelNotify
+}
+
+// pageTier is the tier of an incident a page rule names, with its code:
+// a page, unless only a young node's network setup fails, or the same
+// page just resolved.
+func pageTier(p *Incident, rule string) (Tier, string) {
+	switch {
+	case p.youngNetwork:
+		return Notify, levelYoungNetwork
+	case p.Delivery.PageHeld():
+		// A repeat of a page that just resolved: no new page.
+		return Notify, levelPageHeld
+	}
+	return Page, levelPagePrefix + rule
 }
 
 // quietTier is the tier of an incident nobody needs to hear of now,

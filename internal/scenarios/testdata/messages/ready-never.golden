@@ -1,7 +1,7 @@
 10:04:15 settled
-🟠 cert-controller in shop (prod-eu-1) has had no ready replicas (0 of 1) for three minutes. Cause not found yet: its node and registry are healthy and unchanged. It runs a single replica. To see the pods' state and events, run kubectl describe pods cert-controller- -n shop
-🟠 cert-controller in shop (prod-eu-1) has had no ready replicas (0 of 1) for three minutes.
-| 🟠 **cert-controller** in **shop** (**prod-eu-1**) has had no ready replicas (0 of 1) for three minutes.
+🟠 cert-controller in shop (prod-eu-1) has no ready replicas (0 of 1). Cause not found yet: its node and registry are healthy and unchanged. It runs a single replica. To see the pods' state and events, run kubectl describe pods cert-controller- -n shop
+🟠 cert-controller in shop (prod-eu-1) has no ready replicas (0 of 1).
+| 🟠 **cert-controller** in **shop** (**prod-eu-1**) has no ready replicas (0 of 1).
 | Cause not found yet: its node and registry are healthy and unchanged.
 | It runs a single replica.
 | To see the pods' state and events, run

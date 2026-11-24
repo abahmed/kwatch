@@ -37,6 +37,7 @@
     if (path === "/issues") return { name: "issues" };
     if (path === "/kwatch") return { name: "kwatch" };
     if (path === "/activity") return { name: "activity" };
+    if (path === "/settings") return { name: "settings" };
     var m = /^\/issues\/([^/]+)$/.exec(path);
     if (m) {
       // A malformed escape (%E0) is an ID no issue has: show "not found".
@@ -44,7 +45,7 @@
         return { name: "detail", id: m[1] };
       }
     }
-    return { name: "status" };
+    return { name: "missing" };
   }
 
   KW.go = function (url, replace) {
@@ -120,7 +121,9 @@
     KW.startDot();
     var views = { issues: KW.issuesView, detail: KW.detailView,
       status: KW.statusView, kwatch: KW.kwatchView,
-      activity: KW.activityView };
+      activity: KW.activityView,
+      settings: function (el) { return KW.settingsView(shellEl, el); },
+      missing: KW.pageNotFound };
     view = views[r.name](main, r);
   }
 
@@ -143,12 +146,18 @@
       });
       markTZ();
       legendStates(shellEl);
-      whoMenu(shellEl);
+      KW.wireSettings(shellEl, function () {
+        // A new text size moves every layout: draw the page again
+        // where the reader is.
+        KW.pendingScroll = KW.scrollTop();
+        render();
+      });
       KW.updateBadge(KW.badge);
       KW.notify.start(shellEl);
     }
     KW.setNav(current);
     var main = KW.$("#main", shellEl);
+    KW.parkSettings(shellEl);
     main.textContent = "";
     window.scrollTo(0, 0);
     return main;
@@ -162,16 +171,6 @@
       li.appendChild(KW.el("b", "", KW.STATE[k].label));
       li.appendChild(document.createTextNode(": " + KW.STATE[k].title));
       ul.appendChild(li);
-    });
-  }
-
-  /* whoMenu: under 700px wide, notifications, times and sign out fold
-     behind one "Settings" button (plain.css). */
-  function whoMenu(root) {
-    var b = KW.$("[data-who-toggle]", root), side = KW.$(".side", root);
-    b.addEventListener("click", function () {
-      var open = side.classList.toggle("who-open");
-      b.setAttribute("aria-expanded", open ? "true" : "false");
     });
   }
 

@@ -18,7 +18,8 @@ const weightMissingService = 0.75
 // call and that does not exist.
 func missingServiceRule(cause *rootcause.CauseRecord) bool {
 	return cause != nil && (cause.Rule == explain.RuleMissingServiceCalled ||
-		cause.Rule == explain.RuleMissingServiceConfigured)
+		cause.Rule == explain.RuleMissingServiceConfigured ||
+		cause.Rule == explain.RuleDependencyRemoved)
 }
 
 // missingServiceSentences say what the failing pods call and that it is

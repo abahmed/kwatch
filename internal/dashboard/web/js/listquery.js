@@ -14,6 +14,10 @@
   var STATES = ["open", "settling", "flapping", "recovering", "resolved"];
   var ACKED = ["true", "false"];
   var SINCE = ["", "24h", "72h"];
+  /* The tabs of the Active list (the API's ?bucket=; "all" sends none):
+     what needs attention, what has gone on unchanged for over a day,
+     and cleanup (leftovers). */
+  var BUCKETS = ["attention", "ongoing", "cleanup", "all"];
   var AGES = ["", "today", "day"];
   /* The columns the table sorts by (the API's sort fields). */
   var SORTS = ["", "severity", "title", "namespace", "object", "status",
@@ -41,7 +45,15 @@
   function blank() {
     return { q: "", severity: [], namespace: [], kind: [], state: [],
       acked: [], stopped: [], node: [], mode: [], status: "active", since: "", age: "", sort: "", dir: "",
-      page: 1, pageSize: 50, like: "" };
+      page: 1, pageSize: 50, like: "", bucket: "attention" };
+  }
+
+  /* implicit: the tab a view without ?bucket= shows: Needs attention
+     for the plain Active list, all of it for any narrowed view, so a
+     link with filters (an Overview link, a saved view) opens as it
+     always did. */
+  function implicit(f) {
+    return f.status === "active" && !used(f) ? "attention" : "all";
   }
 
   /* MULTI: the list filters, as they are named in the address. */
@@ -103,6 +115,7 @@
     var offset = number(p.get("offset"), function (n) { return n > 0; }, 0);
     f.page = number(p.get("page"), function (n) { return n >= 1 && n <= MAX_PAGE; },
       Math.min(MAX_PAGE, Math.floor(offset / f.pageSize) + 1));
+    f.bucket = pick(p.get("bucket"), BUCKETS) || implicit(f);
     return f;
   }
 
@@ -125,6 +138,7 @@
     if (f.sort && f.dir) p.set("dir", f.dir);
     if (f.page > 1) p.set("page", String(f.page));
     if (f.pageSize && f.pageSize !== 50) p.set("pageSize", String(f.pageSize));
+    if (f.status === "active" && f.bucket && f.bucket !== implicit(f)) p.set("bucket", f.bucket);
     return "?" + p.toString();
   }
 
@@ -162,6 +176,7 @@
     if (f.age === "day") p.set("startedBefore", "24h");
     if (f.sort) p.set("sort", f.sort);
     if (f.sort && f.dir) p.set("dir", f.dir);
+    if (f.status === "active" && f.bucket && f.bucket !== "all") p.set("bucket", f.bucket);
     p.set("page", String(f.page));
     p.set("pageSize", String(f.pageSize));
     return p;
@@ -170,6 +185,9 @@
   /* ---- quick views: one click sets the filters (the severity chips
      already show only the urgent ones) ---- */
   var PRESETS = [
+    { id: "unacked", label: "Not acknowledged",
+      title: "Urgent and needs-attention issues nobody has acknowledged yet.",
+      set: { severity: ["page", "notify"], acked: ["false"] } },
     { id: "today", label: "New today",
       title: "Active issues that started today.", set: { age: "today" } },
     { id: "long", label: "Going on over a day",
@@ -195,6 +213,7 @@
       f.sort = current.sort;
       f.dir = current.dir;
     }
+    f.bucket = implicit(f);
     return f;
   }
 
@@ -223,6 +242,6 @@
   KW.listQuery = { blank: blank, parse: parse, search: search, used: used, ID: ID,
     api: api, PRESETS: PRESETS,
     presetState: presetState, matchPreset: matchPreset,
-    sameFilters: sameFilters, copy: copy, MULTI: MULTI,
-    SIZES: SIZES, STATUSES: STATUSES, SORTS: SORTS };
+    sameFilters: sameFilters, copy: copy, MULTI: MULTI, BUCKETS: BUCKETS,
+    implicit: implicit, SIZES: SIZES, STATUSES: STATUSES, SORTS: SORTS };
 })();

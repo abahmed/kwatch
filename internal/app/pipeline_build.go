@@ -15,7 +15,6 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
-	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/notification"
 	"github.com/abahmed/kwatch/internal/notification/compose"
@@ -132,7 +131,7 @@ func (p *pipelineBuild) close() {
 }
 
 func (p *pipelineBuild) synced(kind inventory.Kind) bool {
-	return p.source != nil && p.source.Synced(kind)
+	return p.source != nil && p.source.Complete(kind)
 }
 
 // fresh is whether kind's watch still gets through, for the detectors
@@ -215,6 +214,7 @@ func (p *pipelineBuild) newWriter() compose.Writer {
 				p.deps.runtime.Lifecycle().Dashboard().Port),
 			model: p.model, seen: p.deps.dashboardServer,
 			forbidden: p.routesForbidden, sink: linkSinkOf(p.deps),
+			settled: p.routesSettled,
 		}
 		w.Dashboard = p.links.address
 	}
@@ -255,23 +255,6 @@ func (p *pipelineBuild) recordDecision(
 	p.deps.deliveryManager.NotifyIncident(m)
 }
 
-// newProber builds the prober of the API server, cluster DNS and the
-// Leases of controllers.
-func (p *pipelineBuild) newProber(submit kube.Submit) *kube.Prober {
-	deps := p.deps
-	return kube.NewProber(kube.ProbeConfig{
-		Client:   deps.clients.Kubernetes,
-		Resolver: deps.clients.Resolver,
-		Now:      p.clock.Now,
-		Submit:   submit,
-		HTTP:     deps.clients.ProbeHTTP,
-		Model:    p.model,
-		// kwatch renews its own leader Lease; it is not a controller.
-		OwnLeaseNamespace: kubeclient.GetNamespace(),
-		OwnLeaseName:      electionLeaseName(),
-	})
-}
-
 // newStatsPoller builds the kubelet stats poller of the nodes the model
 // holds. A node that is booting or cordoned does not degrade its health.
 func (p *pipelineBuild) newStatsPoller(submit kube.Submit) *kube.StatsPoller {
@@ -304,8 +287,10 @@ func (p *pipelineBuild) newRunners(
 	// the kinds it does not watch itself are synced and verifiable.
 	dynamicSource := kube.NewDynamicSource(
 		dynamicSourceConfig(deps, submit, maintenance, p.model))
-	source, err := kube.NewSource(typedSourceConfig(deps, submit,
-		maintenance, dynamicSource, sourceDigestKey(p.state)))
+	typed := typedSourceConfig(deps, submit, maintenance, dynamicSource,
+		sourceDigestKey(p.state))
+	typed.Model = p.model
+	source, err := kube.NewSource(typed)
 	if err != nil {
 		return nil, err
 	}

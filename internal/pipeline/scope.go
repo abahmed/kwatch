@@ -106,6 +106,16 @@ func (a *announcer) decisions(
 	return append(decisions, a.backInScope(now, decisions)...), next
 }
 
+// rescopeEvery bounds how often backInScope asks the scope again about
+// every unheard incident. The loop wakes many times a second under
+// load, and each ask copies every out-of-scope failing incident and
+// runs the scope on each member, while what the scope reads (a
+// maintenance window, a silence, the configuration) changes far more
+// rarely. A failure whose window ended is announced within this bound.
+// The incidents waiting for a scope verdict (scope_pending.go) are
+// asked on every tick: they are few, and their wait is short.
+const rescopeEvery = 30 * time.Second
+
 // backInScope asks the scope again about each failing incident whose
 // announcement it dropped, and announces those it now allows. Without
 // this a failure that outlives its maintenance window, or a silence,
@@ -113,11 +123,12 @@ func (a *announcer) decisions(
 // otherwise only asked when an incident has something to say. An
 // incident with a decision in this tick's list is left to inScope,
 // which turns its update into the announcement: asked here as well, it
-// would be announced twice.
+// would be announced twice, and it is asked on the next tick instead.
 func (a *announcer) backInScope(
 	now time.Time, decided []incident.Decision,
 ) []incident.Decision {
-	if a.scope == nil {
+	only, due := a.rescopeDue(now)
+	if a.scope == nil || !due {
 		return nil
 	}
 	skip := make(map[string]bool, len(decided))
@@ -125,9 +136,11 @@ func (a *announcer) backInScope(
 		skip[d.Incident.ID] = true
 	}
 	var out []incident.Decision
-	unheard := a.incidents.Unheard()
+	unheard := a.incidents.UnheardOf(only)
 	a.pruneWaiting(unheard)
+	skipped := false
 	for _, p := range unheard {
+		skipped = skipped || skip[p.ID]
 		if skip[p.ID] || !a.scope(p) {
 			a.decidedOut(p, skip[p.ID])
 			continue
@@ -137,5 +150,25 @@ func (a *announcer) backInScope(
 			out = append(out, d)
 		}
 	}
+	if only == nil && !skipped {
+		a.rescopedAt = now
+	}
 	return out
+}
+
+// rescopeDue says which unheard incidents backInScope asks about at
+// now: all of them (a nil only) once rescopeEvery passed since it last
+// asked about all, otherwise only the ones waiting for a verdict. due
+// is false when there is nothing to ask.
+func (a *announcer) rescopeDue(
+	now time.Time,
+) (only func(id string) bool, due bool) {
+	if a.rescopedAt.IsZero() ||
+		!now.Before(a.rescopedAt.Add(rescopeEvery)) {
+		return nil, true
+	}
+	if len(a.waiting) == 0 {
+		return nil, false
+	}
+	return func(id string) bool { return a.waiting[id] }, true
 }

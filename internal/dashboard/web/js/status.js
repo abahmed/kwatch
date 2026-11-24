@@ -132,7 +132,7 @@
      title the short title leaves out ("tracking: the new version can't
      start; the previous one still serves"). "" when there is none. */
   function causeGist(title, i) {
-    var full = String(title || ""), short = KW.shortTitle(full, i);
+    var full = String(title || ""), short = KW.shortTitle(full, i, true);
     var ns = i && i.namespace;
     if (ns) {
       var esc = ns.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -147,6 +147,8 @@
     }
     return rest;
   }
+  /* KW.causeGist: the same gist for the Issues table's second line. */
+  KW.causeGist = causeGist;
 
   /* row: one issue to look at first: what, the gist of why, where, its
      level and how long ago it started. */
@@ -155,7 +157,7 @@
     var a = li.appendChild(link("/issues/" + encodeURIComponent(i.id), "", "ov-row"));
     a.dataset.rowlink = "";
     var mid = a.appendChild(KW.el("span", "ov-what"));
-    var title = mid.appendChild(KW.el("span", "ov-title", KW.shortTitle(i.title || i.id, i)));
+    var title = mid.appendChild(KW.el("span", "ov-title", KW.shortTitle(i.title || i.id, i, true)));
     title.title = i.title || i.id;
     var gist = causeGist(i.title, i);
     if (gist) mid.appendChild(KW.el("span", "ov-gist", gist));
@@ -182,9 +184,21 @@
     box.hidden = !list.length;
     if (!list.length) return;
     V.head(box, "Look at these first", KW.TERMS.lists.order,
-      V.seeAll("/issues?status=active", "See all " + KW.plural(total, "issue", "issues") + " →"), "ov-h2");
+      V.seeAll("/issues?status=active&bucket=all", "See all " + KW.plural(total, "issue", "issues") + " →"), "ov-h2");
     var ul = box.appendChild(KW.el("ul", "ov-look"));
-    list.forEach(function (i) { ul.appendChild(row(i)); });
+    var urgent = 0;
+    list.forEach(function (i) {
+      var li = ul.appendChild(row(i));
+      if (i.severity === "page") { li.dataset.urgent = "1"; urgent++; }
+    });
+    // The server sends at most LOOK_LIMIT: say how many urgent ones
+    // did not fit, with the way to all of them.
+    var left = ((d.counts || {}).urgent || 0) - urgent;
+    if (left > 0 && urgent >= list.length) {
+      var more = box.appendChild(KW.el("p", "ov-more-urgent"));
+      more.appendChild(link("/issues?status=active&bucket=all&severity=page",
+        "+" + KW.num(left) + " more urgent →"));
+    }
     // Every active issue is here when the server sent fewer than its cap.
     ul.dataset.all = list.length < KW.LOOK_LIMIT ? "1" : "";
     box.appendChild(KW.el("p", "ov-end", "That's everything happening now."));
@@ -212,7 +226,8 @@
      every row links somewhere, to its issue or to its workload's
      issues. */
   function relLine(at, w, issue, mins) {
-    at.appendChild(document.createTextNode("Rolled out at "));
+    at.appendChild(document.createTextNode("Rolled out " +
+      (KW.isToday(new Date(w.at)) ? "at " : "")));
     at.appendChild(KW.hm(w.at));
     if (issue) {
       at.appendChild(document.createTextNode(issue.state === "resolved" ?
@@ -261,7 +276,8 @@
       if (e.w) top.appendChild(KW.el("span", "ov-rel-v", WRONG[e.w.verdict] || e.w.verdict));
       var at = li.appendChild(KW.el("div", "ov-rel-at"));
       if (e.i) {
-        at.appendChild(document.createTextNode(e.i.object + ": " + e.i.change + " at "));
+        at.appendChild(document.createTextNode(e.i.object + ": " + e.i.change +
+          (KW.isToday(new Date(e.i.changedAt)) ? " at " : " ")));
         at.appendChild(KW.hm(e.i.changedAt));
         var gap = KW.lasted(e.i.changedAt, e.i.since);
         at.appendChild(document.createTextNode(gap ? ", " + gap + " before the issue started." : "."));
@@ -280,6 +296,10 @@
     var notes = pg.body.appendChild(KW.el("div", "ov-notes"));
     var tileBox = pg.body.appendChild(KW.el("section"));
     tileBox.setAttribute("aria-labelledby", "ov-say");
+    // What changed since this browser's last visit (ovsince.js).
+    var since = KW.sinceStrip();
+    pg.body.appendChild(since.el);
+    since.read();
     // Under the verdict, what to act on: the issues to look at first
     // and, beside them on a wide screen, the bad releases and changes.
     var pair = pg.body.appendChild(KW.el("div", "ov-pair"));
@@ -320,6 +340,8 @@
       var q = V.zone();
       if (q !== zoneNow) etag = "";
       zoneNow = q;
+      // pageView reads once before the strip exists; it reads then.
+      if (since) since.read();
       return Promise.all([KW.api("/api/overview?" + q, { etag: etag }),
         KW.api("/api/status")]).then(function (out) {
         var r = out[0];

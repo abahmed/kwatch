@@ -11,10 +11,6 @@ import (
 // says TerminationByKubelet.
 const ModeEndedPods detection.Mode = "EndedPods"
 
-// RuleNodeEndedPod names the row for a pod the kubelet of its node
-// ended at shutdown.
-const RuleNodeEndedPod = "node-ended-pod"
-
 // shutdownState is ModeEndedPods for the node a failed pod was ended
 // on by its kubelet, and nothing for any other entity.
 func (v *view) shutdownState(id, effect inventory.EntityID) state {
@@ -44,10 +40,6 @@ func (v *view) shutdownState(id, effect inventory.EntityID) state {
 // ModeKubeletSilent is the pseudo mode of a node whose kubelet has not
 // reported on pods bound to it: they are Pending with no start time.
 const ModeKubeletSilent detection.Mode = "KubeletSilent"
-
-// RuleNodeKubeletSilent names the row for pods bound to a node whose
-// kubelet reports nothing on them.
-const RuleNodeKubeletSilent = "node-kubelet-silent"
 
 // kubeletSilentMin is how many bound pods must be silent for the node
 // to be suspected: one pod waiting may be anything.

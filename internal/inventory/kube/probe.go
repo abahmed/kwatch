@@ -63,6 +63,11 @@ type ProbeConfig struct {
 	// leaves out: kwatch is the one renewing it. Empty names skip
 	// nothing.
 	OwnLeaseNamespace, OwnLeaseName string
+	// LeasesWatched reports whether a watch lists the Leases too (the
+	// metadata watch of the dynamic source). That watch then owns the
+	// Lease objects, and the prober withdraws only what it said about
+	// one it stops reporting. Nil means no watch does.
+	LeasesWatched func() bool
 }
 
 // Prober checks the API server and cluster DNS every probeInterval. Each
@@ -267,75 +272,6 @@ func probeObservation(
 		Kind: inventory.Observed, Source: ProbeSource, At: at, Entity: id,
 		Attributes: attrs,
 	}
-}
-
-// leases records every Lease outside the node heartbeats and the
-// control-plane leaders: who holds it, when it was last renewed and
-// for how long it is valid. The detector decides what is stale; the
-// prober only reports. An error (no RBAC, a managed control plane that
-// hides them) reports nothing. Leases are only known through this scan,
-// so a Lease the last complete scan saw and this one did not is gone. An
-// incomplete scan (a failed page, too many pages) retires nothing.
-func (p *Prober) leases(ctx context.Context) []inventory.Observation {
-	items, complete := p.listLeases(ctx)
-	now := p.cfg.Now()
-	var out []inventory.Observation
-	seen := make(map[inventory.EntityID]bool, len(items))
-	for _, lease := range items {
-		if p.skipLease(lease) {
-			continue
-		}
-		seconds := float64(defaultLeaseSeconds)
-		if lease.Spec.LeaseDurationSeconds != nil {
-			seconds = float64(*lease.Spec.LeaseDurationSeconds)
-		}
-		id := inventory.CoreID(KindLease, lease.Namespace, lease.Name)
-		seen[id] = true
-		out = append(out, inventory.Observation{
-			Kind: inventory.Observed, Source: ProbeSource, At: now,
-			Entity: id,
-			Attributes: map[string]inventory.Value{
-				AttrLeaseHolder:   inventory.Text(*lease.Spec.HolderIdentity),
-				AttrLeaseRenewed:  inventory.Time(lease.Spec.RenewTime.Time),
-				AttrLeaseDuration: inventory.Number(seconds),
-			},
-		})
-		if related, ok := p.holderRelation(id, *lease.Spec.HolderIdentity); ok {
-			out = append(out, related)
-		}
-	}
-	if !complete {
-		for id := range p.leasesSeen {
-			seen[id] = true
-		}
-	}
-	for id := range p.leasesSeen {
-		if !seen[id] {
-			out = append(out, inventory.Observation{
-				Kind: inventory.Gone, Source: ProbeSource, At: now,
-				Entity: id,
-			})
-		}
-	}
-	p.leasesSeen = seen
-	return out
-}
-
-// skipLease is a Lease the scan leaves out: node heartbeats, the
-// control-plane leaders, kwatch's own and one nobody holds or renews.
-func (p *Prober) skipLease(lease coordinationv1.Lease) bool {
-	return lease.Namespace == nodeLeaseNamespace ||
-		lease.Spec.RenewTime == nil || lease.Spec.HolderIdentity == nil ||
-		p.isOwnLease(lease.Namespace, lease.Name) ||
-		(lease.Namespace == "kube-system" &&
-			(lease.Name == Scheduler.Name ||
-				lease.Name == ControllerManager.Name))
-}
-
-// isOwnLease reports kwatch's own leader Lease.
-func (p *Prober) isOwnLease(namespace, name string) bool {
-	return p.cfg.OwnLeaseName != "" && name == p.cfg.OwnLeaseName &&
-		namespace == p.cfg.OwnLeaseNamespace
 }
 
 // listLeases reads the Leases of every namespace page by page. complete

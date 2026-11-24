@@ -1,13 +1,14 @@
 10:07:05 settled
-🟠 checkout in shop (prod-eu-1): the new version (checkout:5.2) can't start (it stops at start with "fatal: initialization failed (exit 1)"); the previous version (checkout:5.1) is still serving. alice released it. Its last run lasted ten seconds. Also changed before it broke: secret checkout-keys changed at 10:05 UTC. To see the rollout state, run kubectl rollout status deployment/checkout -n shop
-Proof: the previous revision ran healthy for 65 minutes before the change.
-🟠 checkout in shop (prod-eu-1): the new version (checkout:5.2) can't start; the previous version (checkout:5.1) is still serving.
-| 🟠 **checkout** in **shop** (**prod-eu-1**): the new version (checkout:5.2) can't start (it stops at start with `fatal: initialization failed (exit 1)`); the previous version (checkout:5.1) is still serving.
-| alice released it.
+🟠 checkout in shop (prod-eu-1) keeps crashing; kwatch could not confirm a cause. It fails with "fatal: initialization failed (exit 1)". Its last run lasted ten seconds. To see the rollout state, run kubectl rollout status deployment/checkout -n shop
+kwatch checked: the previous revision ran healthy for 65 minutes before the change.
+Possibilities kwatch could not confirm: it rolled out a change shortly before or secret checkout-keys changed seconds before the pods started failing.
+🟠 checkout in shop (prod-eu-1) keeps crashing; kwatch could not confirm a cause.
+| 🟠 **checkout** in **shop** (**prod-eu-1**) keeps crashing; kwatch could not confirm a cause.
+| It fails with `fatal: initialization failed (exit 1)`.
 | Its last run lasted ten seconds.
-| Also changed before it broke: secret checkout-keys changed at 10:05 UTC.
 | To see the rollout state, run
 | ```
 | kubectl rollout status deployment/checkout -n shop
 | ```
-| *Proof: the previous revision ran healthy for 65 minutes before the change.*
+| *kwatch checked: the previous revision ran healthy for 65 minutes before the change.*
+| *Possibilities kwatch could not confirm: it rolled out a change shortly before or secret checkout-keys changed seconds before the pods started failing.*

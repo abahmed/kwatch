@@ -1,0 +1,14 @@
+10:16:15 settled
+🟠 Node m5 (prod-eu-1) is failing: network plugin is not ready. It was created at 10:05 UTC. The failing pods run on node m5, which joined under a minute before they began failing. Affected: csi-node in kube-system; api and orders in shop; and one other.
+Related alerts: 4 pending pods, 3 unavailable workloads
+To check the node's conditions and recent events, run kubectl describe node m5
+🟠 Node m5 (prod-eu-1) is failing: network plugin is not ready.
+| 🟠 Node m5 (**prod-eu-1**) is failing: network plugin is not ready.
+| It was created at 10:05 UTC.
+| The failing pods run on node m5, which joined under a minute before they began failing.
+| Affected: **csi-node** in **kube-system**; **api** and **orders** in **shop**; and one other.
+| Related alerts: 4 pending pods, 3 unavailable workloads
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node m5
+| ```

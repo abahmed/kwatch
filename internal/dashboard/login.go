@@ -47,7 +47,7 @@ func (a *Auth) loginHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	http.SetCookie(w, a.cookie(value, int(sessionLifetime.Seconds()),
+	http.SetCookie(w, a.cookie(value, int(a.sessions.lifetime.Seconds()),
 		expires.UTC().Format(http.TimeFormat)))
 	w.WriteHeader(http.StatusNoContent)
 }

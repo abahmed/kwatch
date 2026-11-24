@@ -58,7 +58,7 @@ func podFinishedID(model inventory.Reader, id inventory.EntityID) bool {
 }
 
 func finishedPhase(phase string) bool {
-	return phase == "Succeeded" || phase == "Failed"
+	return kube.FinishedPhase(phase)
 }
 
 // drainWait is how long a budget may block a drain before it is

@@ -120,5 +120,6 @@ func TestSummarizeReleasesKeepsRegressionsWithoutAnIssue(t *testing.T) {
 func TestReleasesRouteIsGone(t *testing.T) {
 	s := releasesServer()
 	w := call(t, s, http.MethodGet, "/api/releases", testToken)
-	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Equal(t, http.StatusGone, w.Code)
+	assert.Contains(t, w.Body.String(), "/api/incidents")
 }

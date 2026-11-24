@@ -18,6 +18,21 @@ type ConditionRule struct {
 	Failing bool
 }
 
+// ruleGroups limit rows to the objects of one API group. A type's
+// meaning at one status may belong to one API: Accepted=Unknown is a
+// Gateway API object no controller has taken yet, and means nothing
+// for another operator's kinds.
+var ruleGroups = map[ConditionRule]string{
+	{"Accepted", "Unknown", false}:   GatewayGroup,
+	{"Programmed", "Unknown", false}: GatewayGroup,
+}
+
+// Applies reports whether the row holds for an object of the API group.
+func (r ConditionRule) Applies(group string) bool {
+	only, limited := ruleGroups[r]
+	return !limited || only == group
+}
+
 // ConditionRules are condition types with one meaning across operators,
 // Crossplane, Flux, Argo CD, cert-manager, Tekton, CRDs and the Gateway
 // API. A type may have more than one row: Ready is bad when False, and

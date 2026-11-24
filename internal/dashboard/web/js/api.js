@@ -125,14 +125,42 @@
   };
 
   /* cmd is a command box: one line, scrolls inside, the copy icon
-     copies it. */
+     copies it. Above it, which cluster it is for (KW.cmdCluster). */
   KW.cmd = function (command) {
-    var box = KW.el("div", "cmd");
+    var wrap = KW.el("div", "cmd-wrap");
+    var ctx = wrap.appendChild(KW.el("p", "cmd-ctx"));
+    ctx.dataset.cmdCluster = "";
+    KW.cmdCluster(ctx);
+    var box = wrap.appendChild(KW.el("div", "cmd"));
     var code = KW.el("code", "", command);
     code.tabIndex = 0;
     box.appendChild(code);
     box.appendChild(KW.copyButton(command));
-    return box;
+    return wrap;
+  };
+
+  /* cmdCluster says which cluster a command runs against: "Run against
+     cluster prod-eu - check kubectl config current-context first", or
+     "this cluster" with a link to name it when it has no name. With no
+     node, it redraws every such line (pages.js, once the name is read). */
+  KW.cmdCluster = function (node) {
+    if (!node) {
+      KW.$$("[data-cmd-cluster]").forEach(function (n) { KW.cmdCluster(n); });
+      return;
+    }
+    var name = KW.cluster && KW.cluster.name;
+    node.textContent = "";
+    node.appendChild(document.createTextNode("Run against " + (name ? "cluster " : "this cluster")));
+    if (name) node.appendChild(KW.el("b", "", name));
+    node.appendChild(document.createTextNode(" \u2014 check "));
+    node.appendChild(KW.el("span", "mono", "kubectl config current-context"));
+    node.appendChild(document.createTextNode(" first."));
+    if (KW.cluster && !name) {
+      node.appendChild(document.createTextNode(" "));
+      var a = node.appendChild(KW.el("a", "ulink", "Name this cluster"));
+      a.href = "/kwatch#setup";
+      a.dataset.link = "";
+    }
   };
 
   KW.wireCopy = function (root) {
@@ -170,8 +198,8 @@
     if (kind === "error") {
       var cmd = KW.$("[data-cmd]", p);
       cmd.hidden = false;
-      KW.$("code", cmd).textContent = "kubectl -n " + KW.self.namespace +
-        " logs deploy/" + KW.self.deployment + " --tail=50";
+      KW.$("code", cmd).textContent = "kubectl logs deploy/" + KW.self.deployment +
+        " -n " + KW.self.namespace + " --tail=50";
       KW.wireCopy(p);
       var code = KW.$("[data-code]", p);
       code.hidden = false;

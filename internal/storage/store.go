@@ -47,7 +47,10 @@ var (
 	// lastCopyKey keeps lastCopy across restarts (reclaim.go); a file
 	// without it has had no rewrite measured.
 	lastCopyKey = []byte("reclaim.lastCopy")
-	openTimeout = 5 * time.Second
+	// lastCopyLogicalKey keeps the data size that copy held; a file
+	// without it (an older release) has an unknown one.
+	lastCopyLogicalKey = []byte("reclaim.lastCopyLogical")
+	openTimeout        = 5 * time.Second
 )
 
 // Options configures Open.
@@ -77,6 +80,13 @@ type Options struct {
 	// deleted, and an oversized one is not rewritten until Claim.
 	// Pending reports what Claim will do. False repairs during Open.
 	DeferRepair bool
+	// SkipPageCheck, with DeferRepair, skips the walk over every page
+	// the open does (seconds on a large file). It is for a short peek
+	// that reads a few values and closes, before the real open checks
+	// the file: a damaged page can then make a read panic instead of
+	// failing the open, so the caller must recover. Never Claim such a
+	// handle.
+	SkipPageCheck bool
 }
 
 // Store is a handle on an open state file. Handles from Open start
@@ -112,11 +122,12 @@ type file struct {
 	shrink  bool           // a rewrite deferred until Claim
 	// lastCopy is the size the last online rewrite left (reclaim.go);
 	// copyNoGain says one gained nothing. Both are held under gate.
-	lastCopy   int64
-	copyNoGain bool
-	retry      reclaimBackoff // after failed rewrites (reclaim_backoff.go)
-	latest     *Store         // the newest claimed handle
-	closers    []func()       // run once by Close, before the file closes
+	lastCopy        int64
+	lastCopyLogical int64
+	copyNoGain      bool
+	retry           reclaimBackoff // after failed rewrites (reclaim_backoff.go)
+	latest          *Store         // the newest claimed handle
+	closers         []func()       // run once by Close, before the file closes
 
 	writes   map[Bucket]*atomic.Uint64 // see generation in mirror.go
 	counters counters
@@ -149,7 +160,7 @@ func Open(path string, options Options) (*Store, error) {
 	var db *bolt.DB
 	var err error
 	if options.DeferRepair {
-		db, f.absent, err = openForInspection(path)
+		db, f.absent, err = openForInspection(path, !options.SkipPageCheck)
 	} else {
 		db, err = openCheckedFree(path, f.free)
 	}
@@ -342,17 +353,18 @@ func (f *file) claimInto(handle *Store) (uint64, error) {
 		return 0, err
 	}
 	var epoch uint64
-	var lastCopy int64
+	var lastCopy, lastLogical int64
 	err = f.db.Update(func(tx *bolt.Tx) error {
 		meta := tx.Bucket(metaBucket)
 		epoch = readUint(meta.Get(epochKey)) + 1
 		lastCopy = int64(readUint(meta.Get(lastCopyKey)))
+		lastLogical = int64(readUint(meta.Get(lastCopyLogicalKey)))
 		return meta.Put(epochKey, writeUint(epoch))
 	})
 	if err != nil {
 		return 0, fmt.Errorf("store: claim: %w", err)
 	}
-	f.lastCopy = lastCopy
+	f.lastCopy, f.lastCopyLogical = lastCopy, lastLogical
 	if f.latest != nil && f.latest != handle {
 		f.latest.abandoned.Store(true)
 	}

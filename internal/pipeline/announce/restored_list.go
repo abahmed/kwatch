@@ -40,21 +40,23 @@ func (c *Collector) ListRestored(ctx context.Context, now time.Time) bool {
 
 // restoredNews sorts the restored incidents still failing that people
 // want to hear about: news are the ones to name, ongoing the ones
-// already told and unchanged, which are only counted. Each is
-// remembered as named by the restored summary (ListedBy).
+// already told and unchanged, which are only counted. Only the news is
+// remembered as named by the restored summary (ListedBy): a count names
+// nothing, so it owes no introduction (restored_intro.go).
 func (c *Collector) restoredNews() (news, ongoing []incident.Decision) {
 	for _, p := range c.env.Incidents.RestoredFailing() {
-		if c.restoredListed[p.ID] ||
+		if c.restoredSeen(p.ID) ||
 			(c.env.Scope != nil && !c.env.Scope(p)) {
 			continue
 		}
-		c.markRestoredListed(p.ID)
 		d := incident.Decision{Action: incident.Announce, Incident: p,
 			Reason: "restored"}
 		if !c.restoredIsNews(p) {
+			c.markRestoredCounted(p.ID)
 			ongoing = append(ongoing, d)
 			continue
 		}
+		c.markRestoredListed(p.ID)
 		// A worse one is named at the tier its findings have now.
 		d.Incident.Tier = max(p.Tier, p.LiveTier())
 		news = append(news, d)
@@ -106,22 +108,24 @@ func (c *Collector) listLateRestored(
 	}
 	if !now.Before(s.lateUntil) {
 		s.lateUntil = time.Time{}
-		c.restoredListed = nil
+		c.restoredListed, c.restoredCounted = nil, nil
 		return false
 	}
 	var news []incident.Decision
 	for _, p := range c.env.Incidents.RestoredFailing() {
-		if c.restoredListed[p.ID] || !currentNews(p) ||
+		if c.restoredSeen(p.ID) || !currentNews(p) ||
 			(c.env.Scope != nil && !c.env.Scope(p)) {
 			continue
 		}
-		c.markRestoredListed(p.ID)
-		if c.restoredIsNews(p) {
-			d := incident.Decision{Action: incident.Announce,
-				Incident: p, Reason: "restored"}
-			d.Incident.Tier = max(p.Tier, p.LiveTier())
-			news = append(news, d)
+		if !c.restoredIsNews(p) {
+			c.markRestoredCounted(p.ID)
+			continue
 		}
+		c.markRestoredListed(p.ID)
+		d := incident.Decision{Action: incident.Announce,
+			Incident: p, Reason: "restored"}
+		d.Incident.Tier = max(p.Tier, p.LiveTier())
+		news = append(news, d)
 	}
 	if len(news) == 0 {
 		return false
@@ -136,6 +140,22 @@ func (c *Collector) markRestoredListed(id string) {
 		c.restoredListed = map[string]bool{}
 	}
 	c.restoredListed[id] = true
+}
+
+// markRestoredCounted remembers that the restored summary only counted
+// incident id, unchanged: it is not looked at again in this session,
+// and it is not named (ListedBy).
+func (c *Collector) markRestoredCounted(id string) {
+	if c.restoredCounted == nil {
+		c.restoredCounted = map[string]bool{}
+	}
+	c.restoredCounted[id] = true
+}
+
+// restoredSeen reports an incident the restored summary named or
+// counted in this session.
+func (c *Collector) restoredSeen(id string) bool {
+	return c.restoredListed[id] || c.restoredCounted[id]
 }
 
 // NextWarm is when the restored incidents are listed, or zero.

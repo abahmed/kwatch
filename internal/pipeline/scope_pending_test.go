@@ -80,6 +80,8 @@ func TestBackInScopeSkipsAnIncidentDecidedThisTick(t *testing.T) {
 
 	decided := []incident.Decision{{Action: incident.Update,
 		Incident: unheard[0]}}
-	assert.Empty(t, a.backInScope(h.now, decided))
-	assert.Len(t, a.backInScope(h.now, nil), 1)
+	due := h.now.Add(rescopeEvery)
+	assert.Empty(t, a.backInScope(due, decided))
+	// Skipped, it is asked again on the next tick, not after the bound.
+	assert.Len(t, a.backInScope(due, nil), 1)
 }

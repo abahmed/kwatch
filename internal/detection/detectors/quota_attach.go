@@ -227,9 +227,10 @@ func goneRelated(
 	if id.Name == "" {
 		return "", false
 	}
-	if !ctx.Synced(kind) {
-		// Look again once the kind has synced: nothing else touches
-		// the attachment to have it worded then.
+	if !ctx.SyncedFor(kind) {
+		// Wording only, so nothing is held back. Look again once the
+		// kind has synced: nothing else touches the attachment to have
+		// it worded then.
 		ctx.RecheckAfter(unsyncedRecheck)
 		return id.Name, false
 	}

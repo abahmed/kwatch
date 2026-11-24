@@ -54,7 +54,7 @@ func TestFinalizerLeadDoesNotPlaceClusterScopedObjects(t *testing.T) {
 
 // Two causes that say the same of two objects name both once, so the
 // shared words cannot be read as part of the first.
-func TestRivalLeadNamesBothCausesOnceForTheSameWords(t *testing.T) {
+func TestPossibilitiesNameBothCausesOnceForTheSameWords(t *testing.T) {
 	subject := inventory.CoreID(kube.KindDeployment, "arc", "hook")
 	cause := &rootcause.CauseRecord{Rule: "finalizer-handler-stopped",
 		Mode: explain.ModeHandlerStopped, Root: subject,
@@ -63,15 +63,16 @@ func TestRivalLeadNamesBothCausesOnceForTheSameWords(t *testing.T) {
 				kube.KindDeployment, "arc", "ctl")}}
 	finding := detection.Finding{Entity: subject, Reason: "Unavailable",
 		Health: detection.Failing, Summary: "Deployment is failing"}
-	f := caseFacts{p: incident.Incident{Root: subject, Cause: cause,
+	f := caseFacts{p: incident.Incident{Root: subject,
 		Members: members(finding)}, members: []detection.Finding{finding},
-		lead: finding, ok: true}
+		lead: finding, ok: true, possible: cause, symptom: subject}
 
-	got, ok := rivalLead(f)
+	got := unconfirmedSentences(f)
 
-	require.True(t, ok)
-	assert.Contains(t, got, "two possible causes: it or ctl is not "+
-		"running, so it removes no finalizers")
+	require.NotEmpty(t, got)
+	assert.Equal(t, "Possibilities kwatch could not confirm: it or ctl "+
+		"is not running, so it removes no finalizers.",
+		got[len(got)-1].text)
 	assert.Equal(t, "a or b", rivalChoice("a", "b", "", ""))
 }
 

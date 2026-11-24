@@ -247,7 +247,8 @@ func withNodeAge(
 	}
 	for _, pod := range failurePods(model, s.Entity) {
 		nodes := model.Related(pod, inventory.RunsOn, inventory.Outgoing)
-		if len(nodes) == 0 {
+		// A ready replica of a failing workload is not what fails.
+		if len(nodes) == 0 || !podFailingNow(model, pod) {
 			continue
 		}
 		created, ok := model.Attribute(nodes[0], kube.AttrCreated)

@@ -10,11 +10,11 @@
 | kubectl get validatingwebhookconfiguration image-policy -o yaml
 | ```
 10:03:05 settled
-🟠 Secret policy-tls in policy-system (prod-eu-1) has a TLS certificate that expired less than a minute ago. Clients are rejecting it now. To list the keys of the Secret the pods depend on, run kubectl describe secret policy-tls -n policy-system
+🟠 Secret policy-tls in policy-system (prod-eu-1) has a TLS certificate that expired less than a minute ago. Clients are rejecting it now. To see where the pods use the Secret and which keys they expect from it, run kubectl get pods -o yaml -n policy-system | grep -n -B2 -E '(name|secretName): policy-tls$'
 🟠 Secret policy-tls in policy-system (prod-eu-1) has a TLS certificate that expired less than a minute ago.
 | 🟠 Secret **policy-tls** in **policy-system** (**prod-eu-1**) has a TLS certificate that expired less than a minute ago.
 | Clients are rejecting it now.
-| To list the keys of the Secret the pods depend on, run
+| To see where the pods use the Secret and which keys they expect from it, run
 | ```
-| kubectl describe secret policy-tls -n policy-system
+| kubectl get pods -o yaml -n policy-system | grep -n -B2 -E '(name|secretName): policy-tls$'
 | ```

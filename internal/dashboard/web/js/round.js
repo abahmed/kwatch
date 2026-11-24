@@ -67,23 +67,30 @@
   }
 
   function together(box, t) {
-    var p = line(box, "Started together");
+    var p = line(box, "Also failing at the same time");
     p.appendChild(document.createTextNode(t.workloads + " workloads started failing " +
       (t.seconds === 0 ? "at the same time" : t.seconds + " s apart") + ", under the "));
     term(p, "same upstream");
     p.appendChild(document.createTextNode(" shown above."));
   }
 
-  function blast(box, b) {
-    var p = line(box, "Overlap");
-    term(p, "failing pods read it", b.count + " of " + b.total + " failing pods " + b.verb + " it");
+  /* blast: "9 of 10 failing pods use this address", in plain words:
+     the address read above when there is one, else the object. */
+  function blast(box, b, address) {
+    var p = line(box);
+    var what = address ? "use this address" : (b.verb || "use") + " this object";
+    term(p, "failing pods read it", b.count + " of " + b.total + " failing pods " + what);
     p.appendChild(document.createTextNode("."));
   }
 
-  function check(box, c) {
-    var p = line(box);
-    term(p, "kwatch checked", "Check");
-    p.appendChild(document.createTextNode(": " + c.text));
+  /* check: the fact is left out when Why? already says it. */
+  function check(box, c, said) {
+    var fact = String(c.text || "").replace(/^kwatch checked:?\s*/i, "").replace(/\.$/, "");
+    if (!fact || said.indexOf(fact) < 0) {
+      var p = line(box);
+      term(p, "kwatch checked", "Check");
+      p.appendChild(document.createTextNode(": " + fact));
+    }
     var q = line(box, "Candidates");
     q.appendChild(document.createTextNode(KW.entityText(c.cause) + " and " + KW.entityText(c.rival)));
   }
@@ -105,7 +112,7 @@
     steps.forEach(function (s) {
       var li = ol.appendChild(KW.el("li"));
       li.setAttribute("aria-label", "step " + s.step + " of " + steps.length);
-      var t = KW.el("span", "rd-at", KW.valid(s.at) ? KW.hhmm(new Date(s.at)) : "time unknown");
+      var t = KW.el("span", "rd-at", KW.valid(s.at) ? KW.when(s.at) : "time unknown");
       li.appendChild(t);
       li.appendChild(document.createTextNode(" "));
       li.appendChild(KW.el("span", "mono", (s.kind === "node" ? "" : s.kind + " ") + s.name));
@@ -149,8 +156,8 @@
     if (r.config) { config(host, r.config); used.push("ConfigMap"); }
     if (r.burst) { burst(host, r.burst); used.push("up but failing"); }
     if (r.together) { together(host, r.together); used.push("same upstream"); }
-    if (r.blast) { blast(host, r.blast); used.push("failing pods read it"); }
-    if (r.check) { check(host, r.check); used.push("kwatch checked"); }
+    if (r.blast) { blast(host, r.blast, !!r.config); used.push("failing pods read it"); }
+    if (r.check) { check(host, r.check, KW.checkVerdict ? KW.checkVerdict(inc) : ""); used.push("kwatch checked"); }
     if (r.causeNow) { causeNow(host, r.causeNow); if (r.causeNow === "still") used.push("cause still present"); }
     if (r.chain && r.chain.length) { chain(host, r.chain); used.push("chain of events"); }
     if ((inc.traffic || []).some(function (t) { return t.kind === "ingress"; })) used.push("Ingress");

@@ -37,6 +37,7 @@ func TestRestoredIncidentOwedItsIntroduction(t *testing.T) {
 // over.
 func TestRestoredIntroductionIsNotRepeatedByLaterRestarts(t *testing.T) {
 	r := &restartRig{t: t, rolledUp: map[string]bool{"api": true},
+		unheard: map[string]bool{"api": true},
 		digests: map[string]string{"api": "d-api"}}
 	r.start(foldNow, apiLost)
 	owed := r.last.TakeRestoredIntros()
@@ -50,5 +51,20 @@ func TestRestoredIntroductionIsNotRepeatedByLaterRestarts(t *testing.T) {
 		r.start(foldNow.Add(time.Duration(i)*time.Hour), apiLost)
 		assert.Empty(t, r.last.TakeRestoredIntros(),
 			"restart %d introduced it again", i)
+	}
+}
+
+// A restored incident the restart only counted as unchanged was not
+// named by it: it is owed no introduction, however often kwatch
+// restarts.
+func TestRestoredIncidentOnlyCountedIsOwedNoIntroduction(t *testing.T) {
+	r := &restartRig{t: t, rolledUp: map[string]bool{"api": true},
+		digests: map[string]string{"api": "d-api"}}
+	for i := range 4 {
+		r.start(foldNow.Add(time.Duration(i)*12*time.Hour), apiLost)
+		assert.Empty(t, r.last.TakeRestoredIntros(),
+			"restart %d introduced a counted incident", i)
+		assert.Empty(t, r.last.ListedBy("inc-api"),
+			"restart %d named a counted incident", i)
 	}
 }

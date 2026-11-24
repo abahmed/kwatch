@@ -24,7 +24,13 @@ const (
 // already run, then the fixes the gathered evidence makes concrete.
 // Without a report they are the plain steps.
 func proSteps(f caseFacts) []notification.Step {
-	steps := gatheredSteps(nextSteps(f.p, stepMembers(f.p, f.members)),
+	p := f.p
+	if f.possible != nil {
+		// The checks that would confirm a possibility are still worth
+		// running; an undo needs a likely cause (undo_gate.go).
+		p.Cause = f.possible
+	}
+	steps := gatheredSteps(nextSteps(p, stepMembers(p, f.members)),
 		f.gathered)
 	if len(f.gathered) == 0 {
 		return steps

@@ -44,6 +44,7 @@ CI measures these on synthetic replay and labeled scenarios with
 | Calibration, high confidence | right 80% to 100% of the time, gated at 10 or more cases |
 | Calibration, likely confidence | right 50% to 95% of the time, gated at 10 or more cases |
 | Messages per incident | p95 at most 3, most at most 5 |
+| Messages per day, scheduled-operations replay | at most 4 on the busiest day (the noise budget) |
 | Time to first message, page tier | at most 2 minutes from the first failure observation |
 | Time to first message, notify tier | at most 5 minutes from the first failure observation (aim: p95 at most 3 minutes) |
 | Notifications caused by non-events | 0 (successful rollouts, scaling, drains within budget, Jobs completing, a healthy CronJob, and advisory states: a quota used exactly with nothing refused, pods throttled but ready, a budget that allows no disruption beside nothing that needs one) |
@@ -87,6 +88,25 @@ scenario that notifies or pages. The latency targets were set to two
 minutes (page) and five minutes (notify) on 2026-10-01 by the
 maintainers' decision; they leave room for the detectors' grace periods
 plus the settle.
+
+The noise budget bounds what a cluster on a schedule costs its team in
+chat. The scheduled-operations replay is a week of a cluster whose apps
+scale to zero and whose pool nodes are removed every evening, and whose
+nodes join and apps scale up (failing their readiness probes for a few
+minutes) every morning; one morning an app stays at zero and another
+crash-loops with a cause of its own. The gate counts every chat message
+(incident messages and summaries) of its busiest calendar day. The
+target was set on 2026-11-24 from the measured busiest day, 3
+messages, plus one message of margin, so one extra announcement shows as
+a failure; the staging cluster of rc.1, which follows the same
+schedule, sent about 55 a day. It is never raised to fit a change: a
+change that needs more messages for this week is a regression. The
+report also shows the headroom left on "Messages per incident (most)",
+whose current value sits at its limit of 5.
+Each new detection reason starts on trial and waits for the digest for
+one release (see the [detector guide](./contributing-detector.md)), so
+a new detector cannot spend this budget before real clusters have shown
+it is worth an interruption.
 
 The held-out scenarios are written from descriptions of Kubernetes
 failures and are never used to tune the engine. A held-out miss is

@@ -118,7 +118,8 @@ func TestWriteConfidenceShowsInWording(t *testing.T) {
 			p := podCrash(incident.Notify)
 			p.Root = inventory.CoreID("secret", "default", "db")
 			p.Cause = &rootcause.CauseRecord{Root: p.Root, Score: tt.score,
-				Summary: "secret db is missing"}
+				Summary: "secret db is missing",
+				Proof:   []rootcause.Proof{{Supports: true}}}
 
 			msg := Writer{}.Write(announce(p), writerNow)
 

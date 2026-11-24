@@ -12,9 +12,6 @@ import (
 // LinkInjects is a mutating webhook adding what the pod runs.
 const LinkInjects LinkType = "injects"
 
-// RuleWebhookInjectsImage names the rule below.
-const RuleWebhookInjectsImage = "webhook-injects-image"
-
 // injectedImageRow blames a mutating webhook configuration that changed
 // just before pods failed to pull an image their workload's template does
 // not name: the webhook added the container. It outranks the registry,

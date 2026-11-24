@@ -39,10 +39,13 @@ func TestBudgetReportsSelectingNothing(t *testing.T) {
 	labelledPod(m, "web-1", "app=web")
 	id := budget(m, "api", "app=api", 0)
 
-	early := evaluate(Budget{}, m, t0.Add(time.Minute), id, nil)
+	// Without the controller's condition the wait counts from when
+	// kwatch first saw the budget empty.
+	registry := detection.NewRegistry(nil, Budget{})
+	early := registry.Evaluate(m, t0.Add(time.Minute), id)
 	assert.Empty(t, early.Findings)
 
-	eval := evaluate(Budget{}, m, t0.Add(11*time.Minute), id, nil)
+	eval := registry.Evaluate(m, t0.Add(11*time.Minute), id)
 	require.Len(t, eval.Findings, 1)
 	assert.Equal(t, "Budget.SelectsNothing", string(eval.Findings[0].Mode))
 	assert.False(t, eval.Findings[0].Advisory)

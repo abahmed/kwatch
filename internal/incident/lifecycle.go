@@ -133,7 +133,7 @@ func (m *Manager) settle(p *Incident, now time.Time) (Decision, bool) {
 	if p.Tier == Silent {
 		return Decision{}, false
 	}
-	p.State, p.Announced = Open, now
+	m.announceSettled(p, now)
 	m.adoptAck(p, now)
 	m.holdRepeatedPage(p, now)
 	m.holdSiblingPage(p, now)
@@ -330,7 +330,7 @@ func (m *Manager) decide(p *Incident, action Action, why Reason) Decision {
 	p.Owner = m.ownerOf(p)
 	p.Owners, p.Spaces = m.reachOf(p)
 	p.Revision++
-	p.resetBackoff(why)
+	m.noteNews(p, action, why)
 	p.prevDigest, p.updateHeld = p.Digest, false
 	// A message shows the cause as it is now, held or not: record that
 	// one as told, so it is not news again 30 s later (causeMemory).

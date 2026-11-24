@@ -257,6 +257,15 @@ func (s *Source) syncComplete() bool {
 	return true
 }
 
+// Complete reports whether the model holds every current object of
+// kind: the kind synced and its access was not lost since. A kind whose
+// access was refused mid-run keeps its old cache, so an object created
+// after that is absent from the model although it exists: decisions
+// that conclude something is missing read Complete, not Synced.
+func (s *Source) Complete(kind inventory.Kind) bool {
+	return s.Synced(kind) && s.Verifiable(kind)
+}
+
 // accessLost reports whether the typed watch of kind lost its access
 // after it synced (see watchState.accessLost).
 func (s *Source) accessLost(kind inventory.Kind) bool {

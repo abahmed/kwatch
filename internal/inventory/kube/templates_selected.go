@@ -18,8 +18,9 @@ func TemplateKinds() []inventory.Kind {
 	return append([]inventory.Kind(nil), templateKinds...)
 }
 
-// SelectedByTemplate reports whether any pod template in the Service's
-// namespace carries labels the Service's selector matches. It is the
+// SelectedByTemplate reports whether any pod template in the namespace
+// of a Service (or of another object with a pod selector, such as a
+// disruption budget) carries labels its selector matches. It is the
 // inverse of ServicesSelecting: it holds for a workload scaled to
 // zero, which has no pod now but is the Service's backend when it runs.
 func SelectedByTemplate(

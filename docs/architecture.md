@@ -149,7 +149,17 @@ reason for its value. Each contribution carries a code and its numbers
 (`rootcause.ProofCode`), and the incident keeps the cause as a
 `rootcause.CauseRecord` with its row and mode: messages are written from
 those fields, never from the solver's trace text. Below the confidence floor the cause is stated as
-unknown. The solver is a pure function of a snapshot: no clock, no I/O.
+unknown. A cause above the floor is named only when it is confirmed
+(`rootcause.Confirmed`): at "likely" or "high", or at "possible" with no
+close rival and at least `rootcause.MinCorroboration` piece of evidence
+beyond its rule (a counterfactual check or a supporting proof). Otherwise
+the message states the symptom, says "kwatch could not confirm a cause",
+lists what kwatch checked, and names the candidate (or both candidates of
+a tie) only in its closing line, as a possibility; the incident keeps the
+cause, so the dashboard and the scorecard still see it. A lead that only
+states what was seen (the subject failing on its own, a zone or pool
+failing as a whole, a denied request, a shared failure signature) is not
+affected. The solver is a pure function of a snapshot: no clock, no I/O.
 
 A change is evidence only when it can have caused the failure, so the
 solver reads three guards before it believes one. A change made after a

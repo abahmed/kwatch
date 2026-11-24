@@ -29,7 +29,8 @@ func probeLogSentences(f caseFacts) []sentence {
 		line := evidence(m, detection.EvidenceProbeLog)
 		result := evidence(m, detection.EvidenceProbeResult)
 		check, ok := probeCheckWords[m.Reason]
-		if line == "" || !ok || !strings.HasPrefix(result, "HTTP ") {
+		if line == "" || !ok || !strings.HasPrefix(result, "HTTP ") ||
+			!probeEntity(m.Entity) {
 			continue
 		}
 		subject := "Its " + check

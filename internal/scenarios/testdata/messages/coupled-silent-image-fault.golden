@@ -1,12 +1,14 @@
 10:12:25 settled
-🟠 intake in mail (prod-eu-1) keeps crashing; two possible causes: config map intake-config changed 1 min before the pods started failing or it rolled out a change shortly before. bob changed key mode. It fails with "fatal: startup failed (exit status 1)". To check the object the pods depend on, run kubectl get configmap intake-config -n mail -o yaml
-Proof: both replicas fail, on 2 nodes.
-🟠 intake in mail (prod-eu-1) keeps crashing; two possible causes: config map intake-config changed 1 min before the pods started failing or it rolled out a change shortly before.
-| 🟠 **intake** in **mail** (**prod-eu-1**) keeps crashing; two possible causes: config map **intake-config** changed 1 min before the pods started failing or it rolled out a change shortly before.
-| bob changed key mode.
+🟠 intake in mail (prod-eu-1) keeps crashing; kwatch could not confirm a cause. It fails with "fatal: startup failed (exit status 1)". Its last run lasted ten seconds. To check the object the pods depend on, run kubectl get configmap intake-config -n mail -o yaml
+kwatch checked: both replicas fail, on 2 nodes.
+Possibilities kwatch could not confirm: config map intake-config changed 1 min before the pods started failing or it rolled out a change shortly before.
+🟠 intake in mail (prod-eu-1) keeps crashing; kwatch could not confirm a cause.
+| 🟠 **intake** in **mail** (**prod-eu-1**) keeps crashing; kwatch could not confirm a cause.
 | It fails with `fatal: startup failed (exit status 1)`.
+| Its last run lasted ten seconds.
 | To check the object the pods depend on, run
 | ```
 | kubectl get configmap intake-config -n mail -o yaml
 | ```
-| *Proof: both replicas fail, on 2 nodes.*
+| *kwatch checked: both replicas fail, on 2 nodes.*
+| *Possibilities kwatch could not confirm: config map intake-config changed 1 min before the pods started failing or it rolled out a change shortly before.*

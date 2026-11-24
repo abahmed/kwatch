@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/chromedp"
 
@@ -27,9 +28,26 @@ var shotPages = []struct{ name, path, ready string }{
 	{"kwatch", "/kwatch", ".ov-say"},
 }
 
+// shotThemes are the color schemes the main pages are saved in; the
+// system's scheme is emulated, so the page follows it as it would.
+var shotThemes = []string{"light", "dark"}
+
+// shotTheme makes the tab's system color scheme theme.
+func shotTheme(t *testing.T, tab context.Context, theme string) {
+	t.Helper()
+	_, err := chromedp.Call(tab, emulation.SetEmulatedMedia,
+		emulation.SetEmulatedMediaParams{
+			Features: []*emulation.MediaFeature{
+				{Name: "prefers-color-scheme", Value: theme}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestBrowserShots saves a screenshot of each main page, the window
-// and the whole page, at a desktop and a phone size into KW_SHOTS, to
-// look at a change by eye. Without KW_SHOTS it skips.
+// and the whole page, at a desktop and a phone size, in the light and
+// the dark theme, into KW_SHOTS, to look at a change by eye. Without
+// KW_SHOTS it skips.
 func TestBrowserShots(t *testing.T) {
 	dir := os.Getenv("KW_SHOTS")
 	if dir == "" {
@@ -40,27 +58,38 @@ func TestBrowserShots(t *testing.T) {
 	}
 	ctx, srv := browserSetup(t)
 	for _, size := range []struct{ w, h int64 }{{1440, 900}, {390, 844}} {
-		tab, _ := browserTab(t, ctx)
-		signInBrowser(t, tab, srv.URL)
-		for _, p := range shotPages {
-			name := fmt.Sprintf("%s-%d", p.name, size.w)
-			err := chromedp.Do(tab, chromedp.EmulateViewport(size.w, size.h),
-				chromedp.Navigate(srv.URL+p.path),
-				chromedp.WaitVisible(chromedp.CSS(p.ready)),
-				settleFonts(), chromedp.Sleep(time.Second))
-			if err != nil {
-				t.Errorf("%s: %v", name, err)
-				continue
-			}
-			save(t, tab, filepath.Join(dir, name+".png"), false)
-			save(t, tab, filepath.Join(dir, name+"-full.png"), true)
-		}
-		if size.w > 900 {
-			popShot(t, tab, srv.URL, filepath.Join(dir, "popover-hover.png"))
+		for _, theme := range shotThemes {
+			tab, _ := browserTab(t, ctx)
+			signInBrowser(t, tab, srv.URL)
+			shotTheme(t, tab, theme)
+			mainShots(t, tab, srv.URL, dir, size.w, size.h, theme)
 		}
 	}
 	longTitleShots(t, ctx, dir)
 	kwatchShots(t, ctx, dir)
+}
+
+// mainShots saves each of shotPages at one size and theme, and the
+// View options popover on a wide screen.
+func mainShots(t *testing.T, tab context.Context, base, dir string,
+	w, h int64, theme string) {
+	t.Helper()
+	for _, p := range shotPages {
+		name := fmt.Sprintf("%s-%d-%s", p.name, w, theme)
+		err := chromedp.Do(tab, chromedp.EmulateViewport(w, h),
+			chromedp.Navigate(base+p.path),
+			chromedp.WaitVisible(chromedp.CSS(p.ready)),
+			settleFonts(), chromedp.Sleep(time.Second))
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		save(t, tab, filepath.Join(dir, name+".png"), false)
+		save(t, tab, filepath.Join(dir, name+"-full.png"), true)
+	}
+	if w > 900 && theme == "dark" {
+		popShot(t, tab, base, filepath.Join(dir, "popover-hover.png"))
+	}
 }
 
 // kwatchShots saves the kwatch page with what kwatch watches known

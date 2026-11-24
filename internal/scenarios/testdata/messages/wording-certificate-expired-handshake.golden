@@ -1,7 +1,7 @@
 10:01:15 settled
 🟠 Secret bank-client-tls in shop (prod-eu-1) has a TLS certificate that expired one day ago. Every app that uses it is failing. The last run of container app in pod payments-10be2a67-a lasted ten seconds. Clients are rejecting it now. Affected: payments. Fix: renew the certificate in secret/bank-client-tls.
 Related alerts: 2 crash loops
-To list the keys of the Secret the pods depend on, run kubectl describe secret bank-client-tls -n shop
+To see where the pods use the Secret and which keys they expect from it, run kubectl get pods -o yaml -n shop | grep -n -B2 -E '(name|secretName): bank-client-tls$'
 🟠 Secret bank-client-tls in shop (prod-eu-1) has a TLS certificate that expired one day ago.
 | 🟠 Secret **bank-client-tls** in **shop** (**prod-eu-1**) has a TLS certificate that expired one day ago.
 | Every app that uses it is failing.
@@ -10,7 +10,7 @@ To list the keys of the Secret the pods depend on, run kubectl describe secret b
 | Affected: **payments**.
 | Fix: renew the certificate in secret/bank-client-tls.
 | Related alerts: 2 crash loops
-| To list the keys of the Secret the pods depend on, run
+| To see where the pods use the Secret and which keys they expect from it, run
 | ```
-| kubectl describe secret bank-client-tls -n shop
+| kubectl get pods -o yaml -n shop | grep -n -B2 -E '(name|secretName): bank-client-tls$'
 | ```

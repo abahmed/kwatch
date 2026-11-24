@@ -33,9 +33,10 @@ func leadSentences(f caseFacts) []sentence {
 // specificLeads are the leads for a case the evidence names exactly, in
 // order: the first that applies is the lead.
 var specificLeads = []func(caseFacts) (string, bool){
-	leftoverLead, logBurstLead, logMissingLead, releaseLeads, archLead,
-	firstRolloutLead, createdLead, volumeHeldLead, provisionerLead,
-	rivalLead, finalizerLead, attachmentLead, removalLead,
+	unconfirmedLead, leftoverLead, logBurstLead, logMissingLead,
+	releaseLeads, archLead, firstRolloutLead, createdLead,
+	volumeHeldLead, provisionerLead, finalizerLead, attachmentLead,
+	removedDependencyLead, removalLead,
 }
 
 func leadText(f caseFacts) string {
@@ -128,7 +129,7 @@ func failingNodes(f caseFacts) (int, string) {
 func blamedChange(f caseFacts) *inventory.Change {
 	cause := f.p.Cause
 	if cause == nil || cause.Change == nil || systemChange(*cause.Change) ||
-		onlyScaledToZero(f.members) || onlyPausedEdit(f.members) {
+		staleChange(f.members) {
 		return nil
 	}
 	if cause.Rule == explain.RuleAccountMissingAtCreate ||

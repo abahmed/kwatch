@@ -9,6 +9,7 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // caseFacts is everything a sentence writer may read about one decision.
@@ -66,6 +67,11 @@ type caseFacts struct {
 	// changeSeen is set when the decision before its Community copy
 	// had a recent change to name: the copy no longer carries it.
 	changeSeen bool
+	// possible is a cause kwatch could not confirm, taken out of p and
+	// told only as a possibility, and symptom the subject its lead
+	// speaks of instead (cause_unconfirmed.go).
+	possible *rootcause.CauseRecord
+	symptom  inventory.EntityID
 }
 
 func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
@@ -87,8 +93,10 @@ func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
 	if own := rootFinding(f.p, f.members); own != nil {
 		f.lead, f.ok = *own, true
 	} else if failures := failing(f.members); len(failures) > 0 {
-		f.lead, f.ok = leadFailure(f.p.Root, failures), true
+		f.lead, f.ok = leadFailure(f.p.Root, causeFirst(f.p, failures)),
+			true
 	}
+	f.unconfirm()
 	return f
 }
 
@@ -237,6 +245,7 @@ var noteWriters = []sentenceWriter{
 	actionSentences,
 	chainLineSentences,
 	checkedLineSentences,
+	unconfirmedSentences,
 }
 
 func writeAll(f caseFacts, writers []sentenceWriter) []sentence {

@@ -74,15 +74,24 @@ var nodeSandboxReasons = map[detection.Mode]struct {
 			"assigns is already in use"},
 }
 
+// nodeConflictPods is how many pods must report an address already in
+// use before the node's network is the cause: any process may hold an
+// address once.
+const nodeConflictPods = 2
+
 // nodeSandboxMinPods is how many pods fail the same way before the node
-// is the cause. A conflict names a route or address in the node's own
-// network namespace, so one stuck pod already says so; a class that may
-// come from the cluster needs three.
-func nodeSandboxMinPods(mode detection.Mode) int {
-	if mode == detection.ModeNetworkConflict {
+// is the cause. A conflict that names a route, an interface or an
+// allocation in the node's own network namespace (ofNode) is shown by
+// one stuck pod; an address in use needs nodeConflictPods; a class that
+// may come from the cluster needs three.
+func nodeSandboxMinPods(mode detection.Mode, ofNode bool) int {
+	switch {
+	case mode != detection.ModeNetworkConflict:
+		return nodeSandboxPods
+	case ofNode:
 		return 1
 	}
-	return nodeSandboxPods
+	return nodeConflictPods
 }
 
 // sandboxFindings reports a node on which several pods cannot get their
@@ -98,6 +107,7 @@ func sandboxFindings(
 	}
 	t := sandboxTally{pods: map[detection.Mode]int{},
 		stuck:  map[detection.Mode]int{},
+		ofNode: map[detection.Mode]bool{},
 		first:  map[detection.Mode]time.Time{},
 		newest: map[detection.Mode]inventory.Note{}}
 	anyPending := false
@@ -124,19 +134,31 @@ func sandboxFindings(
 // with the first and the newest event.
 type sandboxTally struct {
 	pods, stuck map[detection.Mode]int
-	first       map[detection.Mode]time.Time
-	newest      map[detection.Mode]inventory.Note
+	// ofNode marks a class one of whose pods quoted the node itself
+	// (conflictOfNode).
+	ofNode map[detection.Mode]bool
+	first  map[detection.Mode]time.Time
+	newest map[detection.Mode]inventory.Note
 }
 
 func (t sandboxTally) add(
 	mode detection.Mode, note inventory.Note, stuck bool,
 ) {
 	t.pods[mode]++
+	if conflictOfNode(note.Message) {
+		t.ofNode[mode] = true
+	}
 	if stuck {
 		t.stuck[mode]++
 	}
-	if t.first[mode].IsZero() || note.At.Before(t.first[mode]) {
-		t.first[mode] = note.At
+	// The failure began at the first of the repeated note, not at its
+	// latest repeat: a node is not judged against its own retries.
+	first := note.FirstSeen
+	if first.IsZero() || first.After(note.At) {
+		first = note.At
+	}
+	if t.first[mode].IsZero() || first.Before(t.first[mode]) {
+		t.first[mode] = first
 	}
 	if note.At.After(t.newest[mode].At) {
 		t.newest[mode] = note
@@ -165,7 +187,8 @@ func buildSandboxFindings(
 	for mode, count := range t.pods {
 		// Pods that all started since were retried and recovered:
 		// nothing fails now.
-		if count >= nodeSandboxMinPods(mode) && t.stuck[mode] > 0 {
+		if count >= nodeSandboxMinPods(mode, t.ofNode[mode]) &&
+			t.stuck[mode] > 0 {
 			modes = append(modes, mode)
 		}
 	}

@@ -204,12 +204,23 @@ func commandsFor(
 	return out
 }
 
-// kubectl prefixes args with the namespace of id, when it has one.
+// kubectl is the command of args with the namespace of id, when it has
+// one, in the one order the dashboard uses: the verb and the object,
+// then -n, then the other flags ("kubectl logs api-1 -n shop -c api").
 func kubectl(id inventory.EntityID, args string) string {
 	if id.Namespace == "" {
 		return "kubectl " + args
 	}
-	return "kubectl -n " + id.Namespace + " " + args
+	fields := strings.Fields(args)
+	at := len(fields)
+	for i, f := range fields {
+		if strings.HasPrefix(f, "-") {
+			at = i
+			break
+		}
+	}
+	out := append(slices.Clone(fields[:at]), "-n", id.Namespace)
+	return "kubectl " + strings.Join(append(out, fields[at:]...), " ")
 }
 
 // resourceName is the kind as kubectl takes it: lower case, with the

@@ -287,6 +287,17 @@ type Dashboard struct {
 	// through. Both or neither.
 	TLSCertFile string `yaml:"tlsCertFile"`
 	TLSKeyFile  string `yaml:"tlsKeyFile"`
+
+	// SessionLifetime is how long a dashboard sign-in lasts, as a Go
+	// duration ("12h", "168h"), between 15m and 168h (7 days). Empty
+	// keeps the default, 12h.
+	SessionLifetime string `yaml:"sessionLifetime"`
+
+	// SignInHelp is plain text the sign-in page shows above the link
+	// "How to get the password": where people of this cluster find the
+	// password. It is shown as text, never as HTML. At most 500
+	// characters.
+	SignInHelp string `yaml:"signInHelp"`
 }
 
 // AlertRoute defines routing filters for a provider. An incident matching at

@@ -26,6 +26,7 @@ func TestNodeResolveCountsTheNodesOwnPressureNotTheLingeringEviction(
 		State: incident.Resolved, Opened: at(0, 0),
 		RecoveringSince: at(15, 0), Resolved: at(18, 0),
 		Cause: &rootcause.CauseRecord{Rule: "node-disk-pressure", Root: node,
+			Score: rootcause.High,
 			RootFindings: []detection.Finding{{Entity: node,
 				Reason:  reasons.EvictionThresholdMet,
 				Mode:    detection.ModeDiskEvictionThreshold,

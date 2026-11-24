@@ -59,3 +59,36 @@ func CertaintyOf(cause *CauseRecord) Level {
 	}
 	return LevelOf(cause.Score)
 }
+
+// MinCorroboration is how many pieces of supporting evidence a cause
+// below Likely needs, besides the rule that blamed it, before a
+// message may name it: a counterfactual check (Checked) or a proof
+// for it (Proof with Supports) each count once.
+const MinCorroboration = 1
+
+// Confirmed reports whether a message may name the cause as the cause.
+// A cause at LevelPossible is not confirmed when a rival scored almost
+// alike, or when nothing corroborates it (MinCorroboration): kwatch
+// then says the symptom and that it could not confirm a cause, and the
+// candidate is shown only as a possibility. A cause at Likely or High
+// is always confirmed.
+func Confirmed(cause *CauseRecord) bool {
+	if cause == nil {
+		return false
+	}
+	if CertaintyOf(cause) != LevelPossible {
+		return true
+	}
+	return cause.Rival == nil && corroboration(cause) >= MinCorroboration
+}
+
+// corroboration counts the evidence for a cause beyond its rule.
+func corroboration(cause *CauseRecord) int {
+	count := len(cause.Checked)
+	for _, p := range cause.Proof {
+		if p.Supports {
+			count++
+		}
+	}
+	return count
+}

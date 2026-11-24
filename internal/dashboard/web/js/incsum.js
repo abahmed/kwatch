@@ -152,12 +152,31 @@
 
   var CONF = { likely: "kwatch thinks this is the likely cause.", possible: "This is a possible cause, not a certain one." };
 
+  /* checkVerdict: what kwatch's own check between two causes decided,
+     said in Why? itself: "Likely external endpoint db:5432 — kwatch
+     ruled out cluster DNS: db resolves from kwatch and accepts a
+     connection." From round.check and the candidates' states (kept,
+     ruled out); "" when the check decided nothing. */
+  function checkVerdict(inc) {
+    var r = inc.round || {}, c = r.check, list = r.candidates || [];
+    var kept = list.filter(function (x) { return x.state === "kept"; })[0];
+    var out = list.filter(function (x) { return x.state === "ruled out"; })[0];
+    if (!c || !kept || !out) return "";
+    var found = String(c.text || "").replace(/^kwatch checked:?\s*/i, "").replace(/\.$/, "");
+    return "Likely " + KW.entityText(kept.cause) + " — kwatch ruled out " +
+      KW.entityText(out.cause) + (found ? ": " + found : "") + ".";
+  }
+
+  KW.checkVerdict = checkVerdict;
+
   function whyRow(root, inc) {
     var w = sum(inc).why || {}, text = w.text || inc.rootCause || "";
     var known = w.causeKnown === undefined ? !!text : !!w.causeKnown && !!text;
     var dd = KW.summaryRow(root, "why", T.ask.why, true);
+    var verdict = checkVerdict(inc);
     if (known) {
       KW.hideMarks(dd.appendChild(KW.el("p", "ds-why-t")), causeText(inc, text));
+      if (verdict) dd.appendChild(KW.el("p", "ds-why-check", verdict));
       if (CONF[w.confidence]) dd.appendChild(KW.el("p", "ds-sub", CONF[w.confidence]));
       var also = checkedBlock(w.checked);
       if (also) dd.appendChild(also);
@@ -174,7 +193,11 @@
     var viaRelease = KW.releaseWhy ? KW.releaseWhy(inc) : "";
     if (viaRelease) { dd.appendChild(KW.el("p", "ds-why-t", viaRelease)); return; }
     // No single cause, but the investigation narrowed it to two.
-    var ck = inc.round && inc.round.check;
+    var ck = inc.round && inc.round.check, verdict = checkVerdict(inc);
+    if (verdict) {
+      dd.appendChild(KW.el("p", "ds-why-t", verdict));
+      return;
+    }
     if (ck && ck.cause && ck.rival) {
       dd.appendChild(KW.el("p", "ds-why-t", "One of two causes: " + KW.entityText(ck.cause) + " or " + KW.entityText(ck.rival) + "."));
       dd.appendChild(KW.el("p", "ds-sub", "kwatch ran a check to tell them apart; see what it found below."));
@@ -258,14 +281,15 @@
      show what Kubernetes reports about the object, and the proof. */
   function firstLook(dd, root, inc) {
     var kind = String(inc.workloadKind || "").toLowerCase(), name = inc.workload;
-    var ns = inc.namespace ? "-n " + inc.namespace + " " : "", obj = kind + "/" + name;
+    var ns = inc.namespace ? " -n " + inc.namespace : "", obj = kind + "/" + name;
     var list = [];
-    if (kind && name) list.push(["Its state and recent events:", "kubectl " + ns + "describe " + obj]);
+    // One order everywhere: verb, object, namespace, then the flags.
+    if (kind && name) list.push(["Its state and recent events:", "kubectl describe " + obj + ns]);
     if (kind && name && LOGS.test(kind)) {
-      list.push(["Its latest logs:", "kubectl " + ns + "logs " + obj + " --all-containers --tail=50"]);
+      list.push(["Its latest logs:", "kubectl logs " + obj + ns + " --all-containers --tail=50"]);
     }
-    list.push(["Recent warnings around it:", "kubectl " + (ns || "-A ") +
-      "get events --field-selector type=Warning --sort-by=.lastTimestamp"]);
+    list.push(["Recent warnings around it:", "kubectl get events" + (ns || " -A") +
+      " --field-selector type=Warning --sort-by=.lastTimestamp"]);
     dd.appendChild(KW.el("p", "ds-sub", T.ask.noSteps));
     var ol = dd.appendChild(KW.el("ol", "ds-todo"));
     list.forEach(function (x) {
@@ -293,7 +317,7 @@
     }
     var rest = steps.length - a.used + KW.cutCount(inc, "summaryNext");
     if (rest > 0) {
-      var b = dd.appendChild(KW.el("button", "link ds-steps-b", KW.plural(rest, "more step", "more steps") + " →"));
+      var b = dd.appendChild(KW.el("button", "link ds-steps-b", "+" + KW.plural(rest, "more step", "more steps") + " →"));
       b.type = "button";
       b.addEventListener("click", function () { KW.openFold(root, "fix"); });
     }
@@ -384,6 +408,8 @@
       if (cmd) {
         p.appendChild(document.createTextNode(" To acknowledge it, run:"));
         dd.appendChild(KW.cmd(cmd));
+        dd.appendChild(KW.el("p", "ev-cap", "kwatch posts one update and stops reminding while " +
+          "the annotation is there. This page only reads your cluster, so it can't do this for you."));
       }
     }
   }

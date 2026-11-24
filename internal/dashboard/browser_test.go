@@ -52,6 +52,9 @@ func browserIssues() []incident.Incident {
 			it.Facts = []string{
 				"kwatch checked: DNS resolves db fine."}
 		}
+		if i == 3 {
+			it.Cause = browserGistCause()
+		}
 		out = append(out, it)
 	}
 	return out

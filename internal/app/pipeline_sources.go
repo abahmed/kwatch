@@ -4,6 +4,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/scope"
 )
 
@@ -80,4 +81,28 @@ func (s scopedServices) Entities(kind inventory.Kind) []inventory.EntityID {
 		}
 	}
 	return inScope
+}
+
+// leasesWatched reports whether the metadata watch lists the Leases the
+// prober also scans, so the prober leaves their deletion to it.
+func (p *pipelineBuild) leasesWatched() bool {
+	return p.source != nil && p.source.Synced(kube.KindLease)
+}
+
+// newProber builds the prober of the API server, cluster DNS and the
+// Leases of controllers.
+func (p *pipelineBuild) newProber(submit kube.Submit) *kube.Prober {
+	deps := p.deps
+	return kube.NewProber(kube.ProbeConfig{
+		Client:   deps.clients.Kubernetes,
+		Resolver: deps.clients.Resolver,
+		Now:      p.clock.Now,
+		Submit:   submit,
+		HTTP:     deps.clients.ProbeHTTP,
+		Model:    p.model,
+		// kwatch renews its own leader Lease; it is not a controller.
+		OwnLeaseNamespace: kubeclient.GetNamespace(),
+		OwnLeaseName:      electionLeaseName(),
+		LeasesWatched:     p.leasesWatched,
+	})
 }

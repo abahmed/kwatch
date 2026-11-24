@@ -16,7 +16,7 @@ import (
 )
 
 // sessionLifetime is how long a sign-in lasts, from sign-in, without
-// sliding (decision D10).
+// sliding (decision D10), unless Options.SessionLifetime sets another.
 const sessionLifetime = 12 * time.Hour
 
 // maxRevoked bounds the signed-out sessions remembered until they
@@ -42,6 +42,8 @@ type sessions struct {
 	key      atomic.Pointer[[]byte]
 	now      clock.Clock
 	disabled atomic.Bool
+	// lifetime is how long a sign-in lasts; set before serving.
+	lifetime time.Duration
 
 	mu   sync.Mutex
 	boot [bootTagBytes]byte
@@ -66,7 +68,8 @@ func newSessions(password, token string, now clock.Clock) *sessions {
 		bootKey = nil
 	}
 	key := deriveKey(bootKey, password, token)
-	s := &sessions{now: now, revoked: make(map[string]time.Time)}
+	s := &sessions{now: now, revoked: make(map[string]time.Time),
+		lifetime: sessionLifetime}
 	s.disabled.Store(bootKey == nil)
 	s.key.Store(&key)
 	s.boot = bootTag(bootKey)
@@ -133,13 +136,13 @@ func (s *sessions) issue() (string, time.Time, error) {
 		enc.EncodeToString(s.sign(payload))
 	stored := s.stored != nil
 	if stored {
-		s.stored.add(payload[sessionNonceAt:], at.Add(sessionLifetime), at)
+		s.stored.add(payload[sessionNonceAt:], at.Add(s.lifetime), at)
 	}
 	s.mu.Unlock()
 	if stored {
 		s.save()
 	}
-	return value, at.Add(sessionLifetime), nil
+	return value, at.Add(s.lifetime), nil
 }
 
 func (s *sessions) sign(payload []byte) []byte {
@@ -170,7 +173,7 @@ func (s *sessions) parse(value string) ([]byte, bool) {
 }
 
 // valid reports whether value is a live session: signed with the current
-// key, not older than sessionLifetime, not from the future and not
+// key, not older than its lifetime, not from the future and not
 // signed out.
 func (s *sessions) valid(value string) bool {
 	payload, ok := s.parse(value)
@@ -180,7 +183,7 @@ func (s *sessions) valid(value string) bool {
 	issued := time.Unix(int64(binary.BigEndian.Uint64(payload)), 0)
 	now := s.now.Now()
 	if now.Before(issued.Add(-time.Minute)) ||
-		!now.Before(issued.Add(sessionLifetime)) {
+		!now.Before(issued.Add(s.lifetime)) {
 		return false
 	}
 	s.mu.Lock()
@@ -205,7 +208,7 @@ func (s *sessions) revoke(value string) {
 		return
 	}
 	issued := time.Unix(int64(binary.BigEndian.Uint64(payload)), 0)
-	until := issued.Add(sessionLifetime)
+	until := issued.Add(s.lifetime)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pruneExpired()

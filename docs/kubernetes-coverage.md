@@ -159,7 +159,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | FlowControl | varies | `APIPriorityAndFairnessFailure` | `custom` |
 | Heartbeat.Stale | degraded | `NodeHeartbeatStale` | `node_health` |
 | HelmRelease.Failed | varies | `HelmReleaseFailed` | `helm_release` |
-| HelmRelease.Stuck | degraded | `HelmReleaseStuck` | `helm_release` |
+| HelmRelease.Stuck | varies | `HelmReleaseStuck` | `helm_release` |
 | Hook.PostStart | failing | `PostStartHookError` | `container` |
 | Hook.PreStart | failing | `PreStartHookError` | `container` |
 | ImageDrift | degraded | `ImageDigestDrift` | `image_drift` |
@@ -285,7 +285,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | VolumeFull.Inodes | varies | `VolumeInodesHigh` | `usage` |
 | Waiting.Unknown | varies | `UnknownWaiting.` | - |
 | Webhook.BackendMissing | degraded | `WebhookBackendNotFound` | `conversion_backend`, `policy` |
-| Webhook.NoEndpoints | degraded | `WebhookNoEndpoints` | `conversion_backend`, `policy` |
+| Webhook.NoEndpoints | varies | `WebhookNoEndpoints` | `conversion_backend`, `policy` |
 | Webhook.Rejecting | degraded | `WebhookRejecting` | `webhook_calls` |
 | Webhook.Slow | varies | `WebhookSlow` | `webhook_calls` |
 

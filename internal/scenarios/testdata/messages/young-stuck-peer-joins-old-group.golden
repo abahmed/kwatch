@@ -1,0 +1,7 @@
+10:31:15 digest
+🟡 kwatch summary (prod-eu-1): one new low-priority problem. Two objects (config map run-a and config map run-b) in batch have been stuck deleting since Aug 15: their finalizer jobs.example.com/cleanup is never removed; no controller in the cluster is known to handle it (API group jobs.example.com). Not urgent: kwatch alerts on its own if it gets worse.
+🟡 kwatch summary (prod-eu-1): one new low-priority problem.
+| 🟡 **kwatch summary** · prod-eu-1 — 1 problem
+|
+| **Problems**
+| - Two objects (config map **run-a** and config map **run-b**) in **batch** have been stuck deleting since Aug 15: their finalizer **jobs.example.com/cleanup** is never removed; no controller in the cluster is known to handle it (API group jobs.example.com)

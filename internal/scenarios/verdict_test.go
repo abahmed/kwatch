@@ -6,6 +6,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/replay"
+	"github.com/abahmed/kwatch/internal/rootcause"
 	"github.com/abahmed/kwatch/internal/scorecard"
 )
 
@@ -158,6 +159,8 @@ func rootCases(e expectation, incidents []reported) []scorecard.Case {
 			c.Actual, c.Confidence = actualRoot(got), got.confidence()
 			c.Correct = rootMatches(want, got)
 			c.Hedged = got.Cause != nil && got.Cause.Rival != nil
+			c.Unconfirmed = got.Cause != nil &&
+				!rootcause.Confirmed(got.Cause)
 		}
 		cases = append(cases, c)
 	}

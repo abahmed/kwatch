@@ -222,7 +222,7 @@ func digestCounts(
 			" with pods that never become ready")
 	}
 	if extras.Wake != nil && len(counts) == 0 {
-		counts = append(counts, "a cluster wake-up")
+		counts = append(counts, extras.Wake.Kind())
 	}
 	return counts
 }

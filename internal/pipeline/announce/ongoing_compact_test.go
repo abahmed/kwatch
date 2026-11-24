@@ -23,7 +23,7 @@ func TestOngoingIsListedInFullOnceADay(t *testing.T) {
 	assert.Empty(t, unchanged)
 
 	for _, item := range changed {
-		c.markShown(item.p, foldNow)
+		c.markShown(item, foldNow)
 	}
 	changed, unchanged = c.splitOngoing(items, foldNow.Add(5*time.Hour))
 	assert.Empty(t, changed)
@@ -39,7 +39,7 @@ func TestOngoingThatChangedIsListedInFullAgain(t *testing.T) {
 	items := c.ongoingProblems(foldNow)
 	for _, item := range items {
 		item.p.Members = failingMember(item.p)
-		c.markShown(item.p, foldNow)
+		c.markShown(item, foldNow)
 	}
 	items[0].p.Members = failingMember(items[0].p)
 	items[0].p.State = incident.Flapping
@@ -63,7 +63,7 @@ func TestOngoingWithoutFindingsIsUnchanged(t *testing.T) {
 	c, _ := foldHarness(demotedRecord("a"))
 	items := c.ongoingProblems(foldNow)
 	items[0].p.Members = failingMember(items[0].p)
-	c.markShown(items[0].p, foldNow)
+	c.markShown(items[0], foldNow)
 	items[0].p.Members = nil
 
 	_, unchanged := c.splitOngoing(items, foldNow.Add(time.Hour))
@@ -78,7 +78,7 @@ func TestShownRecordSurvivesARestart(t *testing.T) {
 	c, _ := foldHarness(demotedRecord("a"), demotedRecord("b"))
 	items := c.ongoingProblems(foldNow)
 	for _, item := range items {
-		c.markShown(item.p, foldNow)
+		c.markShown(item, foldNow)
 	}
 	saved := c.pendingState()
 
@@ -100,8 +100,37 @@ func TestShownRecordSurvivesARestart(t *testing.T) {
 func TestShownRecordForgetsEarlierDays(t *testing.T) {
 	c, _ := foldHarness(demotedRecord("a"), demotedRecord("b"))
 	items := c.ongoingProblems(foldNow)
-	c.markShown(items[0].p, foldNow)
-	c.markShown(items[1].p, foldNow.Add(24*time.Hour))
+	c.markShown(items[0], foldNow)
+	c.markShown(items[1], foldNow.Add(24*time.Hour))
 
 	assert.Len(t, c.shownLines(), 1)
+}
+
+// A problem that has lasted more than WeeklyAfter and did not change is
+// listed in full once a week, not every day: the other days' digests
+// only count it. A young one is still listed daily.
+func TestOldUnchangedOngoingIsListedInFullOnceAWeek(t *testing.T) {
+	old := demotedRecord("old")
+	old.Opened = foldNow.Add(-30 * 24 * time.Hour)
+	c, _ := foldHarness(old, demotedRecord("young"))
+	items := c.ongoingProblems(foldNow)
+	require.Len(t, items, 2)
+	for _, item := range items {
+		c.markShown(item, foldNow)
+	}
+
+	nextDay := foldNow.Add(24 * time.Hour)
+	changed, unchanged := c.splitOngoing(items, nextDay)
+	require.Len(t, changed, 1)
+	assert.Equal(t, "young", changed[0].p.ID, "listed daily")
+	require.Len(t, unchanged, 1)
+	assert.Equal(t, "old", unchanged[0].p.ID, "counted, not listed")
+
+	_, week := foldNow.ISOWeek()
+	monday := foldNow.Add(24 * time.Hour)
+	for _, w := monday.ISOWeek(); w == week; _, w = monday.ISOWeek() {
+		monday = monday.Add(24 * time.Hour)
+	}
+	changed, _ = c.splitOngoing(items, monday)
+	assert.Len(t, changed, 2, "the next week lists it in full again")
 }

@@ -162,7 +162,9 @@ func (u *Upgrader) checkRelease(ctx context.Context) {
 		return
 	}
 
-	if u.lastNotified(ctx) == *r.TagName {
+	if u.notified == *r.TagName ||
+		(u.persistenceManager != nil &&
+			u.persistenceManager.GetNotifiedVersion(ctx) == *r.TagName) {
 		klog.V(4).InfoS(
 			"already notified about version, skipping",
 			"version", *r.TagName)
@@ -171,6 +173,8 @@ func (u *Upgrader) checkRelease(ctx context.Context) {
 
 	u.deliveryManager.Notify(updateNotice(*r.TagName, u.current))
 
+	// Remember the notice in memory first: if the state cannot be
+	// written, the next check must not announce the version again.
 	u.notified = *r.TagName
 	if u.persistenceManager != nil {
 		if err := u.persistenceManager.SetNotifiedVersion(
@@ -180,13 +184,6 @@ func (u *Upgrader) checkRelease(ctx context.Context) {
 			klog.InfoS("failed to set notified version", "error", err)
 		}
 	}
-}
-
-func (u *Upgrader) lastNotified(ctx context.Context) string {
-	if u.persistenceManager != nil {
-		return u.persistenceManager.GetNotifiedVersion(ctx)
-	}
-	return u.notified
 }
 
 // updateNotice is the message announcing release latest to a cluster

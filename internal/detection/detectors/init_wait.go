@@ -117,12 +117,12 @@ func serviceState(
 	name := "Service " + id.Name + " in " + id.Namespace
 	service, exists := ctx.Model.Entity(id)
 	if !exists {
-		if ctx.Synced(kube.KindService) {
+		if ctx.SyncedFor(kube.KindService) {
 			return name + " does not exist", true
 		}
 		return "", false
 	}
-	if !ctx.Synced(kube.KindEndpointSlice) {
+	if !ctx.SyncedFor(kube.KindEndpointSlice) {
 		return "", false
 	}
 	slices := ctx.Model.Related(id, inventory.Backs, inventory.Incoming)

@@ -36,6 +36,9 @@ type historyRecorder struct {
 	// restored is the served memory restored and not yet checked
 	// against the cluster (served_restore.go).
 	restored servedCheck
+	// pinnedBy names, per entity whose older changes a restart pinned,
+	// the open incidents it was pinned for (change_pin.go).
+	pinnedBy map[inventory.EntityID][]string
 }
 
 func newHistoryRecorder(
@@ -52,6 +55,7 @@ func newHistoryRecorder(
 		model: deps.Model, sampler: newBaselineSampler(deps.Model),
 		store: store, timer: deps.Timer, now: now, stats: stats,
 		checks: newCauseChecker(deps.Model), incidents: deps.Incidents,
+		pinnedBy: map[inventory.EntityID][]string{},
 	}
 	h.checks.save = h.saveChecks
 	h.unexplained = newUnexplainedTracker(now)
@@ -197,6 +201,9 @@ func (h *historyRecorder) decided(
 ) {
 	h.checks.observe(decisions)
 	h.unexplained.observeDecisions(now, decisions)
+	if len(decisions) > 0 {
+		h.releasePins(now)
+	}
 	if h.writer == nil {
 		return
 	}

@@ -1,0 +1,16 @@
+{
+  "name": "morning-sandbox-one-node-stuck",
+  "description": "Five nodes join at once in the morning; the pods of four start within 90 seconds, those of the fifth keep failing sandbox network setup for ten minutes.",
+  "root": "node//m5",
+  "tier": "notify",
+  "bootHeld": true,
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//m1",
+    "node//m2",
+    "node//m3",
+    "node//m4",
+    "node//n0"
+  ],
+  "tail": "5m0s"
+}

@@ -237,3 +237,18 @@ func TestActivityHandlerTakesUntold(t *testing.T) {
 		}
 	}
 }
+
+func TestActivityWeekWindowReachesOlderChanges(t *testing.T) {
+	p := testIncident("old", "shop", -3*24*time.Hour)
+	p.Occurrences = []time.Time{p.Opened}
+	s := newTestServer(p)
+	for since, want := range map[string]int{"24h": 0, "7d": 1} {
+		w := get(t, s, "/api/activity?since="+since)
+		var r ActivityResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &r); err != nil ||
+			w.Code != http.StatusOK || r.Since != since ||
+			len(r.Events) != want {
+			t.Errorf("%s: %d %s", since, w.Code, w.Body.String())
+		}
+	}
+}

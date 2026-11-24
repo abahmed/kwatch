@@ -34,4 +34,7 @@ type ListFacets struct {
 	Kind      map[string]int `json:"kind"`
 	Acked     map[string]int `json:"acked"`
 	Stopped   map[string]int `json:"stopped"`
+	// Bucket counts the active issues of each part of the active list
+	// (?bucket=, buckets.go): attention, ongoing and cleanup.
+	Bucket map[string]int `json:"bucket"`
 }

@@ -19,6 +19,7 @@ type Context struct {
 	synced      func(inventory.Kind) bool
 	fresh       func(inventory.Kind) bool
 	unsynced    *[]inventory.Kind
+	unsure      *[]string
 	misses      *int
 	specialised bool
 	onsets      *onsetScope
@@ -37,13 +38,16 @@ func (c Context) Specialised() bool { return c.specialised }
 // A kind that is not synced is noted in the Evaluation, so the caller can
 // evaluate the entity again when the kind syncs: an absent object that
 // was never listed raises no event of its own to do it.
+//
+// Synced makes the whole detector unsure: every finding it raised before
+// is kept, and its onsets too. It suits a detector that returns at once
+// when the kind is not synced. A detector with findings that do not
+// depend on the kind calls SyncedFor, naming the reasons that do.
 func (c Context) Synced(kind inventory.Kind) bool {
 	if c.synced == nil || c.synced(kind) {
 		return true
 	}
-	if c.unsynced != nil && !slices.Contains(*c.unsynced, kind) {
-		*c.unsynced = append(*c.unsynced, kind)
-	}
+	c.noteUnsynced(kind)
 	if c.misses != nil {
 		*c.misses++
 	}
@@ -108,6 +112,10 @@ type Evaluation struct {
 	// a panic, that leaves what they would say unknown, so Keeping keeps
 	// their earlier findings rather than clearing them.
 	UnsyncedBy []string
+	// UnsureReasons names the reasons a detector could not judge (see
+	// Context.SyncedFor). Keeping keeps the earlier findings of those
+	// reasons only; the detector's other findings clear as usual.
+	UnsureReasons []string
 }
 
 // Detector evaluates entities of the kinds it declares.
@@ -190,6 +198,7 @@ func (r *Registry) Evaluate(
 	}
 	var recheck time.Duration
 	var unsynced []inventory.Kind
+	var unsureReasons []string
 	var misses int
 	scope := r.onsets.begin(id)
 	var unsure []string
@@ -198,6 +207,7 @@ func (r *Registry) Evaluate(
 	ctx := Context{
 		Model: model, Now: now, recheck: &recheck, synced: r.synced,
 		fresh: r.fresh, unsynced: &unsynced, misses: &misses,
+		unsure:      &unsureReasons,
 		specialised: present && len(r.byKind[id.Kind]) > 0,
 		onsets:      scope,
 		pass:        &r.pass,
@@ -217,7 +227,8 @@ func (r *Registry) Evaluate(
 		ctx.RecheckAfter(incompleteRecheck)
 	}
 	return Evaluation{Findings: collapseReasons(out), RecheckAfter: recheck,
-		Unsynced: unsynced, Panicked: panicked, UnsyncedBy: run.unsynced}
+		Unsynced: unsynced, Panicked: panicked, UnsyncedBy: run.unsynced,
+		UnsureReasons: unsureReasons}
 }
 
 // runDetectors runs the detector groups in order and returns the findings

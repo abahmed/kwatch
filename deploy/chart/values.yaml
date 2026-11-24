@@ -128,15 +128,18 @@ networkPolicy:
 # 460 MiB at 20,000. The default 512Mi suits about 5,000 pods comfortably and 8,000 at the
 # edge (cached state-file pages and evidence buffers come on top); use
 # 768Mi at 10,000 pods and 1Gi at 20,000 (raise the request with the limit).
-# The request stays 128Mi so upgrades with an older 128Mi limit still work;
-# set it to 256Mi or more on large clusters so the node keeps room for kwatch.
+# The request is 256Mi: the Go heap plus the state file pages the kernel
+# keeps in memory (about 370Mi in use on a cluster of 230 watched kinds), so
+# the node should keep that room for kwatch. Goroutines are about 100 plus
+# 10 per watched kind; above 200 kinds, or on very large clusters, set the
+# limit to 768Mi.
 # See docs/production-operations.md, section Memory.
 resources:
   limits:
     memory: 512Mi
     cpu: 500m
   requests:
-    memory: 128Mi
+    memory: 256Mi
     cpu: 100m
 
 # -- State store volume. Kwatch keeps incidents, changes,
@@ -235,7 +238,8 @@ priorityClassName: ""
 priorityClass:
   # -- Create a PriorityClass for kwatch (off by default)
   create: false
-  # -- Name of the class; empty uses the release's full name
+  # -- Name of the class; empty uses <fullname>-<namespace> (a PriorityClass
+  # is cluster-wide)
   name: ""
   # -- Priority value; higher is evicted later. Pick one above your
   # workloads (user classes must stay under 1,000,000,000)
@@ -356,6 +360,13 @@ dashboard:
   # in front. Renewals are picked up without a restart.
   tls:
     secretName: ""
+  # -- How long a sign-in lasts, as a duration between 15m and 168h
+  # (7 days). Empty keeps the default, 12h.
+  sessionLifetime: ""
+  # -- Plain text the sign-in page shows above the link "How to get the
+  # password", for example where your team keeps it. Shown as text,
+  # never as HTML; at most 500 characters.
+  signInHelp: ""
   # -- Name of an existing Secret with the keys `password` and `token`.
   # When empty and enabled is true, the chart ships `<release>-dashboard`
   # empty and kwatch writes a generated password and token into it once.

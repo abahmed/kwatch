@@ -76,3 +76,21 @@ func TestFastStartupStepsAreNotLoggedAsSlow(t *testing.T) {
 
 	assert.NotContains(t, out.String(), "was slow")
 }
+
+// A peek (SkipPageCheck) does not walk every page, and still reads.
+func TestPeekOpenSkipsThePageCheck(t *testing.T) {
+	out := captureLog(t)
+	slowClock(t, 2*SlowStep)
+	path := filepath.Join(t.TempDir(), "state.db")
+	seeded(t, path)
+	klog.Flush()
+	out.Reset() // seeding opened the file with a full check
+
+	s := openDeferred(t, path, Options{SkipPageCheck: true})
+	klog.Flush()
+
+	assert.NotContains(t, out.String(), `step="page check"`)
+	_, found, err := state(s).Get("k")
+	require.NoError(t, err)
+	assert.True(t, found, "a peek reads the file")
+}

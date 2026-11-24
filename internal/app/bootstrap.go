@@ -255,13 +255,15 @@ func newDashboardServer(
 			"request is refused with 401", "component", "dashboard-server")
 	}
 	return dashboard.NewServer(dashboard.Options{
-		Port:           dc.Port,
-		Token:          token,
-		Password:       password,
-		TrustedProxies: dc.TrustedProxies,
-		TLSCertFile:    dc.TLSCertFile,
-		TLSKeyFile:     dc.TLSKeyFile,
-		Edition:        string(feature.OrCommunity(e).Edition()),
+		Port:            dc.Port,
+		Token:           token,
+		Password:        password,
+		TrustedProxies:  dc.TrustedProxies,
+		TLSCertFile:     dc.TLSCertFile,
+		TLSKeyFile:      dc.TLSKeyFile,
+		SessionLifetime: dc.Lifetime(),
+		SignInHelp:      dc.SignInHelp,
+		Edition:         string(feature.OrCommunity(e).Edition()),
 		ChangeHistory: feature.OrCommunity(e).Has(
 			feature.ChangeCorrelation),
 		Scope: dashboardScope(runtime.Scope(), now),

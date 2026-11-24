@@ -166,9 +166,13 @@
     if (KW.isUntold(inc)) return "Nobody was alerted: it settled on its own.";
     if (inc.severity === "silent") return "Nobody was alerted: its level is Quiet, so kwatch only keeps track of it.";
     if (inc.severity === "digest") return "Nobody was alerted yet: Low issues are listed in the daily summary.";
-    if (KW.heldWords && KW.heldWords(inc)) return "Nobody was alerted yet: " + KW.heldWords(inc) + ".";
-    if (inc.state === "settling") return "Nobody was alerted yet: kwatch alerts once it is sure this is real.";
-    return "Nobody was alerted yet.";
+    // An Urgent or Needs attention issue nobody heard of yet: the level
+    // says how it will be sent, so say why it is not sent yet.
+    var lvl = (KW.SEVERITY[inc.severity] || {}).label;
+    var lead = lvl ? lvl + " — not sent yet: " : "Nobody was alerted yet: ";
+    if (KW.heldWords && KW.heldWords(inc)) return lead + KW.heldWords(inc) + ".";
+    if (inc.state === "settling") return lead + "kwatch is still confirming it is real.";
+    return lvl ? lead + "no alert channel routes it." : "Nobody was alerted yet.";
   };
 
   /* count: the timeline's events; else the sections a tab shows. */

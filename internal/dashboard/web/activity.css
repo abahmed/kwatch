@@ -1,6 +1,6 @@
 /* kwatch dashboard: the Activity page (js/activity.js): one row per
    change, newest first: the time, a sentence saying what happened to
-   which workload, the issue's title under it, how urgent it is. A burst
+   which workload, how urgent it is. A burst
    in one minute folds behind one line. */
 .act-sw { margin-top: 16px; }
 .act-sw .tz-b { min-height: 32px; padding: 0 14px; font-size: var(--t-micro); }
@@ -10,14 +10,15 @@
 .act-list { list-style: none; margin: 12px 0 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; }
 .act-list > li + li, .act-sub > li { border-top: 1px solid var(--line); }
 .act-sub { list-style: none; margin: 0; padding: 0; }
-.act-row { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) auto; align-items: baseline; gap: 4px 16px; padding: 10px 16px; min-height: var(--hit); color: var(--text); text-decoration: none; font-size: var(--t-body); }
+.act-row { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr) auto; align-items: baseline; gap: 4px 16px; padding: 10px 16px; min-height: var(--hit); color: var(--text); text-decoration: none; font-size: var(--t-body); }
 .act-row:hover { background: var(--surface); }
 .act-row:hover .act-who { text-decoration: underline; }
-.act-at { white-space: nowrap; font-size: var(--t-small); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.act-at { display: flex; flex-direction: column; font-size: var(--t-small); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.act-at time { color: var(--text); }
+.act-ago { font-size: var(--t-micro); }
 .act-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .act-line { overflow-wrap: anywhere; }
 .act-who { font-weight: 700; }
-.act-title { font-size: var(--t-small); color: var(--text-muted); overflow-wrap: anywhere; }
 .act-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 /* The folded rest of a burst: one quiet line that opens the rows. */
 .act-fold > summary { display: flex; align-items: center; min-height: var(--hit); padding: 0 16px 0 calc(4.5rem + 32px); cursor: pointer; color: var(--text-muted); font-size: var(--t-small); font-weight: 600; }

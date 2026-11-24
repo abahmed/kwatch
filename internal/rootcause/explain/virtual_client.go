@@ -21,6 +21,7 @@ func (v *view) clientHops(id inventory.EntityID) []hop {
 	out = append(out, v.roleHops(id)...)
 	out = append(out, v.unauthorizedHops(id)...)
 	out = append(out, v.removedNodeHops(id)...)
+	out = append(out, v.removedArchNodeHops(id)...)
 	out = append(out, v.helperHops(id)...)
 	out = append(out, v.calledHops(id)...)
 	out = append(out, v.serviceCallHops(id)...)

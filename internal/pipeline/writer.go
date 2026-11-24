@@ -70,6 +70,10 @@ type storeWriter struct {
 	// streak is only touched by the writer goroutine.
 	streak writeStreak
 
+	// writeMu is held from taking the pending snapshot until it is
+	// written, so a write the loop waits for (writeNow) and the batch
+	// write never land out of order.
+	writeMu sync.Mutex
 	mu      sync.Mutex
 	pending storeSnapshot
 	// fenced is set once a write found the store claimed by a newer
@@ -187,9 +191,19 @@ func (w *storeWriter) close(deadline <-chan time.Time) bool {
 	}
 }
 
+// writeNow writes s, with whatever is pending, before it returns: for
+// a record that must be on disk before something else happens. A part
+// that fails is retried with the next batch, as in flush.
+func (w *storeWriter) writeNow(s storeSnapshot) {
+	w.offer(s)
+	w.flush()
+}
+
 // flush writes the pending snapshot. Parts that fail are put back and
 // retried with the next batch.
 func (w *storeWriter) flush() {
+	w.writeMu.Lock()
+	defer w.writeMu.Unlock()
 	w.mu.Lock()
 	batch := w.pending
 	w.pending = storeSnapshot{}

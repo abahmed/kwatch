@@ -54,6 +54,14 @@ func writeError(w http.ResponseWriter, code int, msg string) {
 	_, _ = w.Write(append(body, '\n'))
 }
 
+// releasesGone answers the removed /api/releases with 410 and the
+// reason, so a caller sees it was removed and not mistyped: a release is
+// part of the issue it caused (GET /api/incidents).
+func releasesGone(w http.ResponseWriter, _ *http.Request) {
+	writeError(w, http.StatusGone, "/api/releases was removed: a "+
+		"release is part of the issue it caused. Use /api/incidents.")
+}
+
 // onlyGet answers 405 to anything but GET and reports whether to go on.
 func onlyGet(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method == http.MethodGet {

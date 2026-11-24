@@ -14,10 +14,20 @@ import "time"
 // Unheard returns the live incidents whose announcement the scope
 // dropped and that still fail: the ones to ask the scope about again.
 func (m *Manager) Unheard() []Incident {
+	return m.UnheardOf(nil)
+}
+
+// UnheardOf is Unheard for the incidents only keeps, or all of them for
+// a nil only. Each is checked under the lock before it is copied, so
+// asking about a few costs no copy of the others.
+func (m *Manager) UnheardOf(only func(id string) bool) []Incident {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var out []Incident
 	for _, id := range m.liveIDs() {
+		if only != nil && !only(id) {
+			continue
+		}
 		if p := m.incidents[id]; unheardFailing(p) {
 			out = append(out, p.Snapshot())
 		}

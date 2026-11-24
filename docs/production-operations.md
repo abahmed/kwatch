@@ -286,8 +286,20 @@ events does not reach the limit.
 | 10,000 | 270 MiB | `768Mi` |
 | 20,000 | 460 MiB | `1Gi` (`1280Mi` for pods with larger specs) |
 
-The chart's default request is 128Mi; set `requests.memory` to 256Mi or more
-on large clusters.
+The chart's default request is 256Mi (limit 512Mi); raise the request with
+the limit on large clusters.
+
+**Size by watched kinds too.** Besides pods, kwatch runs one informer per
+watched resource kind, and each one costs goroutines and an informer cache.
+Goroutines are about 100 plus about 10 per watched kind: a cluster watching
+234 kinds runs about 2,450. The heap is driven by those caches (the objects
+of every kind), so a cluster with many kinds, many custom resources, or many
+ConfigMaps, Secrets and ReplicaSets needs more than its pod count says. On a
+cluster watching 234 kinds the pod ran at 371Mi of the 512Mi limit: Go about
+290 MiB and about 80 MiB of state file pages. Use a `768Mi` limit (and a
+`384Mi` request) for more than 200 watched kinds or a very large cluster.
+Read the kind count from the `self-health` line's goroutines and from the
+kwatch page ("Watching N of N resource types").
 
 The table counts pods because they dominate, but kwatch also holds the
 other objects it watches. They add to the live heap on top of the per-pod
@@ -321,6 +333,24 @@ page each fill their pages) is dropped and logged once, and the next
 rewrite waits until the file is twice the size that copy had. When
 sizing, add the state file's size (the Resources card or the `state
 compaction pass` line, `fileBytes`) to the heap figure below.
+
+**The page cache is counted but reclaimable.** The kernel counts the state
+file's cached pages in the container's working set, and drops them under
+pressure before it kills anything. A working set near the limit is therefore
+not by itself a problem. Alert on Go memory (`goMemoryMiB` in the
+`self-health` line, or the Go heap series), not on the working set: the
+working set includes the cache and will sit high on a busy cluster.
+
+**State file size.** Three sizes differ. The logical size is the key and
+value bytes the compactor measures (`logicalBytes`, with `<bucket>Bytes` for
+each bucket in the `state compaction pass` line). The file is larger: bbolt
+keeps free pages and half-full pages inside it (`freeBytes`), and a file
+stable at about twice its data is normal until the online rewrite packs it
+(it runs when free pages are most of the file or the file is at least twice
+its data and 64 MiB more; log level 2 says why a rewrite is "not due"). Under
+churn the timeline is held at its 32 MiB cap, so its window is set by that
+cap, not by the 7 days: `oldestTimelineAge` in the same line is how far back
+it reaches right now, and it is shorter than 7 days on a busy cluster.
 
 The default 512Mi holds about 5,000 realistic pods with room to spare and
 about 8,000 at the edge (twice the live heap, about 410 MiB, leaves little
@@ -858,10 +888,10 @@ the story; only without such repeats do the oldest events go.
 An announcement the configured scope drops (namespaces, reasons,
 silences) is logged once as `incident not announced: out of scope`
 (`component="pipeline"`), so a filtered-out failure leaves a trace.
-While such an incident keeps failing, the scope is asked again on every
-tick; when it allows the incident (a maintenance window ended, a silence
-expired) the incident is announced then and logged as `incident back in
-scope: announced` (`component="incident"`).
+While such an incident keeps failing, the scope is asked again at most
+every 30 seconds; when it allows the incident (a maintenance window ended,
+a silence expired) the incident is announced then and logged as `incident
+back in scope: announced` (`component="incident"`).
 
 The dashboard logs sign-in, sign-out and every failed request (`401`,
 `403`, `429`, `5xx`) at the default level; successful reads, which an
@@ -1025,6 +1055,8 @@ server is back and kwatch holds the lock again. During the outage kwatch
 cannot tell you about it, so the heartbeat (Pro; the dead man's switch,
 `heartbeatMonitor`) is the only alarm. Configure it; see
 [Heartbeat Monitor](./configuration.md#-heartbeat-monitor-dead-mans-switch).
+Set it, and `app.clusterName`, in every environment, staging included, so
+each cluster is named in alerts and has its own dead man's switch.
 The gap is reported after the fact in the one restart message.
 
 The startup `KwatchConfig` list is the one API call a start needs before it
