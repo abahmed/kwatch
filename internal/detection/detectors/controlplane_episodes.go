@@ -81,10 +81,11 @@ func allLasted(
 }
 
 // recurringOutage notes a new outage when the probe turns unhealthy, and
-// its end when it turns healthy again, and returns a finding while the latest outageEpisodes outages all lie
-// within outageWindow: a service that goes down and comes back again
-// and again never stays down long enough for the sustained check, yet
-// it is failing. since is when the current health state began.
+// its end when it turns healthy again, and returns a finding while the
+// latest outageEpisodes outages all lie within outageWindow: a service
+// that goes down and comes back again and again never stays down long
+// enough for the sustained check, yet it is failing. since is when the
+// current health state began.
 func recurringOutage(
 	ctx detection.Context, e inventory.Entity, unhealthy bool,
 	since time.Time,

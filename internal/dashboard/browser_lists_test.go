@@ -385,7 +385,8 @@ func TestBrowserIssuesPhoneCards(t *testing.T) {
 	}
 	tall, err := chromedp.Run(tab, chromedp.Evaluate[float64](`Math.max(
   ...[...document.querySelectorAll("#issues-table tbody tr")].
-    filter((r) => !r.querySelector(".it-gist")).map((r) => r.getBoundingClientRect().height))`))
+    filter((r) => !r.querySelector(".it-gist")).
+    map((r) => r.getBoundingClientRect().height))`))
 	if err != nil || tall >= 110 {
 		t.Errorf("a card is %.0fpx tall (%v)", tall, err)
 	}

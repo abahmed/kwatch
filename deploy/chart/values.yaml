@@ -128,9 +128,10 @@ networkPolicy:
 # 460 MiB at 20,000. The default 512Mi suits about 5,000 pods comfortably and 8,000 at the
 # edge (cached state-file pages and evidence buffers come on top); use
 # 768Mi at 10,000 pods and 1Gi at 20,000 (raise the request with the limit).
-# The request is 256Mi: the Go heap plus the state file pages the kernel
-# keeps in memory (about 370Mi in use on a cluster of 230 watched kinds), so
-# the node should keep that room for kwatch. Goroutines are about 100 plus
+# The request stays 128Mi so upgrades that kept an older 128Mi limit still
+# work; kwatch uses more than that (about 370Mi with the state file pages
+# on a cluster of 230 watched kinds), so raise the request to 256Mi or more
+# together with the limit on bigger clusters. Goroutines are about 100 plus
 # 10 per watched kind; above 200 kinds, or on very large clusters, set the
 # limit to 768Mi.
 # See docs/production-operations.md, section Memory.
@@ -139,7 +140,7 @@ resources:
     memory: 512Mi
     cpu: 500m
   requests:
-    memory: 256Mi
+    memory: 128Mi
     cpu: 100m
 
 # -- State store volume. Kwatch keeps incidents, changes,

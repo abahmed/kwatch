@@ -1900,8 +1900,9 @@
 - The start-up edition peek no longer walks every page of the state file (3
   seconds cold on 180 MB); the real open still checks the file, and an
   unreadable file reads as not Pro.
-- The chart's and `deploy/deploy.yaml`'s memory request is 256Mi (limit
-  512Mi). docs/production-operations.md sizes memory by watched kinds, says
+- The chart's and `deploy/deploy.yaml`'s memory request stays 128Mi (limit
+  512Mi) so upgrades with an older 128Mi limit keep working; raise it to
+  256Mi or more with the limit on bigger clusters. docs/production-operations.md sizes memory by watched kinds, says
   to use 768Mi above 200 kinds, and explains that page cache counts in the
   working set but can be reclaimed, so alert on Go memory.
 - An API server outage no longer restarts the pod. A process that loses the
@@ -2142,9 +2143,9 @@
 
 - Documented: in an offline render (`helm template`, Argo CD) a change to the config Secret does not roll the pod; restart the Deployment, set a checksum in `podAnnotations`, or use a reloader. A rollback to a build with an older state schema loses open incidents and baselines.
 
-- The pod has a `startupProbe`. The memory request was 128Mi (limit 512Mi)
-  here; it is 256Mi from the release that sized it by watched kinds (see
-  Unreleased, Performance and operations).
+- The pod has a `startupProbe`. The memory request stays 128Mi (limit
+  512Mi), so upgrades with an older 128Mi limit keep working; set it to
+  256Mi or more on large clusters.
 
 - Changing the dashboard password restarts the pod.
 

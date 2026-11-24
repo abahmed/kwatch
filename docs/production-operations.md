@@ -286,8 +286,9 @@ events does not reach the limit.
 | 10,000 | 270 MiB | `768Mi` |
 | 20,000 | 460 MiB | `1Gi` (`1280Mi` for pods with larger specs) |
 
-The chart's default request is 256Mi (limit 512Mi); raise the request with
-the limit on large clusters.
+The chart's default request is 128Mi (limit 512Mi), kept low so upgrades
+with an older 128Mi limit still work; kwatch normally uses more, so set the
+request to 256Mi or more, with the limit, on bigger clusters.
 
 **Size by watched kinds too.** Besides pods, kwatch runs one informer per
 watched resource kind, and each one costs goroutines and an informer cache.

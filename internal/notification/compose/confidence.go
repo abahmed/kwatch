@@ -78,11 +78,12 @@ func changeLink(cause *rootcause.CauseRecord, symptom, change string,
 }
 
 // rivalChoice joins the two possible causes of a tie, which the
-// closing line of a message names (cause_unconfirmed.go). Two that say the same of
-// different objects name both once, so the words that follow cannot be
-// read as part of the first: "it or deployment arc/ctl is not running,
-// so it removes no finalizers", not "it is not running, so it removes
-// no finalizers or deployment arc/ctl is not running, so ...".
+// closing line of a message names (cause_unconfirmed.go). Two that say
+// the same of different objects name both once, so the words that
+// follow cannot be read as part of the first: "it or deployment
+// arc/ctl is not running, so it removes no finalizers", not "it is not
+// running, so it removes no finalizers or deployment arc/ctl is not
+// running, so ...".
 func rivalChoice(first, second, words, rivalWords string) string {
 	tail := " " + words
 	if words == "" || words != rivalWords ||

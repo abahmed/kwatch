@@ -46,8 +46,9 @@ const tabRoles = `(() => {
 
 // The header card holds only the header; the questions are in the
 // Summary tab, which opens first; What should I do? always answers and
-// What's wrong? is left out when it adds nothing to the title; the tab is kept in the address across a reload; the
-// arrow keys move along the tabs.
+// What's wrong? is left out when it adds nothing to the title; the tab
+// is kept in the address across a reload; the arrow keys move along the
+// tabs.
 func TestBrowserIssueQuestionsInSummaryTab(t *testing.T) {
 	actx, srv := browserSetup(t)
 	tab, problems := browserTab(t, actx)
