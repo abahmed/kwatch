@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDashboardEnvironmentOverridesTheFile(t *testing.T) {
@@ -90,4 +91,47 @@ func TestDashboardEnvironmentSetsTLSFiles(t *testing.T) {
 	if d.TLSCertFile != "/tls/tls.crt" || d.TLSKeyFile != "/tls/tls.key" {
 		t.Fatalf("dashboard = %+v", d)
 	}
+}
+
+func TestDashboardSessionSettingsFromFileAndEnvironment(t *testing.T) {
+	cfg := loadConfigText(t, "dashboard:\n  enabled: true\n"+
+		"  sessionLifetime: 72h\n  signInHelp: Ask the ops channel\n")
+	d := cfg.Runtime.Lifecycle().Dashboard()
+	if d.Lifetime() != 72*time.Hour || d.SignInHelp != "Ask the ops channel" {
+		t.Fatalf("dashboard = %+v, want the file's session settings", d)
+	}
+	t.Setenv(dashboardLifeEnv, "168h")
+	t.Setenv(dashboardHelpEnv, "See the wiki")
+	d = loadConfigText(t, "dashboard:\n  enabled: true\n  "+
+		"sessionLifetime: 72h\n").Runtime.Lifecycle().Dashboard()
+	if d.Lifetime() != 168*time.Hour || d.SignInHelp != "See the wiki" {
+		t.Fatalf("dashboard = %+v, want the environment's", d)
+	}
+}
+
+func TestValidateDashboardSession(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Dashboard.Enabled = true
+	for _, ok := range []string{"", "15m", "12h", "168h"} {
+		cfg.Dashboard.SessionLifetime = ok
+		if errs := Validate(cfg); len(errs) != 0 {
+			t.Fatalf("sessionLifetime %q rejected: %v", ok, errs)
+		}
+	}
+	for _, bad := range []string{"14m", "169h", "8d", "soon", "-1h"} {
+		cfg.Dashboard.SessionLifetime = bad
+		assertErrorContains(t, Validate(cfg), "dashboard.sessionLifetime")
+		if cfg.Dashboard.Lifetime() != 0 {
+			t.Errorf("%q: Lifetime() must fall back to the default", bad)
+		}
+	}
+	cfg.Dashboard.SessionLifetime = ""
+	cfg.Dashboard.SignInHelp = "line one\nline two <b>"
+	if errs := Validate(cfg); len(errs) != 0 {
+		t.Fatalf("plain help rejected: %v", errs)
+	}
+	cfg.Dashboard.SignInHelp = strings.Repeat("é", MaxSignInHelp+1)
+	assertErrorContains(t, Validate(cfg), "at most 500")
+	cfg.Dashboard.SignInHelp = "bell\a"
+	assertErrorContains(t, Validate(cfg), "without control characters")
 }

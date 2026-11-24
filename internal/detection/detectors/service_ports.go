@@ -19,7 +19,8 @@ func portMismatch(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	ports := parseServicePorts(text(e, kube.AttrServicePortSpecs))
-	if ctx.Model == nil || len(ports) == 0 || !ctx.Synced(kube.KindPod) {
+	if ctx.Model == nil || len(ports) == 0 ||
+		!ctx.SyncedFor(kube.KindPod, reasons.ServicePortMismatch) {
 		return nil
 	}
 	var declared []podPort

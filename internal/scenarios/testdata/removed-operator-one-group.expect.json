@@ -1,0 +1,8 @@
+{
+  "name": "removed-operator-one-group",
+  "description": "A removed operator left two webhook Services without pods, each called by its webhooks and named after it: one digest incident, not two.",
+  "root": "service/ops-system/data-operator-conversion",
+  "tier": "digest",
+  "maxMessages": 1,
+  "tail": "1h0m0s"
+}

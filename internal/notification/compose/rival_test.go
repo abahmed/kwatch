@@ -13,8 +13,9 @@ import (
 )
 
 // A rival that only says the subject is failing is the subject's own
-// state again: the possible cause is told as what the subject lacks.
-func TestRivalLeadDoesNotRestateTheSubjectAsACause(t *testing.T) {
+// state again: the possible cause is told as what the subject lacks,
+// among the possibilities kwatch could not confirm.
+func TestRivalPossibilityDoesNotRestateTheSubjectAsACause(t *testing.T) {
 	claim := inventory.CoreID("resourceclaim", "ml", "gpu-claim")
 	sched := inventory.CoreID("scheduling", "", "cannot allocate all claims")
 	unallocated := detection.Finding{Entity: claim,
@@ -29,10 +30,11 @@ func TestRivalLeadDoesNotRestateTheSubjectAsACause(t *testing.T) {
 			Rival: &rootcause.CauseRecord{Rule: "scheduler-capacity",
 				Root: sched, Score: 0.85}}}
 
-	got := Writer{}.Write(announce(p), at(6, 0)).Title
+	msg := Writer{}.Write(announce(p), at(6, 0))
 
-	assert.Equal(t, 1, strings.Count(got, "gpu-claim"), got)
-	assert.Contains(t, got, "two possible causes: it has no device "+
-		"allocated, so its pod cannot start or the scheduler rejects "+
-		"every node")
+	assert.Equal(t, 1, strings.Count(msg.Title, "gpu-claim"), msg.Title)
+	assert.Contains(t, msg.Title, "kwatch could not confirm a cause")
+	assert.Contains(t, msg.Note, "Possibilities kwatch could not "+
+		"confirm: it has no device allocated, so its pod cannot start "+
+		"or the scheduler rejects every node")
 }

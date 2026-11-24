@@ -236,3 +236,29 @@ type collectedNotices struct{ messages []string }
 func (c *collectedNotices) Notify(msg string) {
 	c.messages = append(c.messages, msg)
 }
+
+// A store that cannot be written must not make every check announce the
+// same version again.
+func TestCheckReleaseNotifiesOnceWhenStateWriteFails(t *testing.T) {
+	newVersion := "v99.0.0"
+	mockGithub := new(MockGitHubClient)
+	mockGithub.On("GetLatestRelease", mock.Anything, "abahmed", "kwatch").
+		Return(&github.RepositoryRelease{TagName: &newVersion}, nil, nil)
+
+	notifier := new(recordingNotifier)
+	notifier.On("Notify", mock.AnythingOfType("string")).Return()
+
+	u := newTestUpgrader(
+		&config.Upgrader{},
+		&delivery.Manager{},
+		&memoryVersions{failSet: true},
+	)
+	u.githubClient = mockGithub
+	u.deliveryManager = notifier
+	u.current = "v0.10.5"
+
+	u.checkRelease(context.Background())
+	u.checkRelease(context.Background())
+
+	notifier.AssertNumberOfCalls(t, "Notify", 1)
+}

@@ -83,6 +83,9 @@ type filter struct {
 	// stopped narrows to resolved issues kwatch stopped tracking at
 	// their still-broken cap ("true") or not ("false").
 	stopped map[string]bool
+	// bucket is ?bucket= (buckets.go): one part of the active list, or
+	// "" for all of it.
+	bucket string
 }
 
 // parseFilter reads the query. status is active (the default), resolved
@@ -94,6 +97,7 @@ type filter struct {
 // is one incident ID. stopped (true, false) is repeatable like acked.
 // Every error is a queryError.
 func parseFilter(q url.Values, now time.Time) (filter, error) {
+	q = stateAsStatus(q)
 	for _, key := range []string{"namespace", "kind"} {
 		if err := capValues(q, key); err != nil {
 			return filter{}, err
@@ -111,6 +115,9 @@ func parseFilter(q url.Values, now time.Time) (filter, error) {
 		return f, err
 	}
 	if f.status, err = parseStatus(q.Get("status")); err != nil {
+		return f, err
+	}
+	if f.bucket, err = parseBucket(q); err != nil {
 		return f, err
 	}
 	sets := []struct {

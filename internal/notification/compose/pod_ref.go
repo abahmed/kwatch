@@ -79,11 +79,13 @@ func (r podRef) describe() string {
 	return "pod " + quote(r.pod)
 }
 
-// podPattern is a grep -E pattern for the header and the pods named
-// after the controller.
-func (r podRef) podPattern() string {
+// podPattern is a grep -E pattern for the header line of a kubectl
+// listing and the pods named after the controller. header is the
+// listing's first column title, as kubectl prints it: NAME for
+// "kubectl get pods", POD for "kubectl top pod --containers".
+func (r podRef) podPattern(header string) string {
 	name := strings.ReplaceAll(r.owner.Name, ".", `\.`)
-	return quote("^(NAME|POD|" + name + "-)")
+	return quote("^(" + header + "|" + name + "-)")
 }
 
 // pickPodStep follows a "kubectl logs" step read through a controller:
@@ -100,7 +102,7 @@ func (r podRef) pickPodStep() []notification.Step {
 			"its name in place of " + replacedOwners[r.owner.Kind] + "/" +
 			r.owner.Name,
 		Command: "kubectl get pods" + r.ns + " -o wide | grep -E " +
-			r.podPattern(),
+			r.podPattern("NAME"),
 	}}
 }
 
@@ -111,5 +113,5 @@ func (r podRef) usage() string {
 		return quote(r.pod) + r.ns + " --containers"
 	}
 	return strings.TrimPrefix(r.ns, " ") + " --containers | grep -E " +
-		r.podPattern()
+		r.podPattern("POD")
 }

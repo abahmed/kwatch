@@ -29,6 +29,12 @@ type ReasonInfo struct {
 	Progress bool
 	// Digest marks a finding that never interrupts on its own.
 	Digest bool
+	// Trial marks a reason new in the unreleased version. Until it is
+	// promoted (the mark removed, see docs/contributing-detector.md)
+	// its findings wait for the digest like Digest ones: they never
+	// notify or page on their own, and only another finding of the same
+	// incident can raise its tier.
+	Trial bool
 	// CauseOnly marks a finding that is a cause but no news alone.
 	CauseOnly bool
 	// ShownByState marks a Warning event reason whose condition is
@@ -82,6 +88,13 @@ func (i ReasonInfo) progress() ReasonInfo {
 // digest marks a reason that waits for the digest.
 func (i ReasonInfo) digest() ReasonInfo {
 	i.Digest = true
+	return i
+}
+
+// trial marks a reason that is new in the unreleased version: it waits
+// for the digest until it is promoted.
+func (i ReasonInfo) trial() ReasonInfo {
+	i.Trial = true
 	return i
 }
 
@@ -185,9 +198,17 @@ func ShownByStateOn(reason string, kind inventory.Kind) bool {
 		(len(info.ShownOn) == 0 || slices.Contains(info.ShownOn, kind))
 }
 
-// DigestOnly reports a reason that never interrupts on its own.
+// DigestOnly reports a reason that never interrupts on its own: one
+// marked digest, or one still on trial (OnTrial).
 func DigestOnly(reason string) bool {
-	return reasonTable[reason].Digest
+	info := reasonTable[reason]
+	return info.Digest || info.Trial
+}
+
+// OnTrial reports a reason new in the unreleased version that has not
+// been promoted yet: its findings wait for the digest.
+func OnTrial(reason string) bool {
+	return reasonTable[reason].Trial
 }
 
 // CauseOnly reports a reason that is a real cause but no news alone.

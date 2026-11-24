@@ -30,6 +30,19 @@ func AtLeast(name string, value, limit float64, unit string) Gate {
 	}
 }
 
+// WithHeadroom adds to an AtMost gate's value how much is left below
+// its limit, so a gate sitting at its limit shows before it fails.
+func WithHeadroom(gate Gate, value, limit float64) Gate {
+	left := limit - value
+	switch {
+	case left > 0:
+		gate.Value += " (" + number(left) + " left)"
+	case left == 0:
+		gate.Value += " (at the limit)"
+	}
+	return gate
+}
+
 // Failed returns the gates that did not pass.
 func Failed(gates []Gate) []Gate {
 	var out []Gate

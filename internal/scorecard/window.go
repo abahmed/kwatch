@@ -22,3 +22,18 @@ func PeakInWindow(times []time.Time, d time.Duration) int {
 	}
 	return peak
 }
+
+// BusiestDay returns the calendar day (UTC, as 2006-01-02) with the
+// most timestamps and how many it has; the earliest such day on a tie.
+func BusiestDay(times []time.Time) (day string, count int) {
+	per := map[string]int{}
+	for _, at := range times {
+		per[at.UTC().Format(time.DateOnly)]++
+	}
+	for d, n := range per {
+		if n > count || n == count && d < day {
+			day, count = d, n
+		}
+	}
+	return day, count
+}

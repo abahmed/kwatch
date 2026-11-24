@@ -93,6 +93,18 @@
           "default": "",
           "description": "Existing Secret with the keys password and token"
         },
+        "sessionLifetime": {
+          "type": "string",
+          "default": "",
+          "pattern": "^$|^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+          "description": "How long a sign-in lasts, between 15m and 168h; empty keeps 12h"
+        },
+        "signInHelp": {
+          "type": "string",
+          "default": "",
+          "maxLength": 500,
+          "description": "Plain text shown above the link How to get the password on the sign-in page"
+        },
         "networkPolicyFrom": {
           "type": "array",
           "default": [],
@@ -972,7 +984,7 @@
         "name": {
           "type": "string",
           "default": "",
-          "description": "Class name; empty uses the release full name"
+          "description": "Class name; empty uses the release full name plus namespace"
         },
         "value": {
           "type": "integer",

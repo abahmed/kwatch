@@ -6,13 +6,13 @@
 .ntf-state { font-weight: 600; color: var(--text-muted); }
 .ntf-b[aria-pressed="true"] { border-color: var(--success); }
 .ntf-b[aria-pressed="true"] .ntf-state { color: var(--success); }
-.ntf-hint { font-size: 0.75rem; color: var(--degraded); max-width: 11.875rem; }
+.ntf-hint { font-size: 0.75rem; color: var(--degraded); max-width: 32rem; }
 .ntf-opts { display: flex; flex-direction: column; gap: 6px; }
 .ntf-opts label { margin: 0; font-size: 0.8125rem; font-weight: 400; color: var(--text-muted); }
 .ntf-opts select { margin-top: 4px; min-height: 34px; padding: 4px 8px; font-size: 0.8125rem; border-color: var(--control-border); }
 .ntf-c { display: flex; align-items: center; gap: 8px; min-height: 28px; cursor: pointer; }
 .ntf-c input { display: inline-block; width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; flex: none; accent-color: var(--text); }
-.ntf-mode { margin: 0; font-size: 0.75rem; color: var(--text-muted); max-width: 11.875rem; }
+.ntf-mode { margin: 0; font-size: 0.75rem; color: var(--text-muted); max-width: 32rem; }
 .ntf-test { width: fit-content; font-size: 0.8125rem; }
 .ntf-opts .dd { display: block; margin-top: 4px; }
 .ntf-opts .dd-btn { min-height: 32px; font-size: 0.8125rem; padding: 0 10px; }

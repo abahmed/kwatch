@@ -305,7 +305,7 @@ func TestBrowserActivityRowsAreSentencesAndBurstsFold(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &seen); err != nil {
 		t.Fatal(err)
 	}
-	if seen.Sum != "In the last hour, 1 issue started and 7 resolved." {
+	if seen.Sum != "In the last 24 hours, 1 issue started and 7 resolved." {
 		t.Errorf("totals = %q", seen.Sum)
 	}
 	joined := strings.Join(seen.Rows, "\n")

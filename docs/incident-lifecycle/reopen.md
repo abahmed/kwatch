@@ -12,7 +12,8 @@ Slack thread) when all of these hold (`reopenable` in `reopen.go`):
 - its tier was at least `Notify`, or it is a held page (`Delivery.pageHeld`),
   or it is a digest-tier incident that a digest listed;
 - it was not superseded;
-- it resolved within `RepageWindow` (2h);
+- it resolved within `ReopenWindow` (1h): a quick return is the outage
+  flapping, a later one is a new outage;
 - the new finding's mode matches. `modes.go` keeps the set of every mode the
   incident's members ever had, and the finding must match one of them. A
   finding or incident with no mode matches any.
@@ -32,7 +33,8 @@ The same holds when its failure moves to another announced incident
 before that update was sent (`quietSupersede`): it closes quietly, with
 no "moved" resolve after the resolve.
 After the window, or for another mode, the failure is a new
-incident that remembers the old one. A reopen also forgets the fix attempt
+incident that remembers the old one (linked as its `previous`); within
+`RepageWindow` (2h) of a page it still notifies instead of paging again. A reopen also forgets the fix attempt
 of the earlier occurrence (`Attempt`, the unsent attempt and its late flag).
 What an incident remembers of the earlier ones is bounded: the 30 most
 recent resolved occurrences with how each ended (`History`, `HistoryKept`)
@@ -155,7 +157,7 @@ How paging state works now:
 
 Slack and the reopen thread. A resolve of an incident that may reopen
 (`Incident.CanReopen`: announced, notify tier or held page, not superseded)
-carries `Message.ReopenWithin` (`RepageWindow`). The Slack provider keeps
+carries `Message.ReopenWithin` (`ReopenWindow`). The Slack provider keeps
 the conversation after that resolve until the window has passed, instead of
 forgetting it. A `failing again` update inside the window is a reply in the
 old thread, and the root message is edited back from the resolved marker to

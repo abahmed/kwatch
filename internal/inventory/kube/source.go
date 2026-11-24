@@ -50,6 +50,9 @@ type SourceConfig struct {
 	// A watch that failed is working again as soon as the count moves,
 	// even when its resource version does not.
 	Answered func(group, resource string) uint64
+	// Model, when set, is read by the ConfigMap join to tell whether
+	// another source still describes an endpoint it stops naming.
+	Model inventory.Reader
 }
 
 // DynamicKinds reports the state of dynamically watched kinds.
@@ -169,7 +172,7 @@ func NewSource(cfg SourceConfig) (*Source, error) {
 		synced:  make(map[inventory.Kind]cache.InformerSynced),
 		started: make(chan struct{}),
 	}
-	join := NewConfigJoin()
+	join := NewConfigJoin().WithModel(cfg.Model)
 	for _, r := range registrations() {
 		if cfg.DisableSecrets && r.resource == SecretsResource {
 			s.disabled = append(s.disabled, r)

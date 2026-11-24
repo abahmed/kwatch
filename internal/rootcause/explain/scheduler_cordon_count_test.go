@@ -3,7 +3,6 @@ package explain
 import (
 	"testing"
 
-	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
@@ -24,8 +23,7 @@ func TestCordonCountBelowCordonedNodesNamesNone(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t)
 			for _, node := range f.nodes("zone-a", "n3", "n4") {
-				f.attrs(node, map[string]inventory.Value{
-					kube.AttrUnschedulable: inventory.Bool(true)})
+				cordonWithRoom(f, node, 2)
 			}
 			pod := f.workload("shop", "web", 1)[0]
 			pendingWith(f, pod, tc.verdict)

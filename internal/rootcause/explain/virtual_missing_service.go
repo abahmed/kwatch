@@ -96,7 +96,8 @@ func (v *view) missingCalledModes(
 	}
 	for _, ref := range v.missingRefs(unit) {
 		if ref.service == id {
-			return pseudoFailing(ModeMissing)
+			return v.removedModes(id, effect,
+				pseudoFailing(ModeMissing))
 		}
 	}
 	return nil
@@ -107,7 +108,8 @@ func (v *view) missingCalledModes(
 // names comes with its line, and with the port the configuration gives.
 func (v *view) missingRefs(pod inventory.EntityID) []missingRef {
 	var refs refList
-	for _, ref := range v.quotedMissing(pod) {
+	for _, ref := range append(v.quotedMissing(pod),
+		v.namedMissing(pod)...) {
 		refs.add(ref)
 	}
 	if entity, ok := v.s.Model.Entity(pod); ok {
@@ -212,7 +214,7 @@ func (v *view) namesMissingService(
 // show a failed lookup of, each with the line, quoted as written.
 func (v *view) quotedMissing(pod inventory.EntityID) []missingRef {
 	var out []missingRef
-	for _, line := range v.errorLines(pod) {
+	for _, line := range v.callerLines(pod) {
 		lower := strings.ToLower(line)
 		if dnsServerFailure.MatchString(lower) ||
 			temporaryLookup.MatchString(lower) {

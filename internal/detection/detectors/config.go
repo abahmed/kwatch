@@ -122,8 +122,11 @@ func certificateUse(ctx detection.Context, e inventory.Entity) certUse {
 		inventory.References, inventory.Incoming)) > 0 {
 		return certificateUsed
 	}
-	ingresses, pods := ctx.Synced(kube.KindIngress), ctx.Synced(kube.KindPod)
-	if !ingresses || !pods {
+	// Context only: an unsynced kind words the claim, never holds the
+	// finding back (no reason named). It is noted, so the Secret is
+	// worded again once the kind syncs.
+	ingresses := ctx.SyncedFor(kube.KindIngress)
+	if pods := ctx.SyncedFor(kube.KindPod); !ingresses || !pods {
 		return certificateUnknown
 	}
 	return certificateUnused
@@ -195,8 +198,9 @@ func missingObjects(
 		pod.ID, inventory.References, inventory.Outgoing,
 	) {
 		reason := missingReason(id.Kind)
-		if reason == "" || !ctx.Synced(id.Kind) || ctx.Model.Exists(id) ||
-			kube.OptionalReference(pod, id) || bootstrapping(ctx, id) {
+		if reason == "" || ctx.Model.Exists(id) ||
+			kube.OptionalReference(pod, id) ||
+			!ctx.SyncedFor(id.Kind, reason) || bootstrapping(ctx, id) {
 			continue
 		}
 		if missing[reason] == nil {

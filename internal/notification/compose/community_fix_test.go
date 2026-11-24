@@ -85,10 +85,9 @@ func TestCommunityKeepsTheAckNotice(t *testing.T) {
 	assert.Contains(t, got.Note, "It is already acknowledged")
 }
 
-// A close rival hides Pro's Fix line only until Pro's own checks settle
-// it, so the Pro line still promises the fix. The Community message
-// names neither cause nor the setting: the promise is all it carries.
-func TestCommunityPromisesTheFixOfATiedCause(t *testing.T) {
+// A close rival confirms no cause, in Pro either: the Pro line promises
+// no fix, and the Community message names neither cause nor setting.
+func TestCommunityPromisesNoFixOfATiedCause(t *testing.T) {
 	_, community, _ := communityWriters()
 	p := placedRollout()
 	cause := *p.Cause
@@ -99,7 +98,7 @@ func TestCommunityPromisesTheFixOfATiedCause(t *testing.T) {
 
 	got := community.Write(announce(p), at(5, 0))
 
-	assert.Contains(t, noteFooter(got.Note), proFixWords)
+	assert.NotContains(t, noteFooter(got.Note), proFixWords)
 	for _, hidden := range []string{"Fix:", "256Mi", "memory limit",
 		"two possible causes", "checkout-rival", "kubectl"} {
 		assert.NotContains(t, got.Note, hidden)

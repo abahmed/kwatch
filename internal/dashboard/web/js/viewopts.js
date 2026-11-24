@@ -1,9 +1,10 @@
-/* kwatch dashboard: "View options" on the Issues page. Density, rows
-   per page, text size, high contrast, what a bare /issues opens with (status,
+/* kwatch dashboard: "View options" on the Issues page. Density, what
+   a bare /issues opens with (status,
    order, or a saved view) and the saved views: save, open, rename,
    delete and pick the default. The columns have their own panel
-   (columns.js), which a link here opens; Local or UTC times are in the
-   sidebar.
+   (columns.js), which a link here opens; rows per page are under the
+   table (pager.js); Local or UTC times, the theme, text size and high
+   contrast are in the sidebar's Settings (settings.js).
    Everything is kept in this browser (prefs.js). */
 (function () {
   "use strict";
@@ -28,11 +29,8 @@
     function paint() {
       var o = P.options();
       $("[data-vo-density]").value = o.density;
-      $("[data-vo-size]").value = String(o.size);
       $("[data-vo-status]").value = o.status;
       $("[data-vo-sort]").value = o.sort;
-      $("[data-vo-text]").value = o.text;
-      $("[data-vo-contrast]").checked = o.contrast;
       views();
     }
 
@@ -117,18 +115,6 @@
         P.set(p[1], e.target.value || undefined);
         if (p[0] === "density") hooks.redraw();
       });
-    });
-    /* Text size and contrast apply at once, on every page. */
-    function look() {
-      P.setLook($("[data-vo-text]").value, $("[data-vo-contrast]").checked);
-      hooks.redraw();
-    }
-    $("[data-vo-text]").addEventListener("change", look);
-    $("[data-vo-contrast]").addEventListener("change", look);
-    $("[data-vo-size]").addEventListener("change", function (e) {
-      var size = parseInt(e.target.value, 10);
-      P.set("size", size);
-      hooks.open(LQ.search(Object.assign({}, hooks.view(), { pageSize: size, page: 1 })));
     });
     var saveErr = KW.el("p", "vo-err");
     saveErr.hidden = true;

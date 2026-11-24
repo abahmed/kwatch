@@ -123,7 +123,9 @@
   /* ---- the browser ---- */
   /* blocked says why notifications can't be shown, or "". */
   function blocked() {
-    if (!("Notification" in window)) return "This browser can't show notifications.";
+    if (!("Notification" in window)) {
+      return KW.iosBrowserTab() ? KW.IOS_HOME : "This browser can't show notifications.";
+    }
     if (window.isSecureContext === false) {
       return "Browser alerts need a secure (https) address.";
     }
@@ -259,6 +261,8 @@
     var on = prefs.enabled && allowed();
     KW.$("[data-ntf-toggle]", ui).setAttribute("aria-pressed", on ? "true" : "false");
     KW.$("[data-ntf-state]", ui).textContent = on ? "On" : "Off";
+    var ind = document.querySelector("[data-ntf-ind]");
+    if (ind) ind.hidden = !on;
     KW.$("[data-ntf-opts]", ui).hidden = !on;
     KW.$("[data-ntf-min]", ui).value = prefs.min;
     KW.$("[data-ntf-resolved]", ui).checked = prefs.resolved;

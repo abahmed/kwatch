@@ -7,6 +7,8 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // probeLeadKinds are the probes probeLead words, in the order it looks
@@ -43,21 +45,35 @@ func probeLead(f caseFacts) (string, bool) {
 
 // probeLeadMember is the probe failure probeLead words, and its kind:
 // only one of the subject's own pods (owns), since the lead tells it
-// as the subject's.
+// as the subject's. A probe is a container's: only a container or pod
+// finding is one, and only an application object (a workload, its pod
+// or container) has probes to tell. A node, Service or any other
+// subject never leads with a pod's health check, whatever finding
+// names it.
 func probeLeadMember(f caseFacts) (detection.Finding,
 	struct{ reason, effect string }, bool) {
 	subject := affectedWorkload(f)
+	if !incident.IsApplicationKind(subject.Kind) {
+		return detection.Finding{}, probeLeadKinds[0], false
+	}
 	for _, kind := range probeLeadKinds {
 		for _, m := range f.members {
 			// A container that exits on its own is not killed by its
 			// probe: its exit leads (ownLead).
-			if m.Reason == kind.reason && f.owns(subject, m.Entity) &&
+			if m.Reason == kind.reason && probeEntity(m.Entity) &&
+				f.owns(subject, m.Entity) &&
 				evidence(m, detection.EvidenceExitedOnOwn) == "" {
 				return m, kind, true
 			}
 		}
 	}
 	return detection.Finding{}, probeLeadKinds[0], false
+}
+
+// probeEntity reports the kinds a probe runs in: a container, or the
+// pod it is reported on.
+func probeEntity(id inventory.EntityID) bool {
+	return id.Kind == kube.KindContainer || id.Kind == kube.KindPod
 }
 
 // probeAnswer is what a probe got: "answers HTTP 503", "does not answer

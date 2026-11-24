@@ -14,10 +14,6 @@ import (
 // room: the refusal is about that node.
 const ModeRefusesPods detection.Mode = "RefusesPods"
 
-// RuleNodeRefusesPods names the row for a pod a node's kubelet
-// refused at admission.
-const RuleNodeRefusesPods = "node-refuses-pods"
-
 // suspectState is what an upstream entity that shows no finding and no
 // change is suspected of: refusing the pod, else being what workloads
 // have in common.

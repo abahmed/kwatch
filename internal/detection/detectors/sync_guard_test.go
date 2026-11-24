@@ -29,7 +29,9 @@ func TestDetectorsReadingEndpointSlicesCheckTheyAreSynced(t *testing.T) {
 	for name, source := range detectorSources(t) {
 		if strings.Contains(source, "inventory.Backs") {
 			assert.True(t, strings.Contains(source,
-				"Synced(kube.KindEndpointSlice)"),
+				"Synced(kube.KindEndpointSlice)") ||
+				strings.Contains(source,
+					"SyncedFor(kube.KindEndpointSlice"),
 				"%s reads EndpointSlices without checking they are synced",
 				name)
 		}
@@ -44,7 +46,8 @@ func TestDetectorsReadingRoutesCheckSyncOrSayWhyNot(t *testing.T) {
 		if _, excused := routeReadersWithoutSyncCheck[name]; excused {
 			continue
 		}
-		assert.True(t, strings.Contains(source, ".Synced("),
+		assert.True(t, strings.Contains(source, ".Synced(") ||
+			strings.Contains(source, ".SyncedFor("),
 			"%s reads routes without checking its sources are synced",
 			name)
 	}

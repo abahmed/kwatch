@@ -337,10 +337,11 @@ type Incident struct {
 	// restoredTier is the tier of the saved record: a rise above it is
 	// news adoptedFingerprint must not swallow (see toldTier).
 	restoredTier Tier
-	// awaited and formerMembers come from the saved record (see
-	// restore_reasons.go and handover.go).
+	// awaited, formerMembers and formerKeys come from the saved
+	// record (see restore_reasons.go, handover.go and rejoined).
 	awaited       []string
 	formerMembers []inventory.EntityID
+	formerKeys    []detection.Key
 	// trafficLost records that a Service in the impact, routed to by an
 	// Ingress or route, has no ready backends or mostly failing ones.
 	// It is recomputed with the impact; the traffic-lost page reads it.
@@ -349,6 +350,10 @@ type Incident struct {
 	// impact has no ready replica. It is recomputed with the impact;
 	// the last-replica-down page reads it.
 	servingDown bool
+	// youngNetwork records that the only critical members are pods'
+	// network setup failures on nodes that just joined (see
+	// young_node_page.go): no page rule pages it.
+	youngNetwork bool
 	// hostedFailing records that a pod running on the root node is not
 	// ready. It is recomputed with the radius (unaffected).
 	hostedFailing bool

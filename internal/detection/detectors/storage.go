@@ -169,7 +169,9 @@ func reclaimEvents(
 func unusedClaim(
 	ctx detection.Context, e inventory.Entity,
 ) (detection.Finding, bool) {
-	if ctx.Model == nil || !ctx.Synced(kube.KindPod) || claimInUse(ctx, e) {
+	if ctx.Model == nil ||
+		!ctx.SyncedFor(kube.KindPod, reasons.ClaimUnused) ||
+		claimInUse(ctx, e) {
 		return detection.Finding{}, false
 	}
 	since := ctx.Onset("unused", ctx.Now)

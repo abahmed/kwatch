@@ -80,9 +80,22 @@ func (m *Manager) inGroup(s detection.Finding, where placement) bool {
 }
 
 // rose reports a finding that was low on its own and no longer is: it
-// got worse. Its onset is still the old one, but it is news.
+// got worse. Its onset is still the old one, but it is news. An object
+// left behind (leftBehind) that flips between Info and Warning did not
+// get worse: a stuck deletion turns Low after a day and back when a
+// claim reads it, and neither is news of the old problem.
 func rose(was, s detection.Finding) bool {
+	if leftBehind(s) && s.Severity < detection.Critical {
+		return false
+	}
 	return lowAlone(was) && !s.Advisory && !lowAlone(s)
+}
+
+// leftBehind reports a finding about an object a removed or stopped
+// controller left behind: a stuck deletion, or a leftover of an absent
+// backend. It joins the group of its controller, it is no live failure.
+func leftBehind(s detection.Finding) bool {
+	return isStuckDeletion(s) || !s.Leftover.IsZero()
 }
 
 // noteRose marks p when finding s, about to become its member, rose:
@@ -139,24 +152,62 @@ func (m *Manager) noteChronic(p *Incident) {
 // interrupt anyone, when every such member is older than horizon. Zero
 // otherwise: a new onset, an onset kwatch does not know, none, or a
 // failure that was low and got worse (Marks.Rose).
+//
+// The objects one controller left behind (leftBehind) are as old as
+// the oldest of them: the controller went away then. One stuck since
+// this morning, joining its old peers after a restart, is not a new
+// onset, and it does not lift the group back to Needs attention. A
+// live failure among the members still does.
 func chronicAge(p *Incident, horizon time.Duration) time.Duration {
 	if horizon <= 0 || p.Opened.IsZero() || p.marks.Rose {
 		return 0
 	}
-	var youngest time.Duration
+	youngest, old := youngestLive(p, horizon)
+	switch {
+	case !old:
+		return 0
+	case youngest > 0:
+		return youngest
+	}
+	if left := oldestLeft(p); left > horizon {
+		return left
+	}
+	return 0
+}
+
+// youngestLive is the age, when p opened, of its youngest member that
+// may interrupt anyone and was not left behind; old is false when one
+// such member is younger than horizon or has no known onset.
+func youngestLive(
+	p *Incident, horizon time.Duration,
+) (youngest time.Duration, old bool) {
 	for _, s := range p.Members {
-		if s.Advisory || waitsForDigest(s) {
+		if s.Advisory || waitsForDigest(s) || leftBehind(s) {
 			continue
 		}
 		age := p.Opened.Sub(s.Since)
 		if s.Since.IsZero() || age <= horizon {
-			return 0
+			return 0, false
 		}
 		if youngest == 0 || age < youngest {
 			youngest = age
 		}
 	}
-	return youngest
+	return youngest, true
+}
+
+// oldestLeft is the age, when p opened, of its oldest dated member that
+// was left behind and may interrupt anyone.
+func oldestLeft(p *Incident) time.Duration {
+	var oldest time.Duration
+	for _, s := range p.Members {
+		if s.Advisory || waitsForDigest(s) || !leftBehind(s) ||
+			s.Since.IsZero() {
+			continue
+		}
+		oldest = max(oldest, p.Opened.Sub(s.Since))
+	}
+	return oldest
 }
 
 // chronicLow reports an incident that needs attention only because of

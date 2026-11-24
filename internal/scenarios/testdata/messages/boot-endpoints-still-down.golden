@@ -1,7 +1,7 @@
 10:12:15 settled
-🟠 api in shop (prod-eu-1) has had no ready replicas (0 of 2) for eight minutes. Cause not found yet: its registry is healthy and unchanged. The failing pods run on nodes n1 and n2, which joined 3 minutes before they began failing. Service api can't serve traffic. To see the object's state and events, run kubectl describe deployment api -n shop
-🟠 api in shop (prod-eu-1) has had no ready replicas (0 of 2) for eight minutes.
-| 🟠 **api** in **shop** (**prod-eu-1**) has had no ready replicas (0 of 2) for eight minutes.
+🟠 api in shop (prod-eu-1) has no ready replicas (0 of 2). Cause not found yet: its registry is healthy and unchanged. The failing pods run on nodes n1 and n2, which joined 3 minutes before they began failing. Service api can't serve traffic. To see the object's state and events, run kubectl describe deployment api -n shop
+🟠 api in shop (prod-eu-1) has no ready replicas (0 of 2).
+| 🟠 **api** in **shop** (**prod-eu-1**) has no ready replicas (0 of 2).
 | Cause not found yet: its registry is healthy and unchanged.
 | The failing pods run on nodes n1 and n2, which joined 3 minutes before they began failing.
 | Service **api** can't serve traffic.

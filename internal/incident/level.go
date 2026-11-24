@@ -29,7 +29,8 @@ const (
 	levelOverride   = "override"
 	levelNoPaging   = "paging-off"
 	levelNonProd    = "non-production"
-	// levelOwnStart is in own_start.go.
+	// levelOwnStart is in own_start.go, levelYoungNetwork in
+	// young_node_page.go.
 )
 
 // fixedLevel is the code of a tier fixedTier sets.
@@ -95,6 +96,9 @@ var levelTexts = map[string]string{
 	levelPageHeld: "Needs attention instead of Urgent: the same " +
 		"failure was Urgent less than " + format.Duration(RepageWindow) +
 		" ago.",
+	levelYoungNetwork: "Needs attention instead of Urgent: pods " +
+		"cannot get a network on a node that joined minutes ago, " +
+		"which usually settles by itself.",
 	levelNotify: "Needs attention: something failed, but users are " +
 		"still served and the cluster keeps working.",
 	levelDigestOnly: "Low: kwatch lists it in the daily summary and " +

@@ -29,8 +29,8 @@ func TestStepNamingAnObjectOutsideTheIncidentIsDropped(t *testing.T) {
 	d := toDetail(p)
 
 	assert.Equal(t, []FixStep{{Text: rootStepText,
-		Command: "kubectl -n ops describe service hook-svc"}}, d.FixSteps)
-	assert.Equal(t, "kubectl -n ops describe service hook-svc",
+		Command: "kubectl describe service hook-svc -n ops"}}, d.FixSteps)
+	assert.Equal(t, "kubectl describe service hook-svc -n ops",
 		d.Summary.Next.Command)
 }
 
@@ -40,7 +40,7 @@ func TestStepsAboutTheIncidentAreKept(t *testing.T) {
 	steps := []incident.FixStep{
 		{Text: "a", Command: "kubectl describe " +
 			"validatingwebhookconfiguration hook-b"},
-		{Text: "b", Command: "kubectl -n ops describe service hook-svc"},
+		{Text: "b", Command: "kubectl describe service hook-svc -n ops"},
 		{Text: "c", Command: "kubectl get pv gone-volume"},
 		{Text: "d", Command: "kubectl describe pvc data -n ops"},
 		{Text: "e", Command: "kubectl get events -A"},

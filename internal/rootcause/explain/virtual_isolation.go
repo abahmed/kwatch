@@ -14,9 +14,6 @@ import (
 // APIService calls off from all ingress.
 const ModeIsolatesBackend detection.Mode = "IsolatesBackend"
 
-// RulePolicyIsolatesBackend names the rows below.
-const RulePolicyIsolatesBackend = "policy-isolates-backend"
-
 // isolationRows say that such a policy explains what the API server
 // cannot do without the backend it calls: creates a webhook rejects, a
 // metrics API that does not answer, and the autoscalers that read it.

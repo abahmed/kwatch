@@ -1,7 +1,8 @@
 /* kwatch dashboard: fills the "Look at these first" card on the
    Overview. Beside Bad releases (wide screen) the two cards are as tall
    as the taller one; a short list would leave the left card half
-   empty. So the card holds up to LIMIT issues, shows MIN of them, and
+   empty. So the card holds up to LIMIT issues, shows MIN of them (and
+   every urgent one, which the server sends first), and
    adds rows while the row stays as tall as it already is. When every
    active issue is shown and there is still room, a short line at the
    bottom says so, or, when the issues are capped, the rows share the
@@ -24,7 +25,10 @@
     var ul = card.querySelector(".ov-look");
     if (!ul) return;
     var rows = ul.children, end = card.querySelector(".ov-end");
-    var n = Math.min(rows.length, MIN);
+    // Every urgent issue sent always shows, even past MIN.
+    var urgent = 0;
+    for (var i = 0; i < rows.length; i++) if (rows[i].dataset.urgent) urgent = i + 1;
+    var n = Math.max(Math.min(rows.length, MIN), urgent);
     setShown(rows, n);
     ul.classList.remove("ov-fill");
     if (end) end.hidden = true;

@@ -184,7 +184,8 @@
     var n = notes.appendChild(KW.el("div", "notice ov-note"));
     n.dataset.noName = "1";
     n.appendChild(KW.el("b", "", "This cluster has no name"));
-    n.appendChild(KW.el("p", "", c.notice));
+    // The server's notice starts with the same words as the heading.
+    n.appendChild(KW.el("p", "", String(c.notice).replace(/^This cluster has no name\.\s*/, "")));
     notes.hidden = false;
   }
 
@@ -349,7 +350,9 @@
       c.appendChild(KW.viz.meter(t.watched, t.total, line, t.unreadable ? "warn" : "ok"));
       c.appendChild(KW.el("p", "pcard-note kp-note", H.kindsNote));
       // Only what is wrong: three zeros say nothing.
-      var wrong = [[t.unreadable, "can't be read", "bad"], [t.unsynced, "not read yet", "warn"],
+      // The same three words as the details below: watched, read,
+      // blocked (can't be read).
+      var wrong = [[t.unreadable, "blocked: can't be read", "bad"], [t.unsynced, "not read yet", "warn"],
         [t.notWatched, "not watched", ""]].filter(function (x) { return x[0] > 0; });
       var stats = wrong.length ? c.appendChild(KW.el("ul", "kp-stats")) : null;
       wrong.forEach(function (x) {
@@ -447,11 +450,14 @@
 
   /* about: version, plan and what it watches: a slim card across the
      top of the page. */
-  function about(s) {
+  function about(s, syncedAt) {
     var c = KW.viz.card("About this kwatch");
     c.classList.add("pwide", "kp-about");
     var ed = (s.edition || "").toLowerCase();
-    var last = KW.valid(s.lastScan) ? KW.timeEl(s.lastScan, "", true) : "Not yet";
+    // The first full read of the cluster is a check too: never "Not
+    // yet" beside "Finished reading the cluster".
+    var at = KW.valid(s.lastScan) ? s.lastScan : KW.valid(syncedAt) ? syncedAt : "";
+    var last = at ? KW.timeEl(at, "", true) : "Not yet";
     var dl = KW.el("dl", "kp-facts-row");
     [["Version", s.version || "unknown", "mono"],
       ["Plan", ed === "pro" ? "Pro" : ed === "community" ? "Community" : s.edition || "unknown"],
@@ -493,7 +499,7 @@
       spotNotice(notes, k);
       clusterNotice(notes, k);
       aboutBox.textContent = "";
-      if (s) aboutBox.appendChild(about(s));
+      if (s) aboutBox.appendChild(about(s, (cov && cov.syncedAt) || (k && k.coverage && k.coverage.syncedAt)));
       var cl = clusterLine(k);
       if (cl) aboutBox.appendChild(cl);
       summary(sum, s, k, KW.selfIssues(s, k), loading);
@@ -506,11 +512,14 @@
         .filter(Boolean);
       halves.forEach(function (c) { grid.appendChild(c); });
       if (halves.length % 2) halves[halves.length - 1].classList.add("pwide");
+      var setup = KW.setupCard(s, k, cov);
+      setup.classList.add("pwide");
+      grid.appendChild(setup);
       var cv = coverage(k, cov, covErr);
       cv.classList.add("pwide");
       grid.appendChild(cv);
-      if (!opened && cov && location.hash === "#cov") {
-        KW.$("#cov", grid).scrollIntoView({ block: "start" });
+      if (!opened && (location.hash === "#setup" || (cov && location.hash === "#cov"))) {
+        KW.$(location.hash, grid).scrollIntoView({ block: "start" });
         opened = true;
       }
     }

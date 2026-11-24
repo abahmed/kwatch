@@ -7,6 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/redact"
 )
 
 // TimelineKind says what a timeline entry records. Values are stable:
@@ -138,7 +139,8 @@ func eventEntry(
 	return TimelineEntry{
 		At: timelineTime(note.At, received), Received: received,
 		Kind: TimelineEvent, Entity: id.String(), Reason: note.Reason,
-		Text: note.Message, FirstSeen: note.FirstSeen, Count: note.Count,
+		Text:      redact.Stored(note.Message),
+		FirstSeen: note.FirstSeen, Count: note.Count,
 	}
 }
 
@@ -160,7 +162,7 @@ func findingEntry(t detection.Transition, now time.Time) TimelineEntry {
 		At: at, Received: now, Kind: TimelineFinding,
 		Entity: s.Entity.String(), Action: transitionActions[t.Kind],
 		Reason: s.Reason, Mode: string(s.Mode), Health: s.Health.String(),
-		Text: s.Summary,
+		Text: redact.Stored(s.Summary),
 	}
 }
 

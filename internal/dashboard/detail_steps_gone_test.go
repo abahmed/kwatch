@@ -65,7 +65,7 @@ func TestStepsFallBackToTheRootOrSayItIsGone(t *testing.T) {
 	got := currentSteps(steps, p, goneModel(t, root))
 	require.Len(t, got, 1)
 	assert.Equal(t, rootStepText, got[0].Text)
-	assert.Equal(t, "kubectl -n shop describe deployment api",
+	assert.Equal(t, "kubectl describe deployment api -n shop",
 		got[0].Command)
 
 	got = currentSteps(steps, p, goneModel(t))

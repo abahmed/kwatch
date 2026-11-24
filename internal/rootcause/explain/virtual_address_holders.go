@@ -11,9 +11,6 @@ import (
 // an address.
 const LinkHoldsAddress LinkType = "holds-address"
 
-// RuleFinalizerHoldsAddresses names the rows below.
-const RuleFinalizerHoldsAddresses = "finalizer-holds-addresses"
-
 // MinAddressHolders is how many pods stuck Terminating on one node make
 // their finalizer what the node's address pool waits for: one leftover
 // pod frees one address, several are a pool in use.

@@ -106,7 +106,7 @@ func (w Writer) write(
 		msg.Steps = stillSteps(f)
 		msg.Opening = w.opening(d, now)
 		if p.CanReopen() {
-			msg.ReopenWithin = incident.RepageWindow
+			msg.ReopenWithin = incident.ReopenWindow
 		}
 		return msg
 	}

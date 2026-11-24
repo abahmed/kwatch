@@ -87,11 +87,3 @@ func TestWebhookCASecretIsItsLeftover(t *testing.T) {
 	assert.Equal(t, policy, leftoverOf(ctx, byCert, "default"))
 	assert.True(t, leftoverOf(ctx, other, "default").IsZero())
 }
-
-func TestNamedAfterNeedsAStemAndASeparator(t *testing.T) {
-	assert.True(t, namedAfter("policy-tls", "policy-controller"))
-	assert.True(t, namedAfter("policy.default.svc", "policy-webhook"))
-	assert.False(t, namedAfter("policyx-tls", "policy-controller"))
-	assert.False(t, namedAfter("my-other-tls", "my-webhook"),
-		"a short stem names nothing")
-}

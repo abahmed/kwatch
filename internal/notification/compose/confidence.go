@@ -5,7 +5,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/rootcause"
-	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // This file words a cause by how sure it is. The levels are the
@@ -78,33 +77,13 @@ func changeLink(cause *rootcause.CauseRecord, symptom, change string,
 	return symptom + "; it might be related to " + change
 }
 
-// rivalLead says two causes scored almost alike: "api in shop is
-// failing; two possible causes: node n1 is low on memory or secret
-// db-creds does not exist". It is not used where the cause has its own
-// wording (a zone, a failure signature, a denied request, itself).
-func rivalLead(f caseFacts) (string, bool) {
-	cause := f.p.Cause
-	if cause == nil || cause.Rival == nil || selfCause(cause) ||
-		selfCause(cause.Rival) || leadIsGroup(f) || deniedCause(cause) ||
-		cause.Root.Kind == explain.KindFailureSignature {
-		return "", false
-	}
-	subject := symptomSubject(f)
-	first := rivalPhrase(cause, subject)
-	second := rivalPhrase(cause.Rival, subject)
-	if first == second {
-		return "", false
-	}
-	return symptomState(f, subject) + "; two possible causes: " +
-		rivalChoice(first, second, causeWordsFor(cause),
-			causeWordsFor(cause.Rival)), true
-}
-
-// rivalChoice joins the two possible causes. Two that say the same of
-// different objects name both once, so the words that follow cannot be
-// read as part of the first: "it or deployment arc/ctl is not running,
-// so it removes no finalizers", not "it is not running, so it removes
-// no finalizers or deployment arc/ctl is not running, so ...".
+// rivalChoice joins the two possible causes of a tie, which the
+// closing line of a message names (cause_unconfirmed.go). Two that say
+// the same of different objects name both once, so the words that
+// follow cannot be read as part of the first: "it or deployment
+// arc/ctl is not running, so it removes no finalizers", not "it is not
+// running, so it removes no finalizers or deployment arc/ctl is not
+// running, so ...".
 func rivalChoice(first, second, words, rivalWords string) string {
 	tail := " " + words
 	if words == "" || words != rivalWords ||

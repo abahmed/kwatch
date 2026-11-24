@@ -53,7 +53,10 @@ func backendFindings(
 		text(e, kube.AttrServiceType) == "ExternalName" {
 		return nil
 	}
-	if !ctx.Synced(kube.KindEndpointSlice) {
+	// Only the endpoint findings wait for the slices: the Service's
+	// load-balancer findings are judged and cleared as usual.
+	if !ctx.SyncedFor(kube.KindEndpointSlice, reasons.ServiceNoEndpoints,
+		reasons.ServiceBackendsDegraded, reasons.ServiceUnused) {
 		return nil
 	}
 	slices := ctx.Model.Related(e.ID, inventory.Backs, inventory.Incoming)
@@ -219,7 +222,7 @@ func routeBackends(
 func missingBackends(
 	ctx detection.Context, e inventory.Entity, subject string,
 ) []detection.Finding {
-	if ctx.Model == nil || !ctx.Synced(kube.KindService) {
+	if ctx.Model == nil {
 		return nil
 	}
 	var missing []string
@@ -235,7 +238,8 @@ func missingBackends(
 	// The grace counts from when the Service went missing, not from the
 	// Ingress's first sighting: a Service deleted and recreated under an
 	// old Ingress gets the same time to come back as a new Ingress.
-	if len(missing) == 0 ||
+	if len(missing) == 0 || !ctx.SyncedFor(kube.KindService,
+		reasons.IngressBackendNotFound) ||
 		!sustained(ctx, "missing-backend", time.Time{},
 			DefaultBackendGrace) {
 		return nil

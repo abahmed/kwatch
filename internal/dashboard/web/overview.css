@@ -252,3 +252,8 @@ a.viz-key:hover span:not(.viz-sw) { text-decoration: underline; }
 .ov-olds { margin-top: 12px; font-size: var(--t-small); color: var(--text-muted); }
 .ov-old-h { margin: 0 0 4px; }
 .ov-old .lo-list { max-width: var(--max-app); }
+/* "Since your last visit: 2 new · 1 resolved" (js/ovsince.js): one
+   quiet line under the status tile. */
+.ov-since { margin-top: 12px; font-size: var(--t-small); color: var(--text-soft); }
+.ov-since b { color: var(--text); }
+.ov-more-urgent { margin-top: 8px; font-size: var(--t-small); font-weight: 600; }

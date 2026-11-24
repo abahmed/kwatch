@@ -47,3 +47,11 @@ func Diagnostics(value string) string {
 	}
 	return value
 }
+
+// Stored is Credentials plus e-mail addresses, for free text an
+// application wrote (an event message) that kwatch keeps for later.
+// Private addresses and URLs stay, as the renderer decides on them.
+func Stored(value string) string {
+	value = Credentials(value)
+	return applyRedaction(value, diagnosticsRedactions[1])
+}

@@ -291,7 +291,9 @@ func (c *Collector) sendDigest(ctx context.Context, now time.Time) bool {
 			c.env.Incidents.RecordDigested(d.Incident.ID, now)
 			c.markListed(d.Incident.ID)
 			c.markSeen(d.Incident)
-			c.markShown(d.Incident, now)
+			c.markShown(ongoingItem{p: d.Incident,
+				Ongoing: compose.Ongoing{
+					Since: compose.StartedAt(d.Incident)}}, now)
 		}
 		for _, d := range g.Resolved {
 			c.env.Incidents.RecordDigested(d.Incident.ID, now)
@@ -300,7 +302,7 @@ func (c *Collector) sendDigest(ctx context.Context, now time.Time) bool {
 		for _, item := range ongoing {
 			c.env.Incidents.RecordDigested(item.p.ID, now)
 			c.markSeen(item.p)
-			c.markShown(item.p, now)
+			c.markShown(item, now)
 		}
 		for _, item := range unchanged {
 			c.env.Incidents.RecordDigested(item.p.ID, now)

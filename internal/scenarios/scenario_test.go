@@ -194,6 +194,7 @@ func library() []scenario {
 		replacedFindingScenarios(), sandboxBlipScenarios(),
 		upstreamReasonScenarios(),
 		crashCycleScenarios(), nodeChurnScenarios(),
+		dependencyRemovedScenarios(), morningSandboxScenarios(),
 		ambiguousScenarios(), reachScenarios(), groupingScenarios(),
 		detectionAScenarios(),
 		detectionBScenarios(),
@@ -225,6 +226,7 @@ func library() []scenario {
 		gap5aScenarios(), gap5bScenarios(), gap67Scenarios(),
 		gap10Scenarios(),
 		gap17Scenarios(), gap24Scenarios(),
+		removedControllerScenarios(),
 	} {
 		out = append(out, group...)
 	}

@@ -1,6 +1,7 @@
 package incident
 
 import (
+	"slices"
 	"strconv"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -44,4 +45,14 @@ func memberNote(s detection.Finding) string {
 		quote += "…"
 	}
 	return text + quote + " (" + describe(s.Entity) + ")"
+}
+
+// rejoined reports finding s coming back to the restored incident p as
+// a member it had when the record was saved: the same object with the
+// same reason, as one pair. A restart rebuilds the members, and the
+// timeline already has the note of its joining, so it is not written
+// again. An object that failed for another reason, while some other
+// member had this one, is a new member.
+func rejoined(p *Incident, s detection.Finding) bool {
+	return p.restored && slices.Contains(p.formerKeys, s.Key())
 }

@@ -372,7 +372,8 @@ func TestBrowserIssuesPhoneCards(t *testing.T) {
 			t.Errorf("%s: a card is %.0fpx tall (%v)", status, tall, err)
 		}
 	}
-	// A short title and name: two lines, under 110px.
+	// A short title and name: two lines, under 110px (a row with a cause
+	// line is the one taller card; browser_gist_test.go checks it).
 	srv := listsServer(t, nil)
 	tab, _ := browserTab(t, actx)
 	signInBrowser(t, tab, srv.URL)
@@ -384,6 +385,7 @@ func TestBrowserIssuesPhoneCards(t *testing.T) {
 	}
 	tall, err := chromedp.Run(tab, chromedp.Evaluate[float64](`Math.max(
   ...[...document.querySelectorAll("#issues-table tbody tr")].
+    filter((r) => !r.querySelector(".it-gist")).
     map((r) => r.getBoundingClientRect().height))`))
 	if err != nil || tall >= 110 {
 		t.Errorf("a card is %.0fpx tall (%v)", tall, err)

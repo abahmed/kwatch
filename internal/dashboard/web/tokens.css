@@ -73,8 +73,10 @@
   --motion-fast: 120ms; /* wrap in prefers-reduced-motion: no-preference */
 }
 
+/* Dark: the system's choice, unless Settings picked a theme
+   (look.js sets data-theme="light" or "dark" on <html>). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #15171B;
     --surface: #1E2126;
     --line: #2A2E35;
@@ -98,3 +100,28 @@
     --text-soft: #D3D6DC;
   }
 }
+:root[data-theme="dark"] {
+  --bg: #15171B;
+  --surface: #1E2126;
+  --line: #2A2E35;
+  --text: #ECEDEA;
+  --text-muted: #B6BBC4;
+
+  --signal: #B5DE3C;
+  --on-signal: #0E1116;
+
+  --failing: #FF9B8F;
+  --failing-bg: #3A1F1E;
+  --degraded: #F5B953;
+  --degraded-bg: #3A2C14;
+  --resolved: #8DB8FF;
+  --resolved-bg: #1B2A44;
+  --success: #7FD99A;
+  --success-bg: #1A3326;
+
+  --control-border: #6B7280;
+  --primary-hover: #FFFFFF;
+  --text-soft: #D3D6DC;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }

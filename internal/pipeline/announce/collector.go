@@ -90,9 +90,15 @@ type Collector struct {
 	// carries (see noteWake).
 	seenAt, wakeDone time.Time
 	wake             *compose.WakeLine
+	// plannedDone is the start of the last scheduled operation a
+	// digest line was kept for (see notePlanned).
+	plannedDone time.Time
 	// restoredListed are the incidents the early restored summary named
 	// (see ListRestored).
 	restoredListed map[string]bool
+	// restoredCounted are the restored incidents it only counted as
+	// unchanged: they are not named, so they owe no introduction.
+	restoredCounted map[string]bool
 	// restoredIntros are the restored incidents still owed their
 	// introduction, and introsNoted says they were collected this
 	// start (restored_intro.go).

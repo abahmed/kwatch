@@ -46,6 +46,10 @@ type PassResult struct {
 	// Rewrote is true when the pass gave free pages back by rewriting
 	// the file while running (see reclaim.go).
 	Rewrote bool
+	// OldestTimeline is how old the oldest surviving timeline entry is
+	// (0: the timeline is empty). The size cap, not the retention, sets
+	// it when the cluster writes fast.
+	OldestTimeline time.Duration
 }
 
 // minHistoryDivisor sets the history the size cap always keeps: a
@@ -113,6 +117,9 @@ func (c *Compactor) Pass(ctx context.Context) (PassResult, error) {
 	}
 	result.Bytes, result.PinnedBytes = report.total(), report.pinned()
 	result.OverCap = result.Bytes > c.policy.SizeCap
+	if !report.oldestTimeline.IsZero() {
+		result.OldestTimeline = c.store.now().Sub(report.oldestTimeline)
+	}
 	c.store.counters.overCap.Store(result.OverCap)
 	c.store.counters.logicalBytes.Store(result.Bytes)
 	result.Rewrote, err = c.reclaim()

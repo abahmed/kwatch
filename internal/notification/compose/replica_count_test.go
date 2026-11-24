@@ -23,9 +23,9 @@ func TestWithReplicaCount(t *testing.T) {
 		want  string
 	}{
 		{"none ready", &incident.ReplicaCount{Desired: 2}, pod, state,
-			"has had no ready replicas (0 of 2) for three minutes"},
+			"has no ready replicas (0 of 2)"},
 		{"some ready", &incident.ReplicaCount{Desired: 3, Ready: 1}, pod,
-			state, "has had only 1 of 3 replicas ready for three minutes"},
+			state, "has only 1 of 3 replicas ready"},
 		{"unknown count", nil, pod, state, state},
 		{"other state", &incident.ReplicaCount{Desired: 2}, pod,
 			"keeps crashing", "keeps crashing"},

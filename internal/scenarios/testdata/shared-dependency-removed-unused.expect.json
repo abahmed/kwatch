@@ -1,0 +1,8 @@
+{
+  "name": "shared-dependency-removed-unused",
+  "description": "A scheduled job deletes the shared cache Service and its pods in the evening; the workloads configured with it stay ready all night.",
+  "maxMessages": 0,
+  "alone": true,
+  "quiet": true,
+  "tail": "20m0s"
+}

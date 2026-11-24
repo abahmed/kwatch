@@ -17,7 +17,8 @@ func (m *Manager) settleFor(p *Incident) time.Duration {
 	if m.fastPage(p) {
 		settle = m.cfg.PageSettle
 	}
-	return m.waitForNotReady(p, m.scaleSettle(p, settle))
+	return m.waitForNotReady(p,
+		m.plannedSettle(p, m.scaleSettle(p, settle)))
 }
 
 // fastPage reports whether p settles with the short page settle.
@@ -65,20 +66,36 @@ func superseded(p *Incident) bool {
 }
 
 // reminderDue reports an announced incident open for another
-// RemindEvery since its announcement or its last reminder.
+// RemindEvery since its announcement or its last reminder. Inside the
+// restore grace after a start nothing is reminded (bootQuiet), and a
+// problem with no news for UnchangedFor is reminded at most every
+// UnchangedFor.
 func (m *Manager) reminderDue(p *Incident, now time.Time) bool {
-	if m.cfg.NoReminders || acked(p) || idleWebhook(p) {
+	if m.cfg.NoReminders || acked(p) || idleWebhook(p) ||
+		m.bootQuiet(now) {
 		return false
 	}
 	last := p.Reminded
 	if last.IsZero() {
 		last = p.Announced
 	}
-	return !last.IsZero() && now.Sub(last) >= reminderEvery(p)
+	every := unchangedGap(p, now, reminderEvery(p))
+	return !last.IsZero() && now.Sub(last) >= every
+}
+
+// bootQuiet reports the first minutes after a start that restored live
+// incidents: until the restore grace is over the model is still being
+// rebuilt, and the restart says what is news (announce restored_list.go).
+// A reminder due while kwatch was down waits for the end of the grace.
+func (m *Manager) bootQuiet(now time.Time) bool {
+	return !m.restoreGrace.IsZero() && now.Before(m.restoreGrace)
 }
 
 // reminderEvery is how long after its announcement or last reminder an
-// open incident is said again.
+// open incident is said again. The chronic back-off is for an incident
+// that has no message of its own (a digest-tier one, or one a listing
+// only named): once one of its own reached chat, it is reminded like
+// any other.
 func reminderEvery(p *Incident) time.Duration {
 	switch {
 	case isPage(p):
@@ -86,8 +103,17 @@ func reminderEvery(p *Incident) time.Duration {
 			return PageRemindAfter
 		}
 		return RemindEvery
-	case p.Delivery.RolledUp() || p.Tier == Digest:
+	case p.Tier == Digest || !hasOwnMessage(p):
 		return chronicBackoff(p.Reminders)
 	}
 	return RemindEvery
+}
+
+// hasOwnMessage reports an incident that a message of its own told:
+// it was announced on its own, or a message of its own reached chat
+// after the listing that carried its announcement (Marks.SaidDigest).
+// The revision does not say it: a decision nobody hears in chat (a
+// lowered tier goes to the pagers only) counts one too.
+func hasOwnMessage(p *Incident) bool {
+	return !p.Delivery.RolledUp() || p.marks.SaidDigest != ""
 }

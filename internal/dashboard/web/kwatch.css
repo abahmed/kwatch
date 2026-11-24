@@ -30,3 +30,13 @@
 .kp-cov { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .kp-cov-h { font-size: var(--t-small); font-weight: 600; margin: 0 0 6px; }
 .kp-gap { margin: 4px 0 0; color: var(--text-muted); font-size: var(--t-small); }
+/* The setup checklist (js/kwsetup.js): a mark, the item and one line
+   on how to do what is missing. */
+.kp-check { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
+.kp-check li { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr); gap: 2px 8px; align-items: baseline; }
+.kp-check-m { font-weight: 700; text-align: center; }
+.kp-check .is-done .kp-check-m { color: var(--success); }
+.kp-check .is-todo .kp-check-m { color: var(--degraded); }
+.kp-check .is-unknown .kp-check-m { color: var(--text-muted); }
+.kp-check-b { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kp-check-t { font-size: var(--t-small); color: var(--text-soft); overflow-wrap: anywhere; }

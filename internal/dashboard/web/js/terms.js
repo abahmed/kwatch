@@ -42,9 +42,6 @@
     /* The questions at the top of an issue page. */
     ask: { what: "What's wrong?", why: "Why?", todo: "What should I do?",
       told: "Who was alerted?",
-      // What's wrong? when the plain sentence only repeats the title.
-      asTitle: "What the title says; kwatch has no more detail on the " +
-        "symptom yet. The Timeline tab shows what it saw.",
       // What should I do? without steps of its own.
       noSteps: "kwatch has no fix steps for this yet. Start with what " +
         "Kubernetes reports:" },

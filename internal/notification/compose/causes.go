@@ -137,6 +137,9 @@ var causeWords = map[string]causeWording{
 			"limit (pull QPS exceeded); the kubelet retries them"},
 	"node-removed-capacity": {
 		words: "was removed and no other node has room"},
+	explain.RuleNodeRemovedArch: {
+		words: "was removed, and the pods moved to nodes with a CPU " +
+			"their image is not built for"},
 	"nodepool-failing":   {words: "is failing as a whole"},
 	"preemptor":          {words: "is preempting lower-priority pods"},
 	"own-change":         {words: "changed shortly before"},
@@ -178,6 +181,7 @@ var causeWords = map[string]causeWording{
 	"routed-missing":             {words: "does not exist"},
 	"missing-service-called":     {words: "does not exist"},
 	"missing-service-configured": {words: "does not exist"},
+	"dependency-removed":         {words: "was removed"},
 	// scheduler-capacity is worded by schedulingWords.
 	"scheduler-capacity":    {words: "rejects every node"},
 	"scheduler-unavailable": {words: "is down"},

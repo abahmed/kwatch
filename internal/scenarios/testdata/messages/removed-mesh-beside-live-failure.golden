@@ -1,0 +1,19 @@
+10:02:15 settled
+🟠 mesh-gateway in mesh-system (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "panic: listener failed". Its last run lasted ten seconds; five restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/mesh-gateway -c app -n mesh-system --previous
+🟠 mesh-gateway in mesh-system (prod-eu-1) keeps crashing.
+| 🟠 **mesh-gateway** in **mesh-system** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with `panic: listener failed`.
+| Its last run lasted ten seconds; five restarts since its pod was created one hour ago.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/mesh-gateway -c app -n mesh-system --previous
+| ```
+10:31:15 digest
+🟡 kwatch summary (prod-eu-1): one new low-priority problem. Leftovers of a removed or stopped controller (3 objects): mesh-control in mesh-system, which its webhooks call, has no ready pods. Not urgent: kwatch alerts on its own if it gets worse.
+🟡 kwatch summary (prod-eu-1): one new low-priority problem.
+| 🟡 **kwatch summary** · prod-eu-1 — 1 problem
+|
+| **Problems**
+| - Leftovers of a removed or stopped controller (3 objects): **mesh-control** in **mesh-system**, which its webhooks call, has no ready pods

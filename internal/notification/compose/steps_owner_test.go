@@ -28,8 +28,11 @@ func ownedSteps(
 	return out
 }
 
+// The grep keeps the header of each listing, whose first column is
+// NAME for "get pods" and POD for "top pod --containers"; neither
+// pattern has a word the reader must replace.
 const pickWeb = "kubectl get pods -n shop -o wide | " +
-	"grep -E '^(NAME|POD|web-)'"
+	"grep -E '^(NAME|web-)'"
 
 // A controller's pod is replaced under a new name by a restart, a
 // rollout or an eviction: a step that names it fails with NotFound
@@ -160,7 +163,7 @@ func TestStepsCompareMemoryOfEveryPodOfTheController(t *testing.T) {
 	assert.Equal(t, []string{
 		"kubectl logs deploy/web -c app -n shop --previous", pickWeb,
 		"kubectl top pod -n shop --containers | " +
-			"grep -E '^(NAME|POD|web-)'",
+			"grep -E '^(POD|web-)'",
 	}, got)
 }
 

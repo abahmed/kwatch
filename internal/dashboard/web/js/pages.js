@@ -153,6 +153,7 @@
       box.querySelector("[data-cluster-env]").hidden = !KW.cluster.nonProduction;
       box.hidden = false;
     }
+    KW.cmdCluster();
     KW.setTitle(KW.baseTitle);
   }
 

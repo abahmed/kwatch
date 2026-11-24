@@ -67,7 +67,7 @@
   }
 
   /* marks: under the title (never beside it, so they cannot squeeze
-     it), only when there is one: "failed again 3 times", New or
+     it), only when there is one: "failed again 3 times", Acknowledged, New or
      Changed since the last visit, "Settled on its own", "Stopped
      tracking"; "in the cause" when the search matched only the likely cause. */
   function marks(td, item, ctx) {
@@ -79,6 +79,12 @@
     if (item.leftoverObjects > 0) {
       row.appendChild(KW.chip("c-acked i-left", KW.plural(item.leftoverObjects, "object", "objects"),
         KW.TERMS.paging.leftTitle));
+    }
+    // Who took it, so nobody needs a column for it: the object that
+    // carries the acknowledgement is the tooltip.
+    if (item.ackedBy && item.state !== "resolved") {
+      row.appendChild(KW.chip("c-acked i-acked", "Acknowledged", "Acknowledged on " + item.ackedBy +
+        ": someone is on it."));
     }
     var m = ctx.marks[item.id];
     if (m) row.appendChild(KW.visitChip(m));
@@ -104,7 +110,7 @@
       var a = KW.el("a", "it-link");
       // A search shows the whole title, so its match is there to see.
       KW.highlight(a, ctx.terms.length ? titleText(item.title, ctx.terms) :
-        KW.shortTitle(item.title, item), ctx.terms);
+        KW.shortTitle(item.title, item, true), ctx.terms);
       a.href = href(item.id);
       a.dataset.link = "";
       a.dataset.rowlink = "";
@@ -112,6 +118,11 @@
       a.title = item.title + (item.rootCause && item.rootCause !== item.title ?
         "\nLikely cause: " + item.rootCause : "");
       td.appendChild(a);
+      // The gist of why, as on the Overview: the part of the title the
+      // short one leaves out, else the likely cause.
+      var gist = KW.causeGist ? KW.causeGist(item.title, item) : "";
+      if (!gist && item.rootCause && item.rootCause !== item.title) gist = item.rootCause;
+      if (gist) KW.highlight(td.appendChild(KW.el("span", "it-gist")), gist, ctx.terms);
       // Where is hidden at 900-1100px; the namespace stays under the title.
       var ns = td.appendChild(KW.el("span", "it-ns mono", item.namespace || "whole cluster"));
       ns.title = KW.whereText(item);

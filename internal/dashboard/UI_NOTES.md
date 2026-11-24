@@ -369,8 +369,11 @@ when the server sent none.
 What's wrong?, Why? and What should I do? are always in the Summary tab.
 What's wrong? shows `summary.what`; when that sentence only repeats the
 title (the headline fallback of an issue kwatch knows little about),
-it says "What the title says; kwatch has no more detail on the symptom
-yet" instead of repeating it. What should I do? without fix steps (and
+it quotes what Kubernetes said last instead ("Kubernetes says:
+FailedMount — …", the newest of `warnings`), and with no warning the
+question is left out. The whole title under the heading shows only
+when the heading cut it and it adds at least three words beyond the
+heading and What's wrong?, so one sentence is never shown three times. What should I do? without fix steps (and
 without a release to undo) says kwatch has none yet and gives three
 read-only commands to start with: `kubectl describe` of the object,
 `kubectl logs <kind>/<name> --all-containers --tail=50` for a kind with
@@ -1232,9 +1235,17 @@ move.
 ### View options and saved views
 
 **View options** (the button beside Columns, above the table) sets,
-for this browser: density (comfortable or compact), rows per page,
-what a bare `/issues` opens with (status and order), text size and
-high contrast. Local or UTC times are only in the sidebar.
+for this browser: density (comfortable or compact) and what a bare
+`/issues` opens with (status and order). Rows per page is the pager's
+control under the table (it is kept for the next bare `/issues`).
+Local or UTC times, the theme, text size and high contrast are in the
+sidebar's Settings (`js/settings.js`), on every page.
+
+**Theme** is System, Light or Dark (`theme`: absent, `light` or `dark`
+in `kwatch.view`). `js/look.js` sets `data-theme` on `<html>` for a
+picked one; `tokens.css` applies the dark tokens under
+`prefers-color-scheme: dark` unless `data-theme="light"`, and always
+with `data-theme="dark"` (`look.css` does the same for high contrast).
 
 **Text size and contrast** apply to every page. Text size is Small,
 Normal, Large or Extra large (`text`: `s`, `m`, `l`, `xl` in
@@ -1247,7 +1258,7 @@ text and thicker focus rings (`look.css`); its text is at least 7:1 and
 its borders 5:1 against the page and surfaces (WCAG AA, mostly AAA).
 `js/look.js` is the first script of the page and is not deferred: it
 reads `kwatch.view` and sets `data-text` and `data-contrast` on
-`<html>` before anything is drawn (the CSP allows it: it is a file,
+`<html>` (and `data-theme`) before anything is drawn (the CSP allows it: it is a file,
 not inline code). Reset to defaults resets them too. The columns
 live in one place, the Columns panel; View options links to it.
 
@@ -1918,3 +1929,26 @@ must stay registered across page loads
 when set.
 
 Browser tests (`-tags browser`) also run with `KWATCH_BROWSER_TEXT_WIDER=1` (text 2% wider, as Linux draws it) to keep headroom in the phone layout; `KWATCH_BROWSER_WIDE_FONT=1` swaps in Verdana (stricter than the layout promises).
+
+### This round's additions
+
+- **Issues tabs** (`js/issuesfilters.js`, `buckets.go`): the Active list
+  has the tabs Needs attention, Ongoing, Cleanup and All active
+  (`bucket` in the address and the API; `facets.bucket` counts them,
+  and the state facet ignores the bucket so Active still counts all).
+  A view without `bucket` opens on Needs attention when nothing narrows
+  it, else on All active (`KW.listQuery.implicit`), so old links and
+  saved views open as before. An empty tab while another has issues
+  says "Nothing in Ongoing right now." with a link to all of them.
+- **Command boxes** (`KW.cmd`, `KW.cmdCluster` in `js/api.js`) carry the
+  cluster line above them; `pages.js` redraws them once the name is
+  read. In a list only the first item's line shows (`app.css`).
+- **Since your last visit** (`js/ovsince.js`) reads `/api/activity` for
+  the smallest window that reaches the previous visit (`visits.js`
+  `lastVisit`) and counts the changes after it.
+- **Setup checklist** (`js/kwsetup.js`) on the kwatch health page,
+  `#setup`.
+- **Compression** (`compress.go`): gzip for text bodies of 512 bytes or
+  more when the client accepts it; `Vary: Accept-Encoding`; the ETag of
+  a gzipped body (and its 304) ends in `-gz`, and `If-None-Match` is
+  read without it. `/api/events` passes through.

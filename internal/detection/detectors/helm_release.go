@@ -86,7 +86,7 @@ func (h HelmRelease) Detect(
 			return nil
 		}
 		f = detection.Finding{Reason: reasons.HelmReleaseStuck,
-			Severity: detection.Warning,
+			Severity: uninstallSeverity(ctx, e.ID, status, since),
 			Summary: "Helm release has been stuck in " + status + at +
 				" since " + since.UTC().Format("15:04 MST") +
 				"; Helm refuses another upgrade of it while it is " +
@@ -111,6 +111,27 @@ func (h HelmRelease) failedSeverity(
 		return detection.Warning
 	}
 	if deployedFailing(ctx, release) {
+		return detection.Warning
+	}
+	return detection.Info
+}
+
+// uninstallSeverity is Warning, or Low (Info) for an uninstall stuck for
+// DefaultLeftoverAge that left no workload of the release behind: what
+// remains is the record of a removed installation, left over like the
+// rest of what it left (incident/leftover_link.go).
+func uninstallSeverity(
+	ctx detection.Context, release inventory.EntityID, status string,
+	since time.Time,
+) detection.Severity {
+	if status != "uninstalling" {
+		return detection.Warning
+	}
+	if age := ctx.Now.Sub(since); age < DefaultLeftoverAge {
+		ctx.RecheckAfter(DefaultLeftoverAge - age + time.Second)
+		return detection.Warning
+	}
+	if len(helmWorkloads(ctx.Model, release)) > 0 {
 		return detection.Warning
 	}
 	return detection.Info

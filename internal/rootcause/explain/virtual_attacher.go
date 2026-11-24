@@ -9,10 +9,6 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
-// RuleAttacherDown names the row that blames the workload serving a
-// CSI driver's attacher.
-const RuleAttacherDown = "attacher-down"
-
 // attacherRows blame the workload that serves the driver whose
 // attacher the pods' volumes wait for, once it has no ready pod.
 var attacherRows = []Row{{

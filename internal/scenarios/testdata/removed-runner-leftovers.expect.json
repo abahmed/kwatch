@@ -1,0 +1,8 @@
+{
+  "name": "removed-runner-leftovers",
+  "description": "A removed runner controller left a runner set and four objects stuck deleting on its finalizers and a webhook with no pods: one digest incident rooted at its webhook Service.",
+  "root": "service/runner-system/runner-webhook",
+  "tier": "digest",
+  "maxMessages": 1,
+  "tail": "1h0m0s"
+}

@@ -63,7 +63,9 @@ var podReasons = []ReasonInfo{
 	reason(reasons.ContainerGCFailed, ModeDiskContainerGCFailed).event(Warning),
 	reason(reasons.NodePodIPExhausted, ModeNetworkIPExhausted),
 	reason(reasons.NodeCNINotReady, ModeNetworkCNINotReady),
-	reason(reasons.NodePodNetworkConflict, ModeNetworkConflict),
+	// New in the unreleased version: on trial, so it waits for the
+	// digest until real clusters show it is worth an interruption.
+	reason(reasons.NodePodNetworkConflict, ModeNetworkConflict).trial(),
 	reason(reasons.NodeHeartbeatStale, ModeHeartbeatStale),
 	reason(reasons.PodResizeInfeasible, ModeResizeInfeasible),
 	reason(reasons.PodResizeDeferred, ModeResizeDeferred),

@@ -154,9 +154,8 @@ func (p *ActiveProber) podLooksBroken(id inventory.EntityID) bool {
 	if !ok {
 		return false
 	}
-	phase, _ := pod.Attribute(AttrPhase)
-	switch corev1.PodPhase(phase.Value.AsText()) {
-	case corev1.PodSucceeded, corev1.PodFailed, corev1.PodPending:
+	if PodFinished(pod) || entityText(pod, AttrPhase) ==
+		string(corev1.PodPending) {
 		return false
 	}
 	if ready, known := pod.Attribute(AttrReady); known {

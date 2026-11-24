@@ -1,4 +1,4 @@
-/* kwatch dashboard: text size and high contrast, from View options.
+/* kwatch dashboard: text size and high contrast, from Settings.
    look.js sets data-text and data-contrast on <html> before the page
    draws. Every font size is in rem, so the root size scales the text
    and what is sized around it. The high-contrast colors pass WCAG AA
@@ -16,13 +16,20 @@ html[data-text="xl"] { font-size: 125%; --text-scale: 1.25; }
   --ink-muted: #C3C7CE; --focus-width: 4px;
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-contrast="more"] {
+  :root[data-contrast="more"]:not([data-theme="light"]) {
     --bg: #0B0C0E; --surface: #17191D;
     --text: #FFFFFF; --text-muted: #DADDE2; --text-soft: #E8EAED;
     --line: #8A919C; --control-border: #C3C7CE;
     --failing: #FFB4A9; --degraded: #FFD27F; --resolved: #B5D1FF; --success: #A6EBBA;
     --failing-bg: #3A1F1E; --degraded-bg: #3A2C14; --resolved-bg: #1B2A44;
   }
+}
+:root[data-contrast="more"][data-theme="dark"] {
+  --bg: #0B0C0E; --surface: #17191D;
+  --text: #FFFFFF; --text-muted: #DADDE2; --text-soft: #E8EAED;
+  --line: #8A919C; --control-border: #C3C7CE;
+  --failing: #FFB4A9; --degraded: #FFD27F; --resolved: #B5D1FF; --success: #A6EBBA;
+  --failing-bg: #3A1F1E; --degraded-bg: #3A2C14; --resolved-bg: #1B2A44;
 }
 /* No faded text: what is dimmed elsewhere stays readable. */
 :root[data-contrast="more"] .muted,
@@ -38,7 +45,7 @@ html[data-text="xl"] { font-size: 125%; --text-scale: 1.25; }
 /* Touch screens: every control is at least 44px tall. */
 @media (pointer: coarse) {
   .tz-b, .fchip, .pager .btn, .ttools .btn, .updated .upd-try, .who .link, .dd-opt,
-  .stsw .stsw-b, .qv, .ttools .vopts > summary, .side-top .who-b, .offline .btn,
+  .stsw .stsw-b, .qv, .ttools .vopts > summary, .offline .btn,
   .incnav .btn, .shint > summary, .shint .shint-more, .badreq .btn { min-height: 44px; }
   .legend > summary { width: 44px; height: 44px; }
   .pager .btn { min-width: 44px; }

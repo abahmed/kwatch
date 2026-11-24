@@ -29,9 +29,9 @@ type UnstructuredSchema struct {
 	spelling string
 }
 
-// gatewayGroup is the Gateway API group, the default group of a route's
+// GatewayGroup is the Gateway API group, the default group of a route's
 // parent reference.
-const gatewayGroup = "gateway.networking.k8s.io"
+const GatewayGroup = "gateway.networking.k8s.io"
 
 // NewUnstructuredSchema builds a schema for one Kubernetes Kind of one API
 // group ("" for the core group).
@@ -167,7 +167,7 @@ func routeRelations(u *unstructured.Unstructured, rel relations) {
 	parents, _, _ := unstructured.NestedSlice(u.Object, "spec", "parentRefs")
 	for _, parent := range parents {
 		rel.add(inventory.References,
-			backendRef(u, parent, gatewayGroup, "gateway"))
+			backendRef(u, parent, GatewayGroup, "gateway"))
 	}
 }
 

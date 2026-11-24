@@ -3,19 +3,32 @@
 Part of [The life of an incident](../incident-lifecycle.md).
 
 Reminders say `still open` when nothing else changed (`reminderEvery` in
-`lifecycle.go`).
+`lifecycle_reminders.go`).
 
 - A page (or a held page) is said again once after `PageRemindAfter` (6h),
   then every `RemindEvery` (a week).
-- An incident that only the digest or a roll-up carries (digest tier, or
-  `Delivery.rolledUp`) is said again after `ChronicRemindEvery` (a day), then
+- An incident that has no message of its own (digest tier, or one a
+  roll-up or summary only named and that never spoke since:
+  `hasOwnMessage`) is said again after `ChronicRemindEvery` (a day), then
   3 days later, then a week later, and weekly from then on ("still failing,
-  for 3d now"); `chronicBackoff` in `reminder_backoff.go`. Any other message
-  of the incident (a rise, a new cause, new objects, a reopening) starts the
-  gaps over at a day. The count is saved with the incident, so a restart
-  keeps the back-off. Without a reminder nobody would hear of it twice, but a
-  low problem that changes nothing does not need one every day.
+  for 3d now"); `chronicBackoff` in `reminder_backoff.go`. Once a message
+  of its own reached chat (that first reminder, an introduction, an
+  update), it is reminded like any other. News (a rise, a new cause, new
+  objects, a reopening) starts the gaps over at a day; a reminder, an
+  introduction and a lowered page tier are not news and keep them. The
+  count is saved with the incident, so a restart keeps the back-off.
+  Without a reminder nobody would hear of it twice, but a low problem that
+  changes nothing does not need one every day.
 - Every other tier is said again every `RemindEvery`.
+- A problem unchanged for `UnchangedFor` (30 days) is said again at most
+  every `UnchangedFor`, whatever its tier (`unchangedGap`). Unchanged is
+  counted from its latest news (`Marks.NewsAt`, saved with the record),
+  or, without news since, from when its failure began: a deletion stuck
+  for a year that kwatch first saw today is reminded monthly from the
+  start.
+- Nothing is reminded inside the restore grace after a start
+  (`bootQuiet`): the restart says what is news, and a reminder that fell
+  due while kwatch was down goes out when the grace is over.
 
 A flapping incident also gets its reminder when it is due.
 
@@ -31,7 +44,10 @@ is therefore named again in the digests that go out, as an ongoing item
 in the Problems list: `Service web (shop) is still failing, for two days
 now.` Each ongoing item is listed in full at most once a day (UTC): in the
 first digest of the day, or when it changed (flapping, its reason, how many
-things fail, its cause). Other digests carry one line for the rest: `3 more
+things fail, its cause). A problem that began more than `WeeklyAfter` (7
+days) ago and did not change is listed in full at most once a week (ISO
+week, UTC): the first digest of the week lists it with the others still
+open. Other digests carry one line for the rest: `3 more
 still failing, unchanged (web, db, cache +1)`. The audit entry of a digest
 names every ongoing item. The list is capped like the rest (five, then
 `+N more still failing`; `announce/ongoing_compact.go`).
@@ -65,7 +81,7 @@ kubectl annotate deploy/api kwatch.dev/ack="looking into it"
   annotation: an object records the tool that wrote it last, not a person.
 - Editing the note changes nothing in the thread; only the appearance and
   the removal are told.
-- A reopen inside `RepageWindow` is the same incident, so the
+- A reopen inside `ReopenWindow` is the same incident, so the
   acknowledgement still applies and is not told again; its one `failing
   again` update still goes out, because the resolve ended the thread. If
   the annotation was removed meanwhile, the removal is told after it.

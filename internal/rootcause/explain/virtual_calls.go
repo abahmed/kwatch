@@ -334,6 +334,12 @@ func (v *view) inCluster(host string, pod inventory.EntityID) bool {
 	if !qualified {
 		namespace = pod.Namespace
 	}
+	// "cache.data" in a cluster with a namespace data names its Service
+	// cache, even one that was deleted: never a host outside.
+	if qualified && namespace != "" && v.s.Model.Exists(
+		inventory.CoreID(kube.KindNamespace, "", namespace)) {
+		return true
+	}
 	return v.s.Model.Exists(inventory.CoreID(kube.KindService, namespace,
 		name))
 }

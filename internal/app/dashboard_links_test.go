@@ -2,6 +2,7 @@ package app
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -145,4 +146,69 @@ func investigationDeps(entitled, logs bool) *serverDeps {
 		deps.entitlements = feature.ProEntitlements()
 	}
 	return deps
+}
+
+// Until the routes are listed a missing address is not known to be
+// missing: it is not reported as off, and the first message waits for
+// the routes (bounded) so it carries the link found once they are.
+func TestDashboardLinksWaitForTheRoutes(t *testing.T) {
+	model := inventory.NewModel(inventory.Options{})
+	sink := &fakeLinkSink{}
+	listed := make(chan struct{})
+	links := &dashboardLinks{target: testDashboard, model: model,
+		sink: sink, wait: time.Minute,
+		settled: func() bool {
+			select {
+			case <-listed:
+				return true
+			default:
+				return false
+			}
+		}}
+	assert.False(t, links.Status().On)
+	assert.Empty(t, sink.got, "off was reported before the routes")
+
+	go func() {
+		observeAddresses(t, model, ingressID("dash"),
+			"https kwatch.example.com / kwatch-dashboard 8061")
+		close(listed)
+	}()
+	assert.Equal(t, "https://kwatch.example.com", links.address())
+	require.Len(t, sink.got, 1)
+	assert.True(t, sink.got[0].On)
+}
+
+// Routes that never list hold the first message for the bound only.
+func TestDashboardLinksWaitIsBounded(t *testing.T) {
+	sink := &fakeLinkSink{}
+	links := &dashboardLinks{target: testDashboard,
+		model: inventory.NewModel(inventory.Options{}), sink: sink,
+		wait: 10 * time.Millisecond, settled: func() bool { return false }}
+	assert.Empty(t, links.address())
+	require.Len(t, sink.got, 1)
+	assert.Equal(t, health.LinksNoRoute, sink.got[0].Reason)
+}
+
+// routeKinds is a source whose kinds are all verifiable, with some
+// turned off by configuration.
+type routeKinds struct{ off []string }
+
+func (r routeKinds) Disabled() []kube.SourceStatus {
+	var out []kube.SourceStatus
+	for _, resource := range r.off {
+		out = append(out, kube.SourceStatus{Resource: resource})
+	}
+	return out
+}
+
+func (routeKinds) Verifiable(inventory.Kind) bool { return true }
+
+// HTTPRoutes are discovered: before the first discovery pass the
+// source knows nothing of them and calls them verifiable, so the wait
+// must not end then, unless they are not watched by configuration.
+func TestRoutesWaitForTheFirstDiscovery(t *testing.T) {
+	assert.False(t, routesListed(routeKinds{}, false))
+	assert.True(t, routesListed(routeKinds{}, true))
+	assert.True(t, routesListed(routeKinds{off: []string{"httproutes"}},
+		false))
 }

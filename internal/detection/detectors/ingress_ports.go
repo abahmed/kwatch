@@ -16,7 +16,7 @@ import (
 func ingressBackendPorts(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
-	if ctx.Model == nil || !ctx.Synced(kube.KindService) {
+	if ctx.Model == nil {
 		return nil
 	}
 	for _, line := range strings.Split(
@@ -32,8 +32,10 @@ func ingressBackendPorts(
 		if !ok || len(ports) == 0 || hasServicePort(ports, want) {
 			continue
 		}
-		if !sustained(ctx, "backend-port", e.FirstSeen,
-			DefaultBackendGrace) {
+		if !ctx.SyncedFor(kube.KindService,
+			reasons.IngressBackendPortMissing) ||
+			!sustained(ctx, "backend-port", e.FirstSeen,
+				DefaultBackendGrace) {
 			return nil
 		}
 		return []detection.Finding{{

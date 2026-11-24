@@ -1,6 +1,7 @@
 package inventory
 
 import (
+	"slices"
 	"sort"
 	"time"
 )
@@ -14,6 +15,12 @@ const DefaultMaxRecentChanges = 1024
 // creates hundreds of them within seconds; keeping them apart means they
 // cannot push a Deployment or ConfigMap edit out of the cluster history.
 const DefaultMaxChurnChanges = 256
+
+// DefaultMaxScaleChanges bounds the separate history of replica-count
+// edits. An autoscaler can change a workload's replicas every minute;
+// kept apart, those edits cannot push a rollout or a config edit out of
+// the cluster history.
+const DefaultMaxScaleChanges = 256
 
 // DefaultMaxHealthMarks bounds the health marks kept per entity.
 const DefaultMaxHealthMarks = 16
@@ -36,9 +43,14 @@ type HealthMark struct {
 // model's lock guards the rings and counters.
 type history struct {
 	// recent holds meaningful changes; churn holds pod and ReplicaSet
-	// creations and deletions. Both are oldest first.
+	// creations and deletions; scale holds replica-count-only edits.
+	// All are oldest first.
 	recent []changeEntry
 	churn  []changeEntry
+	scale  []changeEntry
+	// pinned holds the older changes a restart reloaded for open
+	// incidents (history_pinned.go), oldest first.
+	pinned []changeEntry
 	// seq numbers appended changes, so the change-set cache can fold in
 	// only the changes it has not seen.
 	seq uint64
@@ -62,11 +74,15 @@ func newHistory() history {
 func (h *history) addChange(change Change) {
 	h.seq++
 	entry := changeEntry{seq: h.seq, change: cloneChange(change)}
-	if isChurn(change) {
+	switch {
+	case isChurn(change):
 		h.churn = h.appendBounded(h.churn, entry, DefaultMaxChurnChanges)
-		return
+	case ScaleOnly(change):
+		h.scale = h.appendBounded(h.scale, entry, DefaultMaxScaleChanges)
+	default:
+		h.recent = h.appendBounded(h.recent, entry,
+			DefaultMaxRecentChanges)
 	}
-	h.recent = h.appendBounded(h.recent, entry, DefaultMaxRecentChanges)
 }
 
 // appendBounded adds entry and evicts the oldest entries beyond limit. It
@@ -94,9 +110,50 @@ func isChurn(change Change) bool {
 		(change.Created || change.Deleted)
 }
 
+// ScaleOnly reports an edit of nothing but the replica count, which an
+// autoscaler makes in bulk. Such edits are kept apart from the other
+// changes, in the cluster history and in each entity's, so they never
+// push a rollout or a config edit out.
+func ScaleOnly(change Change) bool {
+	if change.Created || change.Deleted || len(change.Fields) == 0 {
+		return false
+	}
+	for _, f := range change.Fields {
+		if f.Path != scalePath {
+			return false
+		}
+	}
+	return true
+}
+
+// scalePath is the field of a replica-count edit.
+const scalePath = "spec.replicas"
+
+// boundChanges keeps at most limit of an entity's changes of each class,
+// scale-only edits and the rest, evicting the oldest of the class the
+// latest change belongs to.
+func boundChanges(changes []Change, limit int) []Change {
+	scale := ScaleOnly(changes[len(changes)-1])
+	n, first := 0, -1
+	for i := range changes {
+		if ScaleOnly(changes[i]) == scale {
+			if first < 0 {
+				first = i
+			}
+			n++
+		}
+	}
+	if n <= limit {
+		return changes
+	}
+	return slices.Delete(changes, first, first+1)
+}
+
 func (h *history) prune(before time.Time) {
 	h.recent = h.pruneRing(h.recent, before)
 	h.churn = h.pruneRing(h.churn, before)
+	h.scale = h.pruneRing(h.scale, before)
+	h.pinned = h.pruneRing(h.pinned, pinnedFrom(before))
 }
 
 func (h *history) pruneRing(
@@ -113,11 +170,16 @@ func (h *history) pruneRing(
 	return kept
 }
 
+// rings returns every change ring.
+func (h *history) rings() [][]changeEntry {
+	return [][]changeEntry{h.recent, h.churn, h.scale, h.pinned}
+}
+
 // entriesAfter returns the live changes numbered above seq, in sequence
 // order.
 func (h *history) entriesAfter(seq uint64) []changeEntry {
 	var out []changeEntry
-	for _, ring := range [][]changeEntry{h.recent, h.churn} {
+	for _, ring := range h.rings() {
 		for _, entry := range ring {
 			if entry.seq > seq {
 				out = append(out, entry)
@@ -130,8 +192,9 @@ func (h *history) entriesAfter(seq uint64) []changeEntry {
 
 // liveSeqs returns the sequence numbers still in the rings.
 func (h *history) liveSeqs() map[uint64]bool {
-	live := make(map[uint64]bool, len(h.recent)+len(h.churn))
-	for _, ring := range [][]changeEntry{h.recent, h.churn} {
+	live := make(map[uint64]bool,
+		len(h.recent)+len(h.churn)+len(h.scale)+len(h.pinned))
+	for _, ring := range h.rings() {
 		for _, entry := range ring {
 			live[entry.seq] = true
 		}

@@ -279,6 +279,24 @@ priorityClassName wins, then the class the chart creates, else none.
 {{- if .Values.priorityClassName -}}
 {{- .Values.priorityClassName -}}
 {{- else if .Values.priorityClass.create -}}
-{{- default (include "kwatch.fullname" .) .Values.priorityClass.name -}}
+{{- include "kwatch.priorityClassCreatedName" . -}}
 {{- end -}}
+{{- end }}
+
+{{/*
+Name of the PriorityClass the chart creates. A PriorityClass is
+cluster-wide, so the default includes the release namespace like the
+ClusterRole does; an explicit priorityClass.name wins.
+*/}}
+{{- define "kwatch.priorityClassCreatedName" -}}
+{{- default (include "kwatch.clusterRoleName" .) .Values.priorityClass.name -}}
+{{- end }}
+
+{{/*
+Name of the control-plane Lease Role and RoleBinding. They live in
+kube-system, shared by every release, so the release namespace is part of
+the name like the ClusterRole.
+*/}}
+{{- define "kwatch.controlPlaneLeasesName" -}}
+{{- printf "%s-control-plane-leases" (include "kwatch.clusterRoleName" .) | trunc 253 | trimSuffix "-" -}}
 {{- end }}

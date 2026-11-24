@@ -12,9 +12,11 @@ import (
 
 // restoreChanges reloads the last day of persisted changes and the
 // last-healthy marks into the model, with their original times and
-// actors. It runs before the sources report, so before the changes made
-// while kwatch was down are found. A store without these records, such
-// as a state file from an older version, restores nothing.
+// actors, and pins older changes of the entities of open incidents
+// (change_pin.go). It runs before the sources report, so before the
+// changes made while kwatch was down are found. A store without these
+// records, such as a state file from an older version, restores
+// nothing.
 func (h *historyRecorder) restoreChanges() {
 	now := h.now()
 	var since time.Time
@@ -22,6 +24,7 @@ func (h *historyRecorder) restoreChanges() {
 		since = now.Add(-inventory.ChangeRetention)
 	}
 	restored := 0
+	var pinned []inventory.Change
 	if store, ok := h.store.(changeStore); ok {
 		records, err := store.LoadChanges(since, maxRestoredChanges)
 		if err != nil {
@@ -32,12 +35,19 @@ func (h *historyRecorder) restoreChanges() {
 		for _, record := range records {
 			changes = append(changes, record.Change)
 		}
-		restored = h.model.RestoreChanges(changes)
+		// Older changes are pinned up to where this reload starts.
+		until := since
+		if len(records) >= maxRestoredChanges {
+			until = records[0].Change.At
+		}
+		pinned = h.pinnedChanges(until)
+		restored = h.model.RestoreHistory(changes, pinned)
 	}
 	marks := h.restoreHealthy(since)
 	if restored > 0 || marks > 0 {
 		klog.InfoS("restored change history", "component", "pipeline",
-			"operation", "restore", "changes", restored, "healthyMarks", marks)
+			"operation", "restore", "changes", restored,
+			"pinned", len(pinned), "healthyMarks", marks)
 	}
 }
 

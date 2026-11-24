@@ -92,6 +92,14 @@ var communityCauseLeaks = map[string][]string{
 		"from its log"},
 }
 
+// proUnconfirmed are the scenarios of communityCauseLeaks whose cause
+// the Community engine finds tied with a rival (rootcause.Confirmed),
+// so its message names none and tells no category: the names must
+// still not leak.
+var proUnconfirmed = map[string]bool{
+	"missing-secret": true, "adv-two-causes-stable": true,
+}
+
 // causeTeaser starts the Community sentence that tells the category.
 var causeTeaser = regexp.MustCompile(`(Most likely|Possible) cause: `)
 
@@ -230,6 +238,7 @@ func checkCauseCategoryOnly(
 ) {
 	t.Helper()
 	leaks, caused := communityCauseLeaks[name]
+	caused = caused && !proUnconfirmed[name]
 	leaks = append(leaks, "shortly before", " because ")
 	teased := false
 	for _, m := range result.Messages {

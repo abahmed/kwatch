@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 )
 
@@ -136,4 +137,48 @@ func savedMembers(p *Incident) []inventory.EntityID {
 // the journal; where the tier stands once the grace is over is.
 func (m *Manager) tierUnsettled(p *Incident, now time.Time) bool {
 	return p.restored && p.State != Resolved && m.inGrace(p, now)
+}
+
+// memberKeys are the sorted keys of the failing members of p, at most
+// maxSavedMembers of them.
+func memberKeys(p *Incident) []detection.Key {
+	var out []detection.Key
+	for key, s := range p.Members {
+		if !s.Advisory {
+			out = append(out, key)
+		}
+	}
+	slices.SortFunc(out, func(a, b detection.Key) int {
+		if c := strings.Compare(a.Entity.String(),
+			b.Entity.String()); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Reason, b.Reason)
+	})
+	return out[:min(len(out), maxSavedMembers)]
+}
+
+// savedKeys are the member keys a record keeps; like savedMembers, a
+// restored incident with no live member yet keeps its former ones.
+func savedKeys(p *Incident) []detection.Key {
+	if len(p.Members) == 0 && p.restored {
+		return slices.Clone(p.formerKeys)
+	}
+	return memberKeys(p)
+}
+
+// formerKeys are the member keys r was saved with. A record from before
+// they were saved has the objects and the reasons apart: each pairing
+// of the two counts, as each did before.
+func formerKeys(r Record) []detection.Key {
+	if len(r.MemberKeys) > 0 {
+		return slices.Clone(r.MemberKeys)
+	}
+	out := make([]detection.Key, 0, len(r.Members)*len(r.Reasons))
+	for _, entity := range r.Members {
+		for _, reason := range r.Reasons {
+			out = append(out, detection.Key{Entity: entity, Reason: reason})
+		}
+	}
+	return out
 }

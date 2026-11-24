@@ -2,6 +2,7 @@ package detectors
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -55,6 +56,21 @@ func hpaFailureFor(reason, fallbackSummary string) hpaFailure {
 		return known
 	}
 	return hpaFailure{reasons.HPAScalingError, fallbackSummary}
+}
+
+// unservedKind is the API server's wording for a kind it serves in no
+// version the reference names: `no matches for kind "Deployment" in
+// version "apps/v2"`.
+const unservedKind = "no matches for kind"
+
+// unserved adds why a scale target cannot be read when the controller's
+// message says its apiVersion is not served: the target may exist under
+// another version, so it is not missing, yet nothing is scaled.
+func unserved(message string) string {
+	if strings.Contains(message, unservedKind) {
+		return ": the API version its scaleTargetRef names is not served"
+	}
+	return ""
 }
 
 // HPAMetricsGrace is how long an autoscaler must fail to read its
@@ -156,11 +172,12 @@ func hpaConditionFindings(
 			return
 		}
 		seen[failure.reason] = true
+		message := conditionMessage(e, conditionType)
 		out = append(out, detection.Finding{
 			Reason: failure.reason, Severity: detection.Warning,
-			Since: since, Summary: failure.summary,
+			Since: since, Summary: failure.summary + unserved(message),
 			Evidence: []detection.Evidence{{
-				Label: "message", Value: conditionMessage(e, conditionType),
+				Label: "message", Value: message,
 			}},
 		})
 	}

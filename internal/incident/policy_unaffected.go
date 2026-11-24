@@ -43,7 +43,9 @@ func unaffected(p *Incident) bool {
 }
 
 // hostedFailing reports a pod running on node that is not ready: what
-// the node's condition may be doing to the workloads placed on it.
+// the node's condition may be doing to the workloads placed on it. A
+// pod that finished (a completed Job run, an evicted pod) is never
+// ready again and says nothing about the node now.
 func hostedFailing(model inventory.Reader, node inventory.EntityID) bool {
 	if node.Kind != kube.KindNode {
 		return false
@@ -51,7 +53,7 @@ func hostedFailing(model inventory.Reader, node inventory.EntityID) bool {
 	for _, pod := range model.Related(node, inventory.RunsOn,
 		inventory.Incoming) {
 		e, ok := model.Entity(pod)
-		if !ok {
+		if !ok || kube.PodFinished(e) {
 			continue
 		}
 		if ready, known := e.Attribute(kube.AttrReady); known {

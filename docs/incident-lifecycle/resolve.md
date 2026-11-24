@@ -18,7 +18,7 @@ The reason of that resolve does not say `healthy`: it is `stopped tracking
 after 2h; coverage check continues` (`StoppedTrackingPrefix`,
 `resolveReason`), with `; container still crashing` added when only a
 crashing container held it. A workload that is really down is handed back by
-the coverage check, and a failure inside `RepageWindow` reopens the same
+the coverage check, and a failure inside `ReopenWindow` reopens the same
 incident.
 
 A failure inside the hold returns the incident to `Open` and the manager says

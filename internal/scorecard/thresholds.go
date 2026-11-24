@@ -88,6 +88,12 @@ const (
 	// pods may produce inside GoalStormWindow.
 	GoalStormMessages = 3
 	GoalStormWindow   = 2 * time.Minute
+	// GoalScheduledOpsMessagesPerDay is the noise budget: the most chat
+	// messages on any one day of the scheduled-operations replay, a
+	// week of a cluster scaled down every evening and up every morning
+	// with one real problem. Set on 2026-11-24 from the measured busiest
+	// day (3) plus one message of margin; never raised to fit a change.
+	GoalScheduledOpsMessagesPerDay = 4
 )
 
 // Goals returns the production-goal thresholds that apply to an audit log.

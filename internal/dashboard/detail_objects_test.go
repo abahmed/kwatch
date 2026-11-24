@@ -103,8 +103,8 @@ func TestDetailAffectedListsRootFailingAndImpactWithCommands(
 		t.Errorf("root = %+v", d.Affected[0])
 	}
 	cmds := d.Affected[1].Commands
-	if len(cmds) != 2 || cmds[0] != "kubectl -n shop describe pod api-1" ||
-		cmds[1] != "kubectl -n shop logs api-1 -c api --previous" {
+	if len(cmds) != 2 || cmds[0] != "kubectl describe pod api-1 -n shop" ||
+		cmds[1] != "kubectl logs api-1 -n shop -c api --previous" {
 		t.Errorf("pod commands = %q", cmds)
 	}
 }
@@ -159,7 +159,7 @@ func TestCommandsForSkipsObjectsKubectlCannotDescribe(t *testing.T) {
 	cr := inventory.NewEntityID("cert-manager.io", "certificate", "shop",
 		"tls")
 	if c := commandsFor(nil, cr); len(c) != 1 || c[0] !=
-		"kubectl -n shop describe certificate.cert-manager.io tls" {
+		"kubectl describe certificate.cert-manager.io tls -n shop" {
 		t.Errorf("custom resource commands = %q", c)
 	}
 }

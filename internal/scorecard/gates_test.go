@@ -52,3 +52,14 @@ func scoreEntries(start time.Time) []audit.Entry {
 		{Timestamp: at(90), Incident: "b", Action: audit.ActionCreate},
 	}
 }
+
+func TestWithHeadroomShowsWhatIsLeft(t *testing.T) {
+	assert.Equal(t, "3 (2 left)",
+		WithHeadroom(AtMost("m", 3, 5, ""), 3, 5).Value)
+	at := WithHeadroom(AtMost("m", 5, 5, ""), 5, 5)
+	assert.Equal(t, "5 (at the limit)", at.Value)
+	assert.True(t, at.Pass)
+	over := WithHeadroom(AtMost("m", 6, 5, ""), 6, 5)
+	assert.Equal(t, "6", over.Value)
+	assert.False(t, over.Pass)
+}

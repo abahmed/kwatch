@@ -1,0 +1,8 @@
+{
+  "name": "young-stuck-peer-joins-old-group",
+  "description": "Objects of a controller removed weeks ago wait on its finalizer; a new one deleted today joins them: the group stays Low, nothing is sent.",
+  "root": "finalizer/batch/jobs.example.com/cleanup",
+  "tier": "digest",
+  "maxMessages": 1,
+  "tail": "1h0m0s"
+}

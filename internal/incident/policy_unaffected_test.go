@@ -29,3 +29,35 @@ func TestLostNodeIsNotUnaffected(t *testing.T) {
 
 	assert.False(t, unaffected(r.m.incidents[r.only().ID]))
 }
+
+// hostedPod observes a pod on node n1 in phase, ready or not.
+func hostedPod(
+	t *testing.T, r *rig, name, phase string, ready bool,
+) {
+	t.Helper()
+	pod := entity(kube.KindPod, name)
+	_, err := r.model.Apply(inventory.Observation{
+		Kind: inventory.Observed, Source: "test", At: t0, Entity: pod,
+		Attributes: map[string]inventory.Value{
+			kube.AttrPhase: inventory.Text(phase),
+			kube.AttrReady: inventory.Bool(ready),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.relate(pod, inventory.RunsOn, inventory.CoreID(kube.KindNode, "", "n1"))
+}
+
+// A completed Job run or an evicted pod on the node is not ready, but
+// it is not failing: the node's condition still affects nothing.
+func TestFinishedPodsOnTheNodeAreNotFailing(t *testing.T) {
+	r := newRig(t, Config{})
+	node := inventory.CoreID(kube.KindNode, "", "n1")
+	hostedPod(t, r, "backup-29", "Succeeded", false)
+	hostedPod(t, r, "evicted", "Failed", false)
+	assert.False(t, hostedFailing(r.model, node))
+
+	hostedPod(t, r, "web-1", "Running", false)
+	assert.True(t, hostedFailing(r.model, node))
+}

@@ -66,7 +66,15 @@ var lifecycleRowCases = []rowCase{
 			}
 			return first
 		}},
+	nodeRemovedArchCase,
 }
+
+// nodeRemovedArchCase is the row fixture of RuleNodeRemovedArch.
+var nodeRemovedArchCase = rowCase{row: RuleNodeRemovedArch,
+	want: "node//n1",
+	build: func(f *fixture) inventory.EntityID {
+		return archReplacements(f, removedNodeCase(f, true))[0]
+	}}
 
 // removedNodeCase runs one pod of api and web on n1, then deletes n1 a
 // minute after t0, and its pods too when they were replaced. It returns

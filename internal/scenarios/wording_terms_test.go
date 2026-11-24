@@ -37,6 +37,8 @@ var wordingGlobalNot = []string{
 	"confidence", "score", "edge", "graph", "informer", "reconcile",
 	"signal", "evidence", "candidate", "suppressed", "dedup",
 	"trial", "open source", "SLA", "24/7",
+	// No step reads a Secret.
+	"describe secret", "get secret",
 }
 
 var wordingTable = []wordingTerms{
@@ -95,7 +97,7 @@ var wordingTable = []wordingTerms{
 	// cron-secret-edited-hours-before).
 	{name: "cron-secret-edited-hours-before",
 		contain: []string{"sync-key", "billing",
-			"kubectl describe secret sync-key -n billing"},
+			"kubectl get pods -o yaml -n billing"},
 		not: []string{"rotated by"}},
 	{name: "wording-certificate-expired-handshake",
 		contain: []string{"Affected: payments", "bank-client-tls",

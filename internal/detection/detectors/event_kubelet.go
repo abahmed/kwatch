@@ -57,10 +57,21 @@ var sandboxClasses = []struct {
 		"cni config uninitialized", "networkpluginnotready",
 	}},
 	{detection.ModeNetworkConflict, []string{
-		"already exists for an interface", "address already in use",
+		"already exists for an interface", addressInUse,
 		"address already allocated", "route already exists",
 	}},
 }
+
+// addressInUse is the conflict wording any process can cause: one pod
+// that gets it may have met a socket left behind, not the node's
+// network, so it takes more than one pod (see nodeSandboxMinPods).
+const addressInUse = "address already in use"
+
+// hostPortWord marks a sandbox failure about a pod's hostPort ("cannot
+// open hostport 80 ... address already in use"): the port is taken on
+// the node by another process, a clash of that pod's own setting, not
+// a broken pod network.
+const hostPortWord = "hostport"
 
 // eventMode names the failure mode an event's message makes more precise
 // than its reason; "" keeps the reason's mode.
@@ -82,6 +93,10 @@ func eventMode(note inventory.Note) detection.Mode {
 func sandboxMode(message string) detection.Mode {
 	lower := strings.ToLower(message)
 	for _, class := range sandboxClasses {
+		if class.mode == detection.ModeNetworkConflict &&
+			strings.Contains(lower, hostPortWord) {
+			continue
+		}
 		for _, pattern := range class.patterns {
 			if strings.Contains(lower, pattern) {
 				return class.mode
@@ -89,6 +104,24 @@ func sandboxMode(message string) detection.Mode {
 		}
 	}
 	return ""
+}
+
+// conflictOfNode reports a network conflict message that names the
+// node's own interfaces, routes or allocations, not only an address in
+// use, so one pod already shows it.
+func conflictOfNode(message string) bool {
+	lower := strings.ToLower(message)
+	for _, class := range sandboxClasses {
+		if class.mode != detection.ModeNetworkConflict {
+			continue
+		}
+		for _, pattern := range class.patterns {
+			if pattern != addressInUse && strings.Contains(lower, pattern) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // sandboxFailure reports whether a note is a classified pod network setup

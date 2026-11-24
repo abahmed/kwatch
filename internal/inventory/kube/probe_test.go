@@ -87,7 +87,11 @@ func runProbe(
 	<-done
 	out := map[inventory.EntityID]inventory.Observation{}
 	for _, f := range observations {
-		out[f.Entity] = f
+		// An entity's relations come with its attributes; the
+		// attributes are what the tests read.
+		if f.Kind != inventory.Related {
+			out[f.Entity] = f
+		}
 	}
 	return out
 }

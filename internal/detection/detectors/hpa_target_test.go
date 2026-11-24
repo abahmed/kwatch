@@ -79,3 +79,21 @@ func TestHPAMissingTargetOfAnUnwatchedKindIsNotConcluded(t *testing.T) {
 
 	assert.Empty(t, got)
 }
+
+// A scaleTargetRef whose apiVersion the cluster does not serve names a
+// target that exists under another version: it is not missing, and the
+// finding says why the autoscaler cannot read it.
+func TestHPATargetInUnservedVersionSaysSo(t *testing.T) {
+	model, hpa := hpaTargetRig(true)
+	setCondition(model, hpa, "AbleToScale", "False", "FailedGetScale",
+		`the HPA controller was unable to get the target's current `+
+			`scale: no matches for kind "Deployment" in version "apps/v2"`,
+		t0)
+
+	got := detectHPAAt(model, hpa, 2*DefaultConditionGrace)
+
+	require.Len(t, got, 1)
+	assert.Equal(t, reasons.FailedGetScale, got[0].Reason)
+	assert.Equal(t, "Autoscaler cannot read its scale target: the API "+
+		"version its scaleTargetRef names is not served", got[0].Summary)
+}

@@ -75,7 +75,12 @@ func (w Writer) communityOf(
 		return plain, proLine{changeSeen: seen}
 	}
 	help := proHelpOf(proFacts(d, now))
-	return plain, proLine{plain: proNote(d, help),
+	told := d
+	if unconfirmedCause(d.Incident.Cause) {
+		// Pro names no cause: its line promises none.
+		told.Incident.Cause = nil
+	}
+	return plain, proLine{plain: proNote(told, help),
 		cause: causeNote(plain.Incident.Cause, help), changeSeen: seen}
 }
 
@@ -158,7 +163,22 @@ func communityCause(c *rootcause.CauseRecord) *rootcause.CauseRecord {
 	plain.RollbackRevision = ""
 	plain.Hops, plain.Beyond = nil, nil
 	plain.Rival = nil
+	keepConfirmation(&plain, c)
 	return &plain
+}
+
+// keepConfirmation keeps what decides whether the cause is confirmed
+// (rootcause.Confirmed): a cause Pro does not name stays unnamed in
+// Community, which then tells no category either, and a corroborated
+// one keeps a bare mark of its corroboration. Neither is worded: the
+// proof and its rival are Pro detail.
+func keepConfirmation(plain, c *rootcause.CauseRecord) {
+	switch {
+	case unconfirmedCause(c):
+		plain.Rival = c.Rival
+	case !rootcause.Confirmed(plain):
+		plain.Proof = []rootcause.Proof{{Supports: true}}
+	}
 }
 
 // communitySentences drops the sentences that carry Pro detail and, for

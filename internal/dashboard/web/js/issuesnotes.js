@@ -11,6 +11,12 @@
      still says how many are happening now, then how many match. */
   function subtitle(f, data) {
     var rest = f.status === "resolved" ? " · kwatch keeps resolved issues for 7 days" : "";
+    // A tab of the Active list counts its part; the line counts all.
+    if (f.status === "active" && f.bucket !== "all" && !LQ().used(f)) {
+      var st = (data.facets || {}).state || {};
+      var all = (st.open || 0) + (st.settling || 0) + (st.flapping || 0) + (st.recovering || 0);
+      return KW.plural(all, "issue", "issues") + " happening now";
+    }
     if (LQ().used(f)) {
       if (f.status === "active" && KW.activeTotal !== undefined) {
         return KW.plural(KW.activeTotal, "issue", "issues") + " happening now · " +
@@ -52,5 +58,19 @@
     return n;
   }
 
-  KW.listNotes = { subtitle: subtitle, badRequest: badRequest, stale: stale };
+  /* emptyTab: the note of an empty tab of the Active list while
+     another tab has issues (never "All clear" then), or null. */
+  function emptyTab(f, page, root, onAll) {
+    var bk = (page.facets || {}).bucket || {};
+    if (f.bucket === "all" || !(bk.attention || bk.ongoing || bk.cleanup)) return null;
+    var tab = KW.$('[data-bucket="' + f.bucket + '"]', root);
+    var note = KW.el("p", "nomatch", "Nothing in " + (tab ? tab.firstChild.textContent : "this tab") +
+      " right now. ");
+    var all = note.appendChild(KW.el("button", "link", "See all active issues"));
+    all.type = "button";
+    all.addEventListener("click", onAll);
+    return note;
+  }
+
+  KW.listNotes = { subtitle: subtitle, emptyTab: emptyTab, badRequest: badRequest, stale: stale };
 })();

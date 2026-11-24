@@ -35,8 +35,9 @@ const (
 	passKind
 	passAcked
 	passStopped
+	passBucket
 	passAll = passStatus | passSeverity | passNamespace | passKind |
-		passAcked | passStopped
+		passAcked | passStopped | passBucket
 )
 
 // listRowOf is an incident as a list row with the facet filters it
@@ -49,6 +50,8 @@ type listRowOf struct {
 	// still active (severityOK), so counting them would make the
 	// severity facets add up to more than the list holds.
 	severityCounted bool
+	// bucket is the row's part of the active list (buckets.go).
+	bucket string
 }
 
 // buildList answers a list request over every incident: facets over
@@ -66,7 +69,10 @@ func buildList(req listRequest, incidents []incident.Incident,
 		if !f.restOK(p, item) {
 			continue
 		}
-		rows = append(rows, listRowOf{item: item, pass: f.passes(item),
+		b := bucketOf(p, item, now)
+		rows = append(rows, listRowOf{item: item, bucket: b,
+			pass: f.passes(item) |
+				bitIf(f.bucket == "" || f.bucket == b, passBucket),
 			severityCounted: f.severities != nil || f.severityOK(item)})
 	}
 	out := ListResponse{Page: req.page, PageSize: req.pageSize,
@@ -138,9 +144,9 @@ func bitIf(ok bool, bit int) int {
 	return 0
 }
 
-// passesBut reports whether a row passes every facet filter but bit.
-func (r listRowOf) passesBut(bit int) bool {
-	return r.pass|bit == passAll
+// passesBut reports whether a row passes every facet filter but bits.
+func (r listRowOf) passesBut(bits int) bool {
+	return r.pass|bits == passAll
 }
 
 func newFacets() ListFacets {
@@ -153,12 +159,15 @@ func newFacets() ListFacets {
 		Kind:      map[string]int{},
 		Acked:     map[string]int{"true": 0, "false": 0},
 		Stopped:   map[string]int{"true": 0, "false": 0},
+		Bucket: map[string]int{bucketAttention: 0, bucketOngoing: 0,
+			bucketCleanup: 0},
 	}
 }
 
 // addFacets counts each facet over the rows passing every other filter
 // and returns the rows passing all of them. The state facet ignores
-// status too, so the status switch can show each list's size.
+// status and the bucket too, so the status switch can show each list's
+// size; the bucket facet counts active rows only.
 func addFacets(fc *ListFacets, rows []listRowOf) []IncidentListItem {
 	matched := make([]IncidentListItem, 0, len(rows))
 	byNS, byKind, kindName := map[string]int{}, map[string]int{},
@@ -168,8 +177,12 @@ func addFacets(fc *ListFacets, rows []listRowOf) []IncidentListItem {
 		if r.passesBut(passSeverity) && r.severityCounted {
 			fc.Severity[item.Severity]++
 		}
-		if r.passesBut(passStatus) {
+		if r.passesBut(passStatus | passBucket) {
 			fc.State[item.State]++
+		}
+		if r.bucket != "" && r.passesBut(passBucket) &&
+			r.severityCounted {
+			fc.Bucket[r.bucket]++
 		}
 		if r.passesBut(passNamespace) && item.Namespace != "" {
 			byNS[item.Namespace]++

@@ -39,9 +39,16 @@ func judge(r *Record, v View, next time.Time, now time.Time) {
 	}
 	r.Deadline = st.deadline
 	r.Stalled = st.deadline || stalledWithoutDeadline(r, st, now)
-	verdict, incidentID := incidentVerdict(r, v, id, next)
+	verdict, incidentID := incidentVerdict(r, v, id, next, st.complete)
 	if verdict == "" && r.Stalled {
 		verdict = Failed
+	}
+	if st.complete && verdict == "" && r.Verdict.severity() >=
+		Failed.severity() {
+		// The new revision serves every replica now and nothing still
+		// open fails it: what failed on the way is over, and a release
+		// that serves is not failed or down.
+		r.Verdict, r.Incident = "", ""
 	}
 	if verdict == Failed && st.desired > 0 && st.ready == 0 {
 		verdict = Down
@@ -151,9 +158,13 @@ func count(e inventory.Entity, name string) int {
 // incidentVerdict is the bad verdict an incident about the workload,
 // opened while the release was watched, says, with its ID: Regressed for
 // the release watch's finding, Failed for any other failure people were
-// told of (Down is decided by the caller from the replicas).
+// told of (Down is decided by the caller from the replicas). While the
+// new revision serves every replica, an incident already resolved says
+// nothing against it: its failures ended, and the release is what
+// serves now (a forward fix of an earlier break is not a failure).
 func incidentVerdict(
 	r *Record, v View, id inventory.EntityID, next time.Time,
+	serving bool,
 ) (Verdict, string) {
 	end := r.At.Add(StallAfter + WatchWindow)
 	if !next.IsZero() && next.Before(end) {
@@ -162,7 +173,8 @@ func incidentVerdict(
 	verdict, found := Verdict(""), ""
 	for _, p := range v.Incidents {
 		if p.Opened.Before(r.At.Add(-time.Minute)) || p.Opened.After(end) ||
-			!about(v.Model, p, id) || !told(p) {
+			!about(v.Model, p, id) || !told(p) ||
+			serving && p.State == incident.Resolved {
 			continue
 		}
 		bad := Failed

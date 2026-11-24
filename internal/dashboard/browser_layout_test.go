@@ -49,15 +49,19 @@ var layoutChecks = []layoutCheck{
 })()`},
 	{name: "phone nav", path: "/", w: 390, h: 844,
 		ready: ".nav a", script: `(() => {
-  const tops = new Set([...document.querySelectorAll(".nav a")].
-    map((a) => Math.round(a.getBoundingClientRect().top)));
-  if (tops.size > 1) return "the links wrap onto " + tops.size + " rows";
+  // Every link shows whole, under its one name; they may wrap to a
+  // second row, never scroll out of sight.
   const nav = document.querySelector(".nav");
-  const last = [...nav.querySelectorAll("a")].pop();
-  const cut = last.getBoundingClientRect().right -
-    nav.getBoundingClientRect().right;
-  if (cut > 0.5) return "'" + last.textContent.trim() + "' is cut off by " +
-    Math.round(cut) + "px";
+  const tops = new Set([...nav.querySelectorAll("a")].
+    map((a) => Math.round(a.getBoundingClientRect().top)));
+  if (tops.size > 2) return "the links take " + tops.size + " rows";
+  for (const a of nav.querySelectorAll("a")) {
+    const cut = a.getBoundingClientRect().right -
+      nav.getBoundingClientRect().right;
+    if (cut > 0.5) return "'" + a.textContent.trim() + "' is cut off by " +
+      Math.round(cut) + "px";
+  }
+  if (!/kwatch\shealth/.test(nav.textContent)) return "kwatch health renamed";
   const wide = document.documentElement.scrollWidth - innerWidth;
   return wide > 0 ? "the page scrolls sideways by " + wide + "px" : "";
 })()`},
@@ -80,7 +84,7 @@ var layoutChecks = []layoutCheck{
   if (!/^Fix: update slack/.test(no)) return "a refusal says: " + no;
   return "";
 })()`},
-	{name: "notifications switch", path: "/", w: 1440, h: 900,
+	{name: "notifications switch", path: "/settings", w: 1440, h: 900,
 		ready: "[data-ntf-toggle]", script: `(() => {
   const b = document.querySelector("[data-ntf-toggle]");
   return b.getClientRects().length ? "" : "the switch is not shown";

@@ -24,10 +24,15 @@ import (
 //	repage   -> RepageWindow is how soon after a page resolved the same
 //	            failure may not page again. It is longer than MaxHold, so
 //	            a flapping page cannot page on every cycle.
+//	reopen   -> ReopenWindow is how soon after its resolve the same
+//	            failure continues the told incident ("failing again");
+//	            a later one is a new incident linked as its previous.
 //	remind   -> an open, announced incident is said again after
 //	            PageRemindAfter (first reminder of a page) and then every
 //	            RemindEvery; incidents with no message of their own are
-//	            said again every ChronicRemindEvery.
+//	            said again every ChronicRemindEvery, backing off. A
+//	            problem with no news for UnchangedFor is said again at
+//	            most every UnchangedFor; none in the restore grace.
 //	update   -> MaterialGap spaces material-change updates, FixWatch
 //	            spaces the two fix-attempt updates, ReviseSettle waits for
 //	            a revised cause or a reopening to collect its news.
@@ -99,12 +104,23 @@ const (
 	// may not page again: it is the same outage flapping, so it
 	// notifies instead.
 	RepageWindow = 2 * time.Hour
+	// ReopenWindow is how soon after a told incident resolved the same
+	// failure reopens it: a quick return is the outage flapping. One
+	// that starts later is a new outage, a new incident linked to the
+	// old one as its previous (it still does not page within
+	// RepageWindow). It is shorter than RepageWindow, so an unrelated
+	// outage hours later is not one more message in an old thread.
+	ReopenWindow = time.Hour
 	// DigestReportEvery caps how long a periodic recurrence may stay out
 	// of the digests: at least one digest a day lists it.
 	DigestReportEvery = format.Day
 	// RemindEvery is how often an incident that stays open is said
 	// again: "still failing, for a week now".
 	RemindEvery = format.Week
+	// UnchangedFor caps the reminders of a problem that had no news
+	// for this long: it is reminded at most once per UnchangedFor. A
+	// deletion stuck for a year is not worth a weekly message.
+	UnchangedFor = 30 * format.Day
 )
 
 // Resolve holds.
@@ -113,9 +129,9 @@ const (
 	// short of replicas with failing pods (stillBroken): after this long
 	// without a finding the incident resolves anyway. A pod no detector
 	// flags would otherwise keep it, and its paging alert, open for
-	// ever. It equals RepageWindow, so a failure that returns after the
-	// resolve reopens the same incident, and the coverage check hands
-	// back a workload that is really down.
+	// ever. It equals RepageWindow; a failure that returns within
+	// ReopenWindow of the resolve reopens the same incident, and the
+	// coverage check hands back a workload that is really down.
 	StillBrokenMax = RepageWindow
 )
 

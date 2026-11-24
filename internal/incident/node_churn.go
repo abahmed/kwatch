@@ -110,6 +110,7 @@ func touchesNode(
 // every node is listed). Expiry of a displacement needs no look: it is
 // read from the clock in displacedPods.
 func (m *Manager) observeNodes(model inventory.Reader, now time.Time) {
+	m.notePlanned(model, now)
 	if !m.nodesDirty && m.churn.baselined && m.wave.nodes != nil {
 		return
 	}

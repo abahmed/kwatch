@@ -106,6 +106,18 @@ func (m *Model) Entities(kind Kind) []EntityID {
 	return out
 }
 
+// Count returns how many entities of one kind are present. Unlike
+// Entities it copies and sorts nothing.
+func (m *Model) Count(kind Kind) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	n := 0
+	for _, ids := range m.byKind[kind] {
+		n += len(ids)
+	}
+	return n
+}
+
 // Changes returns the entity's changes at or after since, oldest first.
 // Deleted entities keep their history until pruned.
 func (m *Model) Changes(id EntityID, since time.Time) []Change {
@@ -135,7 +147,8 @@ type Stats struct {
 	Notes     int
 	NoteParts int
 	Health    int
-	// Recent and Churn are the cluster-wide change rings.
+	// Recent and Churn are the cluster-wide change rings; Churn counts
+	// the pod and ReplicaSet churn and the scale-only edits.
 	Recent int
 	Churn  int
 	// Baselines is how many workloads have a rolling baseline.
@@ -148,7 +161,8 @@ func (m *Model) Stats() Stats {
 	defer m.mu.RUnlock()
 	stats := Stats{
 		Relations: m.edges.n, Recent: len(m.history.recent),
-		Churn: len(m.history.churn), Baselines: m.history.baselines.Len(),
+		Churn:     len(m.history.churn) + len(m.history.scale),
+		Baselines: m.history.baselines.Len(),
 	}
 	for _, rec := range m.records {
 		if rec.present {
@@ -215,14 +229,7 @@ func (m *Model) pruneRecords(
 		}
 		rec.notes = pruneNotes(rec.notes, before)
 		rec.dropOrphanParts()
-		kept := rec.changes[:0]
-		for _, change := range rec.changes {
-			if !change.At.Before(keepFrom) {
-				kept = append(kept, change)
-			}
-		}
-		removed += len(rec.changes) - len(kept)
-		rec.changes = kept
+		removed += rec.pruneChanges(keepFrom)
 		rec.health = pruneHealth(rec.health, keepFrom)
 		// keepFrom is ChangeRetention ago; served revisions are kept
 		// for ServedRetention.

@@ -194,3 +194,14 @@ func TestEditedStateFileDoesNotUnlockPro(t *testing.T) {
 
 	require.False(t, fileRunsPro(path, stateNow))
 }
+
+// A file that is not a state file reads as not Pro, whether the open
+// fails or a read panics on it: the peek skips the page check.
+func TestFileRunsProReadsAGarbageFileAsNotPro(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+	require.NoError(t, os.WriteFile(path, make([]byte, 64<<10), 0o600))
+
+	require.NotPanics(t, func() {
+		require.False(t, fileRunsPro(path, stateNow))
+	})
+}

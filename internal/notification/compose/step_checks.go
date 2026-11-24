@@ -15,6 +15,8 @@ var stepChecks = []struct{ prefix, check string }{
 	{"kubectl get mutatingwebhookconfiguration", incident.CheckAdmission},
 	{"kubectl get validatingwebhookconfiguration", incident.CheckAdmission},
 	{"kubectl get ingress,pods", incident.CheckConfig},
+	// The pods' specs, read for the Secret they use.
+	{"kubectl get pods -o yaml", incident.CheckConfig},
 	{"kubectl get configmap ", incident.CheckConfig},
 	{"kubectl get ingress", incident.CheckIngress},
 	{"kubectl get --raw ", incident.CheckControlPlane},
@@ -27,7 +29,6 @@ var stepChecks = []struct{ prefix, check string }{
 	{"kubectl describe pods ", incident.CheckPodState},
 	{"kubectl describe node ", incident.CheckNode},
 	{"kubectl describe pvc ", incident.CheckVolume},
-	{"kubectl describe secret ", incident.CheckConfig},
 	{"kubectl describe service ", incident.CheckService},
 	{"kubectl describe ", incident.CheckObject},
 	{"kubectl logs ", incident.CheckLogs},

@@ -77,10 +77,19 @@ func stateRunsPro(statePath string, now time.Time) bool {
 }
 
 // fileRunsPro opens path read-only and reports whether it records a Pro
-// session whose cached lease is still inside its grace.
-func fileRunsPro(path string, now time.Time) bool {
+// session whose cached lease is still inside its grace. It only peeks at
+// two values, so it skips the page walk a normal open does (about 3
+// seconds on 180 MB); the real open that follows checks the file. A
+// damaged page can make a read panic: that reads as not Pro.
+func fileRunsPro(path string, now time.Time) (pro bool) {
+	defer func() {
+		if recover() != nil {
+			pro = false
+		}
+	}()
 	store, err := storage.Open(path, storage.Options{
 		Now: func() time.Time { return now }, DeferRepair: true,
+		SkipPageCheck: true,
 	})
 	if err != nil {
 		return false

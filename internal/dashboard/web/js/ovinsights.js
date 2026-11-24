@@ -160,8 +160,15 @@
     return c;
   }
 
+  /* FEW_ON_NODES: below this many issues on the nodes listed, or with
+     no node holding two, the card shows no pattern: it is left out. */
+  var FEW_ON_NODES = 3;
+
   function nodes(list) {
     if (!list || !list.length) return null;
+    var sum = 0, top = 0;
+    list.forEach(function (n) { sum += n.issues || 0; top = Math.max(top, n.issues || 0); });
+    if (sum < FEW_ON_NODES || top < 2) return null;
     var c = V.card("Nodes with the most issues", "Nodes the most active issues run on.", false,
       V.seeAll("/issues?status=active"));
     var max = 0;

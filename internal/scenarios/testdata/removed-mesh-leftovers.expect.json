@@ -1,0 +1,8 @@
+{
+  "name": "removed-mesh-leftovers",
+  "description": "A removed mesh control plane left a budget that selects nothing, an autoscaler of its gone Deployment and an injector webhook with no pods: one digest incident rooted at the Deployment.",
+  "root": "deployment/mesh-system/mesh-control",
+  "tier": "digest",
+  "maxMessages": 1,
+  "tail": "1h0m0s"
+}

@@ -1,0 +1,19 @@
+{
+  "name": "shared-dependency-removed-overnight",
+  "description": "A scheduled job deletes the shared cache Service and its pods in the evening; 27 workloads that use it fail readiness within three minutes, one more crashes on its own setting; the cache returns next morning.",
+  "root": "service/data/cache",
+  "otherRoots": [
+    "deployment/shop/reports"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "maxPages": 1,
+  "alone": true,
+  "mustNotBlame": [
+    "service/shop/legacy-search",
+    "node//n1",
+    "node//n2",
+    "node//n3"
+  ],
+  "tail": "20m0s"
+}

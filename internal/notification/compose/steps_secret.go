@@ -33,17 +33,33 @@ func secretSteps(
 	case ingresses == 0 && others == 0 && unusedLeftover(members):
 		return []notification.Step{{
 			// 0 means no Ingress or pod of the namespace names it.
-			Text: "Check that nothing in its namespace names the " +
-				"Secret (0 means nothing does)",
+			// An app that reads it through the API names it nowhere
+			// kwatch can see, so the step claims no more than that.
+			Text: "Check that no pod or Ingress in its namespace " +
+				"names the Secret (0 means none does; an app that " +
+				"reads it through the API is not counted)",
 			Command: "kubectl get ingress,pods" + ns +
 				" -o yaml | grep -c -F " + name,
 		}}
 	}
+	// A step never reads the Secret itself: its keys may be what the
+	// reader must not see, and reading Secrets is a right many lack.
+	// The pods' specs say which keys they expect from it.
 	return []notification.Step{{
-		// describe lists each key and its size, never a value.
-		Text:    "List the keys of the Secret the pods depend on",
-		Command: "kubectl describe secret " + name + ns,
+		Text: "See where the pods use the Secret and which keys " +
+			"they expect from it",
+		Command: "kubectl get pods -o yaml" + ns + " | grep -n -B2 -E " +
+			secretUsePattern(root.Name),
 	}}
+}
+
+// secretUsePattern is a grep -E pattern for the lines of a pod spec
+// that name the Secret: a volume's secretName, or the name of an
+// envFrom, secretKeyRef or image pull reference, whose key is printed
+// just above it.
+func secretUsePattern(secret string) string {
+	return quote("(name|secretName): " +
+		strings.ReplaceAll(secret, ".", `\.`) + "$")
 }
 
 // secretUsers counts the Ingresses and the other objects the findings
@@ -78,8 +94,8 @@ func ingressName(members []detection.Finding) string {
 	return ""
 }
 
-// unusedLeftover reports the finding of an expired certificate that
-// nothing references: a warning, where one in use is critical.
+// unusedLeftover reports the finding of an expired certificate that no
+// pod or Ingress uses: a warning, where one in use is critical.
 func unusedLeftover(members []detection.Finding) bool {
 	for _, f := range members {
 		if f.Reason == reasons.TLSCertExpired &&

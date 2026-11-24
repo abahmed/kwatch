@@ -54,6 +54,7 @@ var nodeLifecycleRows = []Row{
 		Effect: podSide(detection.ModePending, detection.ModeUnschedulable),
 		Prior:  0.75,
 	},
+	nodeRemovedArchRow,
 }
 
 // removedNodeHops lead from a pod that waits for a node to the nodes

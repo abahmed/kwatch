@@ -24,7 +24,8 @@ func budgetMisconfiguration(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	out := conditionFindings(ctx, e)
-	if ctx.Model == nil || !ctx.Synced(kube.KindPod) {
+	if ctx.Model == nil || !ctx.SyncedFor(kube.KindPod,
+		reasons.PdbSelectsNothing, reasons.PdbOverlap) {
 		return out
 	}
 	selected := budgetPods(ctx, e.ID)
@@ -45,7 +46,12 @@ func budgetSelectsNothing(
 		text(e, kube.AttrSelector) == "" {
 		return detection.Finding{}, false
 	}
-	since := valueSince(e, kube.AttrExpectedPods)
+	// A workload scaled to zero whose template the selector matches
+	// is the budget's when it runs again: nothing is misconfigured.
+	if kube.SelectedByTemplate(ctx.Model, e) {
+		return detection.Finding{}, false
+	}
+	since := budgetEmptySince(e)
 	if !sustained(ctx, "pdb-selects-nothing", since, DefaultBudgetBlocked) {
 		return detection.Finding{}, false
 	}
@@ -57,6 +63,28 @@ func budgetSelectsNothing(
 			Label: "selector", Value: text(e, kube.AttrSelector),
 		}},
 	}, true
+}
+
+// budgetEmptySince is when the disruption controller found the budget
+// without pods, by the cluster's record: the time its DisruptionAllowed
+// condition turned False. Without it the start is unknown and stays
+// zero, so a budget that has been empty for years is not dated by
+// kwatch's own first sight of it after a restart. The condition is also
+// False, with the same reason, for a budget that had pods and never
+// allowed a disruption (minAvailable 1 on one replica), so its time can
+// be long before the pods went. When kwatch saw the expected pod count
+// change to zero, after it first saw the budget, that is the later and
+// true start.
+func budgetEmptySince(e inventory.Entity) time.Time {
+	status, _, since := condition(e, "DisruptionAllowed")
+	if status != "False" {
+		return time.Time{}
+	}
+	if emptied := valueSince(e, kube.AttrExpectedPods); emptied.After(
+		e.FirstSeen) && emptied.After(since) {
+		return emptied
+	}
+	return since
 }
 
 // budgetOverlap reports pods this budget shares with another budget of

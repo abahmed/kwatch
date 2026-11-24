@@ -190,7 +190,7 @@ func TestBrowserHeldIssueSaysUntilWhen(t *testing.T) {
 		"until ~") || len(note) < 45 {
 		t.Errorf("level note is %q", note)
 	}
-	if !strings.Contains(page, "Nobody was alerted yet: the page is "+
+	if !strings.Contains(page, "Urgent — not sent yet: the page is "+
 		"held while the cluster scales, until ~") {
 		t.Errorf("who was alerted does not mention the hold: %q", page)
 	}

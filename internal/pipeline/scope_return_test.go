@@ -72,3 +72,28 @@ func TestCoverageHandBackContainsAPanic(t *testing.T) {
 	assert.Greater(t, metrics.DefaultRegistry().PanicCount("incident"),
 		panics, "counted")
 }
+
+// Every unheard incident is asked about at most once per rescopeEvery,
+// however often the loop wakes: each ask copies them all and runs the
+// scope on each member.
+func TestBackInScopeAsksAtMostOncePerBound(t *testing.T) {
+	held, pending := true, false
+	h := heldHarness(t, &held, &pending)
+	h.run(h.now.Add(5*time.Minute), 10*time.Second)
+	require.Len(t, h.engine.deps.Incidents.Unheard(), 1)
+	a := h.engine.announcer
+	asked := 0
+	scope := a.scope
+	a.scope = func(p incident.Incident) bool {
+		asked++
+		return scope(p)
+	}
+	start := h.now.Add(rescopeEvery)
+	for tick := time.Duration(0); tick < rescopeEvery; tick += 100 *
+		time.Millisecond {
+		a.backInScope(start.Add(tick), nil)
+	}
+	assert.Equal(t, 1, asked, "300 wakes, one ask")
+	a.backInScope(start.Add(rescopeEvery), nil)
+	assert.Equal(t, 2, asked, "asked again after the bound")
+}

@@ -31,7 +31,8 @@ func missingScaleTarget(
 	for _, target := range ctx.Model.Related(e.ID, inventory.Scales,
 		inventory.Outgoing) {
 		title, known := scalableKinds[target.Kind]
-		if !known || !ctx.Synced(target.Kind) || ctx.Model.Exists(target) {
+		if !known || ctx.Model.Exists(target) ||
+			!ctx.SyncedFor(target.Kind, reasons.HPATargetMissing) {
 			continue
 		}
 		since := missingSince(ctx, e)

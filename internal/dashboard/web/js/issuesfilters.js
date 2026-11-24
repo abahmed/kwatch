@@ -37,6 +37,7 @@
     var age = $('[data-f="age"]'), sortSel = $('[data-f="sort"]');
     var dirBtn = $("[data-f-dir]");
     var statusBtns = KW.$$("[data-status]", box);
+    var tabs = $("[data-buckets]"), bucketBtns = KW.$$("[data-bucket]", box);
     var chips = KW.$$(".fchip", box);
     var f = LQ().blank();
     var debounce = 0, facets = {}, modes = {};
@@ -141,6 +142,11 @@
       var desc = v.dir ? v.dir === "desc" : !!KW.issueTable.DESCENDS[v.sort];
       dirBtn.textContent = desc ? "↓ High to low" : "↑ Low to high";
       pressed(statusBtns, "status", v.status);
+      tabs.hidden = v.status !== "active";
+      bucketBtns.forEach(function (b) {
+        b.setAttribute("aria-selected", b.dataset.bucket === v.bucket ? "true" : "false");
+        b.tabIndex = b.dataset.bucket === v.bucket ? 0 : -1;
+      });
       chips.forEach(function (b) {
         b.setAttribute("aria-pressed", v.severity.indexOf(b.dataset.sev) >= 0 ? "true" : "false");
       });
@@ -194,7 +200,26 @@
       change({ dir: desc ? "asc" : "desc" });
     });
     statusBtns.forEach(function (b) {
-      b.addEventListener("click", function () { change({ status: b.dataset.status }); });
+      b.addEventListener("click", function () {
+        var next = { status: b.dataset.status };
+        // Back to Active from another list: its usual first tab.
+        if (next.status === "active" && f.status !== "active") {
+          next.bucket = LQ().implicit(LQ().copy(f, next));
+        }
+        change(next);
+      });
+    });
+    bucketBtns.forEach(function (b, i) {
+      b.addEventListener("click", function () { change({ bucket: b.dataset.bucket }); });
+      // Tabs: arrows move between them.
+      b.addEventListener("keydown", function (e) {
+        var step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+        if (!step) return;
+        e.preventDefault();
+        var to = bucketBtns[(i + step + bucketBtns.length) % bucketBtns.length];
+        to.focus();
+        to.click();
+      });
     });
     chips.forEach(function (b) {
       b.addEventListener("click", function () {
@@ -223,6 +248,14 @@
         KW.$("[data-n]", b).textContent = n(counts[k]);
         if (narrowed) b.setAttribute("aria-label", STATUS_WORDS[k]);
         else b.setAttribute("aria-label", STATUS_WORDS[k] + ", " + KW.plural(counts[k], "issue", "issues"));
+      });
+      var bk = facets.bucket || {}, every = 0;
+      ["attention", "ongoing", "cleanup"].forEach(function (k) { every += bk[k] || 0; });
+      bucketBtns.forEach(function (b) {
+        var k = b.dataset.bucket, c = k === "all" ? every : bk[k] || 0;
+        KW.$("[data-n]", b).textContent = n(c);
+        KW.$("[data-n]", b).hidden = !facets.bucket;
+        b.setAttribute("aria-label", b.firstChild.textContent + ", " + KW.plural(c, "issue", "issues"));
       });
       chips.forEach(function (b) {
         var c = (facets.severity || {})[b.dataset.sev] || 0;

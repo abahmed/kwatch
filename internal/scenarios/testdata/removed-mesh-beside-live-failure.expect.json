@@ -1,0 +1,11 @@
+{
+  "name": "removed-mesh-beside-live-failure",
+  "description": "Leftovers of a removed mesh beside a Deployment of the namespace that crash-loops: the crash is an incident of its own.",
+  "root": "deployment/mesh-system/mesh-gateway",
+  "otherRoots": [
+    "deployment/mesh-system/mesh-control"
+  ],
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "1h0m0s"
+}

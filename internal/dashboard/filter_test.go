@@ -50,6 +50,10 @@ func TestFilterNarrowsTheListOnTheServer(t *testing.T) {
 		"/api/incidents?status=resolved&since=31h":       "e,r",
 		"/api/incidents?status=resolved&state=open":      "",
 		"/api/incidents?status=all&state=resolved&q=pay": "e",
+		"/api/incidents?state=resolved":                  "e,r",
+		"/api/incidents?state=all":                       "l,n,u,e,r",
+		"/api/incidents?state=active":                    "u,n,l",
+		"/api/incidents?status=all":                      "l,n,u,e,r",
 	}
 	for path, want := range cases {
 		w := get(t, s, path)
@@ -81,7 +85,8 @@ func TestFilterRejectsUnknownValues(t *testing.T) {
 	for _, path := range []string{
 		"/api/incidents?severity=critical",
 		"/api/incidents?severity=page,notify",
-		"/api/incidents?state=active",
+		"/api/incidents?state=bogus",
+		"/api/incidents?state=active&state=bogus",
 		"/api/incidents?status=open",
 		"/api/incidents?since=yesterday",
 		"/api/incidents?since=2026-01-01T00:00:00Z",

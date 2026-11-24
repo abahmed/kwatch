@@ -1,0 +1,37 @@
+10:16:35 settled
+🟠 reports in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "fatal: unknown setting "export.mode" in /etc/reports.yaml". Its last run lasted ten seconds; four restarts since its pod was created about one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/reports -c app -n shop --previous
+🟠 reports in shop (prod-eu-1) keeps crashing.
+| 🟠 **reports** in **shop** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with `fatal: unknown setting "export.mode" in /etc/reports.yaml`.
+| Its last run lasted ten seconds; four restarts since its pod was created about one hour ago.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/reports -c app -n shop --previous
+| ```
+10:17:15 settled
+🟠 Service cache in data (prod-eu-1) was removed at 10:15 UTC; 18 workloads that use it are not ready. svc-01 calls cache, but there is no Service cache in data. From its log: "Error: Redis connection to cache.data:6379 failed - getaddrinfo ENOTFOUND cache.data". Affected: svc-01, svc-04 and svc-10 in billing; and 15 others. To see the pod's state and events, run kubectl describe pods svc-01- -n billing
+🟠 Service cache in data (prod-eu-1) was removed at 10:15 UTC; 18 workloads that use it are not ready.
+| 🟠 Service **cache** in **data** (**prod-eu-1**) was removed at 10:15 UTC; 18 workloads that use it are not ready.
+| **svc-01** calls **cache**, but there is no Service **cache** in **data**.
+| From its log:
+| ```
+| Error: Redis connection to cache.data:6379 failed - getaddrinfo ENOTFOUND cache.data
+| ```
+| Affected: **svc-01**, **svc-04** and **svc-10** in **billing**; and 15 others.
+| To see the pod's state and events, run
+| ```
+| kubectl describe pods svc-01- -n billing
+| ```
+20:33:00 healthy for 3m0s
+✅ Service cache in data (prod-eu-1) is healthy again. Someone changed service cache at 20:30 UTC; it was failing for ten hours. 27 pods were affected.
+✅ Service cache in data (prod-eu-1) is healthy again.
+| ✅ Service **cache** in **data** (**prod-eu-1**) is healthy again.
+| Someone changed service **cache** at 20:30 UTC; it was failing for ten hours.
+| 27 pods were affected.
+20:34:00 healthy for 3m0s
+✅ reports in shop (prod-eu-1) is healthy again. It was failing for ten hours and recovered on its own.
+✅ reports in shop (prod-eu-1) is healthy again.
+| ✅ **reports** in **shop** (**prod-eu-1**) is healthy again.
+| It was failing for ten hours and recovered on its own.

@@ -21,7 +21,8 @@ cannot read its metrics.
    state or Warning event that is a failure by itself), `.progress()`,
    `.shown(kinds...)` (a Warning event reason that the state of those kinds
    already shows; a repeat of the same reason on another kind is reported as
-   an unusual event) and `.label(...)`. `modeByReason` and every lookup such
+   an unusual event), `.trial()` (new in the unreleased version, see step 6)
+   and `.label(...)`. `modeByReason` and every lookup such
    as `DigestOnly` or `EventSeverity` are derived from the table, so
    nothing else lists the reason. Every mode is a `detection.Mode` constant
    in `internal/detection/mode_names.go`; a new mode gets its constant
@@ -93,6 +94,22 @@ cannot read its metrics.
    failure joins it. A critical finding that should page, not just notify,
    needs a rule in `pageRules` in `internal/incident/page_rules.go`.
    Everything else notifies by severity.
+
+   **A new reason starts on trial.** Mark its entry `.trial()`: for one
+   release its findings wait for the digest whatever their severity, so
+   they never notify or page on their own; another finding of the same
+   incident that is not on trial still raises the tier as usual. A
+   detector is only proven on real clusters, and a new one may meet states
+   that are years old (rc.1 sent `PdbSelectsNothing` straight to chat and
+   repeated budgets nobody had touched in years).
+   `TestEveryReasonDeclaresItsTrialStatus` fails on a reason that is
+   neither marked `.trial()` nor listed in
+   `internal/detection/testdata/graduated_reasons.txt`, so no reason skips
+   its trial by accident. **Promotion is explicit:** after a release on real
+   clusters shows the reason is worth an interruption, remove `.trial()`
+   and add the reason to the "Promoted" section of that file with the
+   release it graduated in, and note it in `RELEASES.md`. A reason that
+   only ever belongs in the digest keeps `.digest()` when it graduates.
 7. **Test it.** Add a table test beside the detector, like
    `TestHPAConditionReasons` in
    `internal/detection/detectors/hpa_test.go`: build a model with

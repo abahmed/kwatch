@@ -86,12 +86,15 @@
 <script defer src="{{asset:js/map.js}}"></script>
 <script defer src="{{asset:js/ovinsights.js}}"></script>
 <script defer src="{{asset:js/ovcoverage.js}}"></script>
+<script defer src="{{asset:js/ovsince.js}}"></script>
 <script defer src="{{asset:js/lookfit.js}}"></script>
 <script defer src="{{asset:js/status.js}}"></script>
+<script defer src="{{asset:js/kwsetup.js}}"></script>
 <script defer src="{{asset:js/kwatchpage.js}}"></script>
 <script defer src="{{asset:js/refresh.js}}"></script>
 <script defer src="{{asset:js/push.js}}"></script>
 <script defer src="{{asset:js/notify.js}}"></script>
+<script defer src="{{asset:js/settings.js}}"></script>
 <script defer src="{{asset:js/main.js}}"></script>
 <script defer src="{{asset:js/keys.js}}"></script>
 </head>
@@ -142,10 +145,10 @@
             <ul data-legend-states></ul>
             <ul><li><b>Settled on its own</b>: it recovered while kwatch was still checking it, so nobody was alerted.</li></ul>
             <p>A list shows a state only where it differs: every Active issue is happening now, every Resolved one resolved.</p>
-            <p><b>Browser alerts</b> (in the side bar, or under Settings on a phone): this browser tells you about new issues at the level you pick, even when the tab is in the background.</p>
+            <p><b>Browser alerts</b> (under Settings): this browser tells you about new issues at the level you pick, even when the tab is in the background.</p>
             <p class="legend-h legend-keys">Keyboard</p>
             <ul class="keys legend-keys-list">
-              <li><kbd>g</kbd> then <kbd>o</kbd> Overview · <kbd>i</kbd> Issues · <kbd>a</kbd> Activity · <kbd>k</kbd> kwatch</li>
+              <li><kbd>g</kbd> then <kbd>o</kbd> Overview · <kbd>i</kbd> Issues · <kbd>a</kbd> Activity · <kbd>k</kbd> kwatch health</li>
               <li><kbd>/</kbd> Search the issues</li>
               <li><kbd>j</kbd> <kbd>k</kbd> Next / previous row, or issue when one is open beside the table</li>
               <li><kbd>Enter</kbd> Open the issue beside the table (Cmd or Ctrl and click: its own page in a new tab)</li>
@@ -155,7 +158,6 @@
             </ul>
           </div>
         </details>
-        <button class="who-b btn btn-sm" type="button" data-who-toggle aria-expanded="false" aria-controls="who">Settings</button>
       </div>
       <p class="side-cluster" data-cluster hidden><span class="sr-only">Cluster: </span><span class="cl-name" data-cluster-name></span><span class="chip c-acked cl-env" data-cluster-env title="app.environment marks this cluster as non-production, so kwatch alerts your channels but never pages anyone." hidden>Non-production</span></p>
       <nav class="nav" aria-label="Dashboard">
@@ -163,20 +165,9 @@
         <a href="/issues" data-link data-nav="issues">Issues<span class="count" data-badge hidden></span></a>
         <a href="/activity" data-link data-nav="activity">Activity</a>
         <a href="/kwatch" data-link data-nav="kwatch"><span class="nav-pre">kwatch&nbsp;</span><span class="nav-end">health</span><span class="nav-dot" data-kw-dot hidden></span><span class="sr-only" data-kw-dot-sr></span></a>
+        <a href="/settings" data-link data-nav="settings">Settings<span class="nav-ind" data-ntf-ind hidden>Alerts on</span></a>
       </nav>
       <div class="who" id="who">
-        <div class="ntf" data-ntf>
-          <button class="ntf-b" type="button" data-ntf-toggle aria-pressed="false" aria-describedby="ntf-hint"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg><span>Browser alerts</span><span class="ntf-state" data-ntf-state>Off</span></button>
-          <p class="ntf-hint" id="ntf-hint" data-ntf-hint hidden></p>
-          <div class="ntf-opts" data-ntf-opts hidden>
-            <label class="ntf-l">Tell me about<select name="ntf-min" data-ntf-min><option value="page">Urgent only</option><option value="notify">Urgent and needs attention</option><option value="digest">Everything</option></select></label>
-            <label class="ntf-c"><input type="checkbox" name="ntf-resolved" data-ntf-resolved>Also when resolved</label>
-            <label class="ntf-c" data-ntf-open-l><input type="checkbox" name="ntf-open" data-ntf-open>Even when this tab is open</label>
-            <p class="ntf-mode" data-ntf-mode></p>
-            <button class="link ntf-test" type="button" data-ntf-test>Send a test notification</button>
-          </div>
-        </div>
-        <div class="tz" role="group" aria-label="Show times in"><span>Times</span><button class="tz-b" type="button" data-tz="local" aria-pressed="true">Local</button><button class="tz-b" type="button" data-tz="utc" aria-pressed="false">UTC</button></div>
         <div class="who-acct"><span>Read-only dashboard</span><button class="link" type="button" data-signout>Sign out</button></div>
       </div>
     </header>
@@ -185,6 +176,36 @@
       <div class="offline-pin"><div class="offline" data-offline role="status" aria-live="polite" hidden><span data-offline-text></span><button class="btn btn-sm" type="button" data-offline-try>Try now</button></div></div>
       <nav class="incnav" aria-label="Issues in your list" data-incnav hidden><a class="btn btn-sm" data-link data-incnav-prev aria-keyshortcuts="[" title="Previous issue in your list (press [)">← Previous</a><span class="pager-pos" data-incnav-pos></span><a class="btn btn-sm" data-link data-incnav-next aria-keyshortcuts="]" title="Next issue in your list (press ])">Next →</a></nav>
       <main class="content" id="main" tabindex="-1"></main>
+      <div hidden data-settings-home>
+        <section class="settings" data-settings aria-labelledby="settings-h">
+          <div class="page-head"><div><h1 id="settings-h">Settings</h1><p class="sub">These are kept in this browser only.</p></div></div>
+          <div class="set-grid">
+            <div class="set-g">
+              <h2>Display</h2>
+            <div class="look-set" role="group" aria-label="Display">
+              <div class="tz" role="group" aria-label="Theme"><span>Theme</span><button class="tz-b" type="button" data-theme-b="system" aria-pressed="true">System</button><button class="tz-b" type="button" data-theme-b="light" aria-pressed="false">Light</button><button class="tz-b" type="button" data-theme-b="dark" aria-pressed="false">Dark</button></div>
+              <label class="look-l">Text size<select name="look-text" data-look-text><option value="s">Small</option><option value="m">Normal</option><option value="l">Large</option><option value="xl">Extra large</option></select></label>
+              <label class="look-c"><input type="checkbox" name="look-contrast" data-look-contrast>High contrast</label>
+            </div>
+            <div class="tz" role="group" aria-label="Show times in"><span>Times</span><button class="tz-b" type="button" data-tz="local" aria-pressed="true">Local</button><button class="tz-b" type="button" data-tz="utc" aria-pressed="false">UTC</button></div>
+            </div>
+            <div class="set-g">
+              <h2>Browser alerts</h2>
+            <div class="ntf" data-ntf>
+              <button class="ntf-b" type="button" data-ntf-toggle aria-pressed="false" aria-describedby="ntf-hint"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg><span>Browser alerts</span><span class="ntf-state" data-ntf-state>Off</span></button>
+              <p class="ntf-hint" id="ntf-hint" data-ntf-hint hidden></p>
+              <div class="ntf-opts" data-ntf-opts hidden>
+                <label class="ntf-l">Tell me about<select name="ntf-min" data-ntf-min><option value="page">Urgent only</option><option value="notify">Urgent and needs attention</option><option value="digest">Everything</option></select></label>
+                <label class="ntf-c"><input type="checkbox" name="ntf-resolved" data-ntf-resolved>Also when resolved</label>
+                <label class="ntf-c" data-ntf-open-l><input type="checkbox" name="ntf-open" data-ntf-open>Even when this tab is open</label>
+                <p class="ntf-mode" data-ntf-mode></p>
+                <button class="link ntf-test" type="button" data-ntf-test>Send a test notification</button>
+              </div>
+            </div>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
   </div>
 </template>
@@ -206,6 +227,7 @@
         <p class="field-error" id="pwerr" role="alert" data-error hidden></p>
         <button class="btn btn-primary btn-block" type="submit" data-submit>Sign in</button>
       </form>
+      {{signin-help}}
       <p class="help"><a class="ulink" href="https://github.com/abahmed/kwatch/blob/{{docs-ref}}/docs/dashboard.md#how-to-get-the-password" target="_blank" rel="noopener noreferrer">How to get the password</a></p>
     </div>
   </div>
@@ -247,7 +269,7 @@
       </div>
       <button class="btn btn-sm ftoggle" type="button" data-ftoggle aria-expanded="false" aria-controls="fmore">Filters</button>
       <p class="sr-only" id="stsw-help">Active is what is failing now. Resolved is what stopped failing in the last 7 days. All shows both.</p>
-      <details class="shint" data-shint><summary aria-label="Search tips" title="Search tips">?</summary><div class="shint-pop"><p class="shint-h">Search tips</p><ul>
+      <details class="shint" data-shint><summary title="Search tips">Search tips</summary><div class="shint-pop"><p class="shint-h">Search tips</p><ul>
         <li><code>ns:staging</code> one namespace</li>
         <li><code>is:urgent</code> one alert level</li>
         <li><code>"out of memory"</code> these words together</li>
@@ -256,6 +278,9 @@
         <li><code>state:open</code> <code>state:flapping</code> one state · <code>is:stopped</code> stopped tracking</li>
         <li><code>age:&lt;2h</code> started in the last 2 hours · <code>age:&gt;1d</code> going on over a day</li>
       </ul><button class="link shint-more" type="button" data-shint-more aria-expanded="false">More</button></div></details>
+    </div>
+    <div class="bktabs" role="tablist" aria-label="Parts of the active list" data-buckets hidden>
+      <button class="bktab" type="button" role="tab" data-bucket="attention" aria-selected="true" aria-controls="issues-table" title="Issues that started or changed in the last day.">Needs attention<span class="fc-n" data-n></span></button><button class="bktab" type="button" role="tab" data-bucket="ongoing" aria-selected="false" aria-controls="issues-table" title="Open for over a day and unchanged since.">Ongoing<span class="fc-n" data-n></span></button><button class="bktab" type="button" role="tab" data-bucket="cleanup" aria-selected="false" aria-controls="issues-table" title="Leftovers: objects stuck while deleted, unused Services or claims, expired certificates nothing uses.">Cleanup<span class="fc-n" data-n></span></button><button class="bktab" type="button" role="tab" data-bucket="all" aria-selected="false" aria-controls="issues-table" title="Every active issue.">All active<span class="fc-n" data-n></span></button>
     </div>
     <div class="factive" data-factive role="group" hidden></div>
     <div class="fmore" id="fmore" data-fmore>
@@ -283,11 +308,8 @@
       <div class="vopts-pop">
         <div class="vo-grid">
           <label>Density<select name="vo-density" data-vo-density><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
-          <label>Rows per page<select name="vo-size" data-vo-size><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
           <label>Issues opens with<select name="vo-status" data-vo-status><option value="active">Active</option><option value="resolved">Resolved</option><option value="all">All</option></select></label>
           <label>Order<select name="vo-sort" data-vo-sort></select></label>
-          <label>Text size<select name="vo-text" data-vo-text><option value="s">Small</option><option value="m">Normal</option><option value="l">Large</option><option value="xl">Extra large</option></select></label>
-          <label class="vo-check"><input type="checkbox" name="vo-contrast" data-vo-contrast>High contrast</label>
         </div>
         <p class="vo-colsnote">Which columns show, their order and width: <button class="link" type="button" data-vo-cols>Columns</button></p>
         <h3 class="vo-h">Saved views</h3>

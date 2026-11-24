@@ -1,0 +1,7 @@
+10:31:15 digest
+🟡 kwatch summary (prod-eu-1): one new low-priority problem. Scaled to 0 but still routed in namespace demo (3 workloads): cart, search, wishlist. Not urgent: kwatch alerts on its own if it gets worse.
+🟡 kwatch summary (prod-eu-1): one new low-priority problem.
+| 🟡 **kwatch summary** · prod-eu-1 — 1 problem
+|
+| **Problems**
+| - Scaled to 0 but still routed in namespace **demo** (3 workloads): **cart**, **search**, **wishlist**

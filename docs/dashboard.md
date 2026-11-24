@@ -115,9 +115,16 @@ Environment overrides set by the chart: `KWATCH_DASHBOARD_ENABLED`,
 `KWATCH_DASHBOARD_PORT`, `KWATCH_DASHBOARD_TRUSTED_PROXIES` (comma
 separated), `KWATCH_DASHBOARD_TLS_CERT`, `KWATCH_DASHBOARD_TLS_KEY`.
 
+**Settings** is one item in the side bar (and in the phone's top links)
+that opens its own page, `/settings`, which you can bookmark. It holds
+**Theme** (System, Light or Dark), **Text size**, **High contrast**,
+**Times** (Local or UTC) and **Browser alerts**. They apply at once and
+are kept in this browser only. The item shows "Alerts on" when browser
+alerts are on. Rows per page is the one control under the Issues table.
+
 ## Browser alerts
 
-**Browser alerts** in the side bar (under **Settings** on a phone) turns on
+**Browser alerts**, on the Settings page, turns on
 browser notifications for this browser: kwatch sends each change at the
 level you pick through the browser's push service (Web Push, encrypted
 for that browser), so they arrive with every dashboard tab closed and
@@ -127,7 +134,10 @@ before alerting is never told, neither new nor resolved. With browser
 alerts off a tab reads nothing for them. **Send a test notification** checks the
 path. Signing out, turning them off, 30 days unseen or a new password
 stops them; at most 100 browsers are kept. A service worker (`/sw.js`)
-shows them and caches nothing.
+shows them and caches nothing. On an iPhone or iPad, Safari shows
+notifications only for a page added to the Home Screen: in a Safari tab
+the button says "On iPhone: Share → Add to Home Screen, open kwatch from
+there, then turn on alerts."
 
 ## Pages
 
@@ -144,7 +154,15 @@ shows them and caches nothing.
   before you set `oldProblemDays`, or kept from before a restart) moves
   to this list without a message.
 - **Issues** (`/issues`): every issue in one table, with search, filters
-  and saved views. Active, Resolved and All are tabs on it. An issue that
+  and saved views. Active, Resolved and All are tabs on it, and the
+  Active list has its own tabs, each with its count: **Needs attention**
+  (opens first), **Ongoing** (open for over a day and unchanged since:
+  it did not recover, come back or flap), **Cleanup** (leftovers that
+  are not urgent: groups of objects a removed controller left behind,
+  objects stuck while deleted, unused Services or claims, expired
+  certificates) and **All active**. A link with filters (from the
+  Overview, a saved view) opens on All active, as before; the tab is in
+  the address (`bucket=ongoing`). An issue that
   groups the objects a removed controller left behind carries a small
   "12 objects" chip.
 - **Issue page** (`/issues/<id>`): one issue, as plain questions, with the
@@ -158,6 +176,8 @@ shows them and caches nothing.
   objects lists them in Impact, under **Objects left behind**: kind,
   namespace/name and what is wrong, the first ten shown and "Show all".
 - **Activity** (`/activity`): what changed recently, newest first.
+- An address the dashboard has no page for says "Page not found", with
+  links to the Overview and the Issues.
 - **kwatch health** (`/kwatch`): whether kwatch itself is working, what it
   watches and where its alerts go. A cluster set as non-production says
   "Non-production cluster: nothing pages" under the verdict.
@@ -170,9 +190,13 @@ shows them and caches nothing.
 are happening now by level, such as "1 urgent · 10 need attention · 29
 low" (each part opens that level's issues); it is red only while
 something is urgent, amber while something needs attention, and calm
-otherwise. **Look at these first** lists up to five issues, most urgent
-first and then the longest running, each with a short cause, where it
-is, its level and how long ago it started. **Bad releases (last 24 h)
+otherwise. Under it, after an earlier visit from this browser, one line
+says what changed since: "Since your last visit (14:02): 2 new · 1
+resolved · 3 changes", with a link to Activity. **Look at these first**
+lists up to five issues, most urgent first and then the longest
+running, each with a short cause, where it is, its level and how long
+ago it started; every urgent issue shows, up to eight, and "+3 more
+urgent →" links the rest. **Bad releases (last 24 h)
 and changes behind active issues** joins the releases of the last 24
 hours that failed, went down or got worse with the active issues that
 started right after a change; each release links the issue it opened
@@ -186,7 +210,9 @@ issues go to chat only.", the median time to resolve those same
 resolved issues), one line saying how many issues settled on their own before
 anyone was alerted, the day-by-day chart, and the top causes beside
 where the trouble is, each with a small colour key and each number
-saying what it counts ("105 issues this week").
+saying what it counts ("105 issues this week"). **Nodes with the most
+issues** shows only when it shows a pattern: three issues or more on the
+nodes listed, and a node with two or more.
 
 **Issues** (`/issues`) shows one toolbar row: the Active, Resolved and
 All tabs, the search box and **Filters (N)**, which opens the other
@@ -195,7 +221,12 @@ Filters in use stay visible as chips under the row. On a wide screen the
 toolbar stays put and only the table scrolls, with the table taking
 most of the height. The
 Status column appears only when a row is in a state other than "Happening
-now" (and always on All). A repeat reads "failed again 3 times", the same
+now" (and always on All). Titles wrap to two lines rather than end in
+"…", and a second muted line gives the gist of why (the part of the
+title after the short one, else the likely cause), as on the Overview.
+An acknowledged issue carries an "Acknowledged" chip under its title.
+The quick view **Not acknowledged** shows the urgent and needs-attention
+issues nobody has acknowledged. A repeat reads "failed again 3 times", the same
 words as the issue page. On a phone every issue is a small card: the
 title, where it is ("staging · deployment/api", two lines at most), then
 its level, how long, and its marks ("failed again 2 times", "12
@@ -270,8 +301,10 @@ Once signed in, the side bar and the browser tab name the cluster
 `app.environment` says so. The sign-in page names no cluster: the name
 may say more than the address does.
 
-**Activity** (`/activity`) lists what changed in the last hour or 24
-hours, newest first. Each row is a sentence: "api in shop: resolved after
+**Activity** (`/activity`) lists what changed in the last 24 hours (or
+the last hour, or 7 days), newest first; the window you pick last is
+kept in this browser. Each row shows the clock time and how long ago
+("14:02", "2 h ago"); the issue's title is its tooltip. Each row is a sentence: "api in shop: resolved after
 12 min", "warehouse in shop: became Urgent (alerted the on-call person)" (with
 no pager connected: "sent as urgent"),
 "tracking in staging: settled on its own". The line at the top counts
@@ -279,6 +312,14 @@ the changes in words ("25 issues started, 4 got more urgent and 21
 resolved"). Four or more of the same change in one minute fold behind "8
 more resolved at 14:55". A resolve carries `lasted`, the seconds the issue
 went on, in `/api/activity`.
+
+A **Setup checklist** on the kwatch health page (`/kwatch#setup`) says
+which of five things are done, with one line on how to do each missing
+one: a cluster name, the heartbeat, at least one alert channel, Secrets
+watched, and complete permissions. The counts of what kwatch watches use
+the same words in the card and the details: watched, read, and
+"blocked: can't be read". "Last cluster check" shows the first full read
+of the cluster until a later check comes.
 
 ## Issue pages
 
@@ -305,6 +346,22 @@ proof line and log lines wrap. Press `t`, `p`, `i`, `a` or `d` to open a tab. Th
 same on every page: Urgent, Needs attention, Low and Quiet for how urgent
 an issue is; "Alerted" for what kwatch did to Slack or a pager; "Settled
 on its own" for an issue that recovered before anyone was alerted.
+
+Every command to copy says which cluster it is for, on the line above it
+(once above a list of steps): "Run against cluster prod-eu — check
+`kubectl config current-context` first", or "this cluster" with a link to
+name it. The commands the dashboard writes itself use one order: the
+verb and the object, then `-n`, then the other flags. When **What's
+wrong?** has nothing beyond the title it quotes what Kubernetes said last
+("Kubernetes says: FailedMount — …"), or is left out; the whole title
+under the heading shows only when it adds words. An issue that is Urgent
+or Needs attention but not sent yet says why in **Who was alerted?**
+("Needs attention — not sent yet: kwatch is still confirming it is
+real."), and the acknowledge command shows once. When kwatch ran its own
+check between two possible causes, **Why?** says what it decided:
+"Likely external endpoint db:5432 — kwatch ruled out cluster DNS: …". In
+the Timeline, the same note about several objects is one row with a
+count. With times in UTC, a short time says "UTC".
 
 When kwatch has no cause for an issue, **Why?** says "Cause not found
 yet." and lists what kwatch checked for this issue and found fine, only
@@ -333,16 +390,20 @@ outlined, and the same as a list. A box with another issue opens it.
 ## API
 
 All `/api/*` calls need a session cookie or the bearer token and answer
-JSON. Lists carry an `ETag`; send `If-None-Match` to get `304`.
+JSON. Lists carry an `ETag`; send `If-None-Match` to get `304`. Pages,
+scripts, styles and JSON answers are gzip-compressed for a client that
+sends `Accept-Encoding: gzip` (`Vary: Accept-Encoding`; a compressed
+body's `ETag` ends in `-gz`, and either tag gets the `304`); the live
+stream (`/api/events`) never is.
 
 | Endpoint | Returns |
 |---|---|
 | `GET /api/session` | `204` when signed in; `{"signedIn":false}` (with `"reason":"restarted"` after a restart) otherwise. |
-| `GET /api/incidents` | Paged, filtered and sorted issue list (`status`, `severity`, `namespace`, `q`, `sort`, `page`, `pageSize`, ...). |
+| `GET /api/incidents` | Paged, filtered and sorted issue list (`state` is `active` (default), `resolved` or `all`, and `status` is the same filter; `state=open` or `flapping` with a `status` picks one state; `severity`, `namespace`, `q`, `sort`, `page`, `pageSize`, ...; `bucket` is `attention`, `ongoing` or `cleanup`, one part of the active list, counted in `facets.bucket`). |
 | `GET /api/incidents/{id}` | One issue with its timeline, evidence, delivery trail and similar issues. |
 | `GET /api/overview` | Counts, what to look at first, releases, and the week's insights and trends (`tz`, `tzName`). |
 | `GET /api/status` | Version, edition, last scan, scope, per-channel delivery health (including failing channels), kwatch's own state, and the `kwatch` part: coverage totals, sends per channel, state file and resources. |
-| `GET /api/activity` | Recent changes (`since` 1h or 24h, `untold`, `limit` 1 to 200), with totals by kind for the whole window. |
+| `GET /api/activity` | Recent changes (`since` 1h, 24h or 7d, `untold`, `limit` 1 to 200), with totals by kind for the whole window. |
 | `GET /api/push`; `POST /api/push`, `/api/push/status`, `/api/push/remove`, `/api/push/test` | Browser notifications: the push key; subscribe this browser, read its state, unsubscribe, send a test. |
 | `GET /api/coverage` | What kwatch watches and the gaps. |
 | `GET /api/events` | Server-sent events that say when issues changed. |

@@ -244,11 +244,26 @@ func (a *announcer) send(
 		msg.SkipPaging = true
 	}
 	a.scopePaging(d, &msg)
-	if d.Action == incident.Resolve && msg.Carrier == "" && !msg.PagingOnly {
+	a.noteSent(d, msg)
+	if d.Action == incident.Announce {
+		a.saveBeforeHandoff(d.Incident.ID)
+	}
+	a.sink(ctx, d, msg)
+}
+
+// noteSent records what the message msg for d tells chat: a resolve
+// that reached it, a listed incident that spoke on its own, and the
+// fingerprint of an incident's own message, which an introduction
+// must never repeat (incident.Manager.NoteSaid).
+func (a *announcer) noteSent(d incident.Decision, msg notification.Message) {
+	own := msg.Carrier == "" && !msg.PagingOnly
+	if d.Action == incident.Resolve && own {
 		a.collect.NoteResolveDelivered(d.Incident.ID)
 	}
+	if d.Action != incident.Resolve && own {
+		a.incidents.NoteSaid(d.Incident.ID, d.Incident.Digest)
+	}
 	a.collect.NoteSpoke(d, msg)
-	a.sink(ctx, d, msg)
 }
 
 // listedOnly names the listing that alone announced the incident d

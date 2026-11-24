@@ -26,13 +26,6 @@ const (
 	ModeFamilyMismatch detection.Mode = "FamilyMismatch"
 )
 
-// Rule names of the Service defect rows.
-const (
-	RuleServiceProtocolMismatch = "service-protocol-mismatch"
-	RuleServiceNameIsAddress    = "service-name-is-address"
-	RuleServiceFamilyMismatch   = "service-family-mismatch"
-)
-
 // serviceDefectRows say that a Service whose declaration cannot carry
 // the call explains the pods that fail calling it.
 var serviceDefectRows = []Row{

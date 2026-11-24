@@ -11,7 +11,7 @@
 | kubectl logs deploy/invoices -c app -n billing --previous
 | ```
 10:05:30 material change
-🟠 kube-proxy in kube-system (prod-eu-1) has had only 2 of 3 replicas ready for three minutes. The last run of container app in pod invoices-bcf7f095-c in billing lasted ten seconds; two restarts since the pod was created one hour ago.
-🟠 kube-proxy in kube-system (prod-eu-1) has had only 2 of 3 replicas ready for three minutes.
-| 🟠 **kube-proxy** in **kube-system** (**prod-eu-1**) has had only 2 of 3 replicas ready for three minutes.
+🟠 kube-proxy in kube-system (prod-eu-1) has only 2 of 3 replicas ready. The last run of container app in pod invoices-bcf7f095-c in billing lasted ten seconds; two restarts since the pod was created one hour ago.
+🟠 kube-proxy in kube-system (prod-eu-1) has only 2 of 3 replicas ready.
+| 🟠 **kube-proxy** in **kube-system** (**prod-eu-1**) has only 2 of 3 replicas ready.
 | The last run of container app in pod invoices-bcf7f095-c in **billing** lasted ten seconds; two restarts since the pod was created one hour ago.

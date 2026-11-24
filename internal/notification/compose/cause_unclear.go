@@ -16,7 +16,8 @@ import (
 // a cause, however hedged, is a cause.
 func unclearSentences(f caseFacts) []sentence {
 	p := f.p
-	if p.Cause != nil || !p.CauseUnclear || toldCause(f) ||
+	if p.Cause != nil || f.possible != nil || !p.CauseUnclear ||
+		toldCause(f) ||
 		rootFinding(p, f.members) == nil {
 		return nil
 	}
@@ -50,8 +51,8 @@ var checkedWords = map[inventory.Kind]string{
 // out.
 func checkedSentences(f caseFacts) []sentence {
 	p := f.p
-	if p.Cause != nil || rootFinding(p, f.members) != nil ||
-		onlyAdvisory(f.members) {
+	if p.Cause != nil || f.possible != nil ||
+		rootFinding(p, f.members) != nil || onlyAdvisory(f.members) {
 		return nil
 	}
 	recent := recentChangeSentence(f)

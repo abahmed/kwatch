@@ -38,6 +38,9 @@ type announcer struct {
 	// pending and waiting: see scope_pending.go.
 	pending func(incident.Incident) bool
 	waiting map[string]bool
+	// rescopedAt is when backInScope last asked about every unheard
+	// incident (rescopeEvery).
+	rescopedAt time.Time
 	// pool investigates incidents off the loop; nil without an
 	// investigator.
 	pool *investigationPool

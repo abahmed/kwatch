@@ -92,7 +92,8 @@ func TestPolicyBlockLeadNamesTheCallAndTheChange(t *testing.T) {
 	p := incident.Incident{
 		Root: policy, Impact: []inventory.EntityID{api},
 		Cause: &rootcause.CauseRecord{Rule: "policy-blocks-call",
-			Root: policy, Mode: "BlocksCall.postgres:5432",
+			Score: rootcause.High,
+			Root:  policy, Mode: "BlocksCall.postgres:5432",
 			Change: &inventory.Change{Entity: policy, Created: true,
 				At: callNow, Actor: "bob"}},
 		Members: map[detection.Key]detection.Finding{

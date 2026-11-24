@@ -105,21 +105,29 @@ func TestReclaimDue(t *testing.T) {
 	smallReclaim(t)
 	mib := int64(1 << 20)
 	for name, tc := range map[string]struct {
-		size, free, logical, lastCopy int64
-		want                          bool
+		size, free, logical, lastCopy, lastLogical int64
+		want                                       bool
 	}{
-		"mostly free":        {10 * mib, 6 * mib, 4 * mib, 0, true},
-		"sparse":             {10 * mib, 0, 4 * mib, 0, true},
-		"packed":             {10 * mib, 0, 8 * mib, 0, false},
-		"sparse but tiny":    {mib, 0, mib / 4, 0, false},
-		"not measured yet":   {10 * mib, 0, 0, 0, false},
-		"healthy small free": {10 * mib, 2 * mib, 7 * mib, 0, false},
+		"mostly free":        {10 * mib, 6 * mib, 4 * mib, 0, 0, true},
+		"sparse":             {10 * mib, 0, 4 * mib, 0, 0, true},
+		"packed":             {10 * mib, 0, 8 * mib, 0, 0, false},
+		"sparse but tiny":    {mib, 0, mib / 4, 0, 0, false},
+		"not measured yet":   {10 * mib, 0, 0, 0, 0, false},
+		"healthy small free": {10 * mib, 2 * mib, 7 * mib, 0, 0, false},
 		"as big as the last copy left it": {
-			10 * mib, 0, 4 * mib, 9 * mib, false},
+			10 * mib, 0, 4 * mib, 9 * mib, 4 * mib, false},
 		"outgrew the last copy": {
-			20 * mib, 0, 4 * mib, 9 * mib, true},
+			20 * mib, 0, 4 * mib, 9 * mib, 4 * mib, true},
+		// The staging file: a copy left it large, then the data
+		// shrank to under half. Rewriting it is worth it.
+		"data shrank since the last copy": {
+			10 * mib, 0, 4 * mib, 9 * mib, 12 * mib, true},
+		"last copy's data unknown": {
+			10 * mib, 0, 4 * mib, 9 * mib, 0, true},
 	} {
-		got := reclaimDue(tc.size, tc.free, tc.logical, tc.lastCopy)
+		got, reason := reclaimDue(tc.size, tc.free, tc.logical,
+			tc.lastCopy, tc.lastLogical)
+		assert.NotEmpty(t, reason, name)
 		assert.Equal(t, tc.want, got, name)
 	}
 }
@@ -212,4 +220,35 @@ func TestClaimRemovesALeftoverCopy(t *testing.T) {
 	claim(t, s)
 	_, statErr := os.Stat(path + ".compact")
 	assert.True(t, os.IsNotExist(statErr), "leftover copy still there")
+}
+
+// A rewrite that left a large file (the data was large then) must not
+// block rewrites forever once the data shrinks: the guard follows the
+// data. Seen on staging: 182 MB file, 82 MB of data, no rewrite in 12
+// hours because the last copy was recorded at about the file's size.
+func TestReclaimRewritesAfterTheDataShrankBelowTheLastCopy(t *testing.T) {
+	smallReclaim(t)
+	s := openClaimed(t, newFakeClock())
+	s.bolt().NoSync = true
+	sparseFill(t, s, 6<<20)
+	s.bolt().NoSync = false
+	before, _ := s.fileUsage()
+	report, err := s.measure(context.Background())
+	require.NoError(t, err)
+	logical := report.total()
+	s.counters.logicalBytes.Store(logical)
+	// The last copy left a file this size, when the data was 3 times
+	// what it is now: twice that size is out of reach for ever.
+	s.lastCopy, s.lastCopyLogical = before, 3*logical
+	require.Less(t, before, sparseFactor*s.lastCopy)
+
+	rewrote, err := s.Reclaim()
+
+	require.NoError(t, err)
+	assert.True(t, rewrote, "the guard blocked a half-empty file")
+
+	// Right after, with the same data, it is not copied again.
+	rewrote, err = s.Reclaim()
+	require.NoError(t, err)
+	assert.False(t, rewrote)
 }

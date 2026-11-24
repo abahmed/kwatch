@@ -47,7 +47,8 @@ const flapLongWindow = time.Hour
 func flappingWithin(
 	ctx detection.Context, e inventory.Entity, window time.Duration,
 ) (detection.Finding, bool) {
-	if ctx.Model == nil || !ctx.Synced(kube.KindPod) {
+	if ctx.Model == nil ||
+		!ctx.SyncedFor(kube.KindPod, reasons.ReadinessFlapping) {
 		return detection.Finding{}, false
 	}
 	var pods []inventory.Entity

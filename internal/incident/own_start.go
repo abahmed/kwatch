@@ -34,11 +34,13 @@ var ownStartConsequences = map[string]bool{
 	reasons.DeploymentUnavailable: true,
 }
 
-// noteStart remembers when this manager first ran: kwatch's start.
+// noteStart remembers when this manager first ran: kwatch's start, and
+// the time of the latest run.
 func (m *Manager) noteStart(now time.Time) {
 	if m.started.IsZero() {
 		m.started = now
 	}
+	m.latest = now
 }
 
 // generatedSuffix is what a controller appends to a workload's name: a

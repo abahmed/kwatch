@@ -136,14 +136,16 @@ func gap3Budget(c *cluster, name, value string) *policyv1.PodDisruptionBudget {
 }
 
 // gap3PDBNoPods: a budget's selector has a typo and matches no pod, so a
-// drain of n1 evicts both replicas of search at once.
+// drain of n1 evicts both replicas of search at once. The replicas are
+// back within minutes; the budget that protects nothing is a digest
+// line, never a message of its own.
 func gap3PDBNoPods() scenario {
 	return scenario{
 		expect: g2Exp("pdb-selector-matches-no-pods",
 			"A budget's selector matches no pod (\"No matching pods "+
 				"found\"); a node drain evicts every replica of the "+
 				"application at once and it is down until they restart.",
-			"poddisruptionbudget/shop/search-pdb", "notify",
+			"poddisruptionbudget/shop/search-pdb", "digest",
 			"node//n1", "deployment/shop/search").tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"))

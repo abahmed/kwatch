@@ -115,10 +115,13 @@
     return "kwatch found a different cause: " + rest;
   }
 
+  /* dayLabel heads each day's rows; it says UTC while times show in
+     UTC, as the rows' clock times are short. */
   function dayLabel(d) {
-    if (KW.isToday(d)) return "Today, " + KW.dayMonth(d);
-    if (KW.isYesterday(d)) return "Yesterday, " + KW.dayMonth(d);
-    return KW.dayMonth(d);
+    var z = KW.utc ? " (UTC)" : "";
+    if (KW.isToday(d)) return "Today, " + KW.dayMonth(d) + z;
+    if (KW.isYesterday(d)) return "Yesterday, " + KW.dayMonth(d) + z;
+    return KW.dayMonth(d) + z;
   }
 
   /* entityShown: the object an event names, unless the event text
@@ -150,7 +153,13 @@
      their words without the object, the numbers and the detail after the
      first colon; a failure and its "recovered:" share one. */
   function signature(ev, text) {
-    var t = clean(text).replace(/^recovered:\s*/i, "").replace(/\d+/g, "#"), at = t.indexOf(": ");
+    var name = String(ev.entity || "").split("/").pop();
+    var t = clean(text);
+    // The object's own name is not what happened: the same note about
+    // two pods is the same thing happening again.
+    if (name.length > 2) t = t.split(name).join("#obj");
+    t = t.replace(/^recovered:\s*/i, "").replace(/\d+/g, "#");
+    var at = t.indexOf(": ");
     return ev.kind + "|" + (at >= 12 ? t.slice(0, at) : t);
   }
 
@@ -171,6 +180,14 @@
     var text = title + " · " + KW.plural(n, "time", "times") + " between " + KW.when(first) + " and " + KW.when(last);
     if (fails.length && back) text += ", recovered " + KW.plural(back, "time", "times");
     return text;
+  }
+
+  /* sameText: the same note seen again and again, once: "Deletion is
+     blocked by finalizers ×14 · last 09:13". */
+  function sameText(events) {
+    var last = Math.max.apply(null, events.map(function (e) { return Date.parse(e.ev.at); }));
+    return clean(events[0].w[0]) + " \u00d7" + events.length + " · last " +
+      KW.when(new Date(last).toISOString());
   }
 
   /* timeline: newest first, grouped by day. Back-to-back events that say
@@ -197,18 +214,22 @@
     });
     var sigs = {};
     events.forEach(function (e) {
-      if (e.ev.kind === "opened" || e.ev.kind === "transition" || e.ev.kind === "gap") return;
-      e.sig = signature(e.ev, e.w[0]);
+      if (e.ev.kind === "opened" || e.ev.kind === "gap") return;
+      // A note kwatch read off the objects (transition) groups only
+      // with the very same words: "Deletion is blocked by finalizers
+      // ×14 · last 09:13".
+      e.same = e.ev.kind === "transition";
+      e.sig = e.same ? "same|" + clean(e.w[0]) : signature(e.ev, e.w[0]);
       (sigs[e.sig] = sigs[e.sig] || []).push(e);
     });
     var rows = [], done = {};
     events.forEach(function (e) {
-      var many = e.sig && sigs[e.sig].length >= GROUPED;
+      var many = e.sig && sigs[e.sig].length >= (e.same ? 2 : GROUPED);
       if (many) {
         if (done[e.sig]) return;
         done[e.sig] = true;
         var all = sigs[e.sig];
-        rows.push({ key: e.sig, e: { ev: e.ev, w: [groupText(all), e.w[1]], i: e.i }, group: true,
+        rows.push({ key: e.sig, e: { ev: e.ev, w: [e.same ? sameText(all) : groupText(all), e.w[1]], i: e.i }, group: true,
           all: all.map(function (x) { return x.ev.at; }), folded: 0 });
         return;
       }

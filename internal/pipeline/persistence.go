@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/pipeline/announce"
 )
 
@@ -12,7 +13,9 @@ import (
 // do the I/O, each on its own goroutine: the incident writer saves
 // incident records, fingerprints and the startup marker, and the history
 // writer saves the timeline and the baselines. The decision loop only
-// hands them snapshots and never waits for a write.
+// hands them snapshots and never waits for a write, except for the
+// record of an announcement about to be handed to delivery
+// (handoff_save.go).
 //
 // It also keeps the fingerprints read at start, until the initial list
 // has been compared with them to find changes made while kwatch was down.
@@ -41,6 +44,11 @@ type persistence struct {
 	// carried are the saved fingerprints of kinds that had not synced
 	// when they were compared (see carriedKinds).
 	carried carriedKinds
+	// last are the incident records last handed to the writer, or
+	// restored: what the store holds or is about to (handoff_save.go).
+	// Only the loop reads and replaces it; the writer may still read
+	// the slice, so it is never changed in place.
+	last []incident.Record
 }
 
 func newPersistence(deps Dependencies, stats *workerStats) *persistence {

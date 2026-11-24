@@ -20,4 +20,15 @@ type Marks struct {
 	// pagers heard the incident below the page tier (page_raise.go).
 	PagedBelowPage bool `json:",omitempty"`
 	PageRaised     bool `json:",omitempty"`
+	// Introduced says the incident's one introduction was decided
+	// (introduce.go): it is never introduced again, after a restart
+	// or a reopening either.
+	Introduced bool `json:",omitempty"`
+	// SaidDigest is the fingerprint of the last message of the
+	// incident's own that reached chat (NoteSaid).
+	SaidDigest string `json:",omitempty"`
+	// NewsAt is when the incident last had news: an update other than
+	// a reminder, an introduction or a lowered tier, or a reopening
+	// (reminder_backoff.go). Zero in older records and before any.
+	NewsAt time.Time `json:",omitzero"`
 }

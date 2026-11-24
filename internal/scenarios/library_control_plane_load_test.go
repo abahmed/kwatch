@@ -18,8 +18,12 @@ func controlPlaneLoadScenarios() []scenario {
 	}
 }
 
-// apiLoad is one probe round with the API server's own numbers.
+// apiLoad is one probe round with the API server's own numbers. It is a
+// probe of a shared part, recorded as one (cluster.probe): the staging
+// day's fix probes the API server again without the load, and keeps
+// other failures of the API server hours away.
 func apiLoad(c *cluster, attrs map[string]inventory.Value) {
+	c.probed = append(c.probed, kube.APIServer)
 	attrs[kube.AttrHealthy] = inventory.Bool(true)
 	attrs[kube.AttrLatencyMS] = inventory.Number(40)
 	c.emit(inventory.Observation{

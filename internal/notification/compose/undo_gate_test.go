@@ -50,7 +50,8 @@ func possibleRollout(rival bool, app string) incident.Incident {
 
 // A release blamed only at "possible" gets no undo, in the message's
 // steps or in the steps the dashboard stores from them: only the
-// read-only checks, and the one that would confirm the release.
+// read-only checks, and the one that would confirm the release, also
+// for a release tied with a rival, which the message does not name.
 func TestPossibleReleaseOffersNoUndo(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

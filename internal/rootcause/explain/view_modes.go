@@ -29,7 +29,8 @@ func (v *view) changeModes(
 			continue
 		}
 		if cutoff.ok && change.At.After(cutoff.t) ||
-			v.tooOldFor(id, effect, change) {
+			v.tooOldFor(id, effect, change) ||
+			link == LinkOwns && v.notRollout(id, effect, change) {
 			continue
 		}
 		out = append(out, modeHealth{mode: changeMode(change),

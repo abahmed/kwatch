@@ -174,6 +174,14 @@ spec:
             - name: KWATCH_DASHBOARD_TLS_KEY
               value: /etc/kwatch/dashboard-tls/tls.key
             {{- end }}
+            {{- if $dashEnv.sessionLifetime }}
+            - name: KWATCH_DASHBOARD_SESSION_LIFETIME
+              value: {{ $dashEnv.sessionLifetime | quote }}
+            {{- end }}
+            {{- if $dashEnv.signInHelp }}
+            - name: KWATCH_DASHBOARD_SIGNIN_HELP
+              value: {{ $dashEnv.signInHelp | quote }}
+            {{- end }}
             - name: KWATCH_DEPLOYMENT_NAME
               value: {{ include "kwatch.fullname" . | quote }}
             {{- if $dashEnv.existingSecret }}

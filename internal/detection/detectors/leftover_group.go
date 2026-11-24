@@ -31,7 +31,7 @@ func leftoverOf(
 	ctx detection.Context, member inventory.EntityID, namespace string,
 ) inventory.EntityID {
 	if ctx.Model == nil || namespace == "" ||
-		!ctx.Synced(kube.KindService) {
+		!ctx.SyncedFor(kube.KindService) {
 		return inventory.EntityID{}
 	}
 	for _, call := range webhookCalls(ctx, namespace) {

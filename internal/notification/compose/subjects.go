@@ -17,19 +17,22 @@ func leadSubject(f caseFacts) inventory.EntityID {
 	case !f.ok && p.State == incident.Resolved && !zeroID(p.Subject) &&
 		(!movedAway(p) || f.asAnnounced) && !f.subjectFailing:
 		return p.Subject
+	case f.possible != nil:
+		return f.symptom
 	case policyBlocksCall(p.Cause):
 		// The caller the policy cuts off is the subject; the policy is
 		// the cause it names.
 		return callerWorkload(f)
-	case leadIsGroup(f):
-		// The zone or pool failing as a whole, not its worst node.
+	case leadIsGroup(f), removedDependency(p.Cause):
+		// The zone or pool failing as a whole, not its worst node; the
+		// dependency every user lost, not the first user.
 		return p.Cause.Root
 	case ownCause(p.Cause), blamedChange(f) != nil:
 		return affectedWorkload(f)
 	case p.Cause != nil && rootFinding(p, f.members) == nil:
 		return symptomSubject(f)
 	}
-	return p.Root
+	return f.p.Root
 }
 
 // affectedWorkload is the workload a cause broke: the first workload in

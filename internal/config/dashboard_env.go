@@ -17,11 +17,14 @@ const (
 	dashboardProxiesEnv = "KWATCH_DASHBOARD_TRUSTED_PROXIES"
 	dashboardCertEnv    = "KWATCH_DASHBOARD_TLS_CERT"
 	dashboardKeyEnv     = "KWATCH_DASHBOARD_TLS_KEY"
+	dashboardLifeEnv    = "KWATCH_DASHBOARD_SESSION_LIFETIME"
+	dashboardHelpEnv    = "KWATCH_DASHBOARD_SIGNIN_HELP"
 )
 
-// applyDashboardEnv applies the dashboard port, TLS files and trusted
-// proxies. A port that does not parse is a warning and the file's
-// setting stays. The proxy list wins over the file in both directions.
+// applyDashboardEnv applies the dashboard port, TLS files, trusted
+// proxies, session lifetime and sign-in help. A port that does not
+// parse is a warning and the file's setting stays. The proxy list wins
+// over the file in both directions.
 func applyDashboardEnv(c *Config) {
 	if raw := strings.TrimSpace(os.Getenv(dashboardPortEnv)); raw != "" {
 		port, err := strconv.Atoi(raw)
@@ -41,6 +44,12 @@ func applyDashboardEnv(c *Config) {
 	}
 	if raw, ok := os.LookupEnv(dashboardProxiesEnv); ok {
 		c.Dashboard.TrustedProxies = splitList(raw)
+	}
+	if v := strings.TrimSpace(os.Getenv(dashboardLifeEnv)); v != "" {
+		c.Dashboard.SessionLifetime = v
+	}
+	if v := strings.TrimSpace(os.Getenv(dashboardHelpEnv)); v != "" {
+		c.Dashboard.SignInHelp = v
 	}
 }
 

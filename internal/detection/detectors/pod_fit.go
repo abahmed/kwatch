@@ -109,12 +109,13 @@ type fitSample struct {
 // fitSampleFor reads the sample once per evaluation pass, however many
 // unschedulable pods the pass has.
 func fitSampleFor(ctx detection.Context) fitSample {
-	ids := ctx.Model.Entities(kube.KindNode)
 	// The counts are in the key so a model that gained or lost nodes or
-	// pods at the same instant is read again.
-	key := fmt.Sprintf("pod-fit-nodes/%d/%d", len(ids),
-		len(ctx.Model.Entities(kube.KindPod)))
+	// pods at the same instant is read again. They are counted, not
+	// listed: the key is built for every unschedulable pod.
+	key := fmt.Sprintf("pod-fit-nodes/%d/%d",
+		countOf(ctx.Model, kube.KindNode), countOf(ctx.Model, kube.KindPod))
 	return ctx.Pass(key, func() any {
+		ids := ctx.Model.Entities(kube.KindNode)
 		sort.Slice(ids, func(i, j int) bool {
 			return ids[i].Name < ids[j].Name
 		})
@@ -125,6 +126,21 @@ func fitSampleFor(ctx detection.Context) fitSample {
 		}
 		return s
 	}).(fitSample)
+}
+
+// counter is a reader that counts the entities of a kind without
+// listing them (inventory.Model).
+type counter interface {
+	Count(kind inventory.Kind) int
+}
+
+// countOf counts the present entities of kind, cheaply when the reader
+// can.
+func countOf(model inventory.Reader, kind inventory.Kind) int {
+	if c, ok := model.(counter); ok {
+		return c.Count(kind)
+	}
+	return len(model.Entities(kind))
 }
 
 // evenSample picks at most limit items spread evenly over ids, so a

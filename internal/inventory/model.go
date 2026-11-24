@@ -9,7 +9,8 @@ import (
 )
 
 // DefaultMaxChangesPerEntity bounds the in-memory change history of one
-// entity. Older changes live in the persistent store.
+// entity, for scale-only edits and for the other changes each (see
+// ScaleOnly). Older changes live in the persistent store.
 const DefaultMaxChangesPerEntity = 64
 
 // Options configures a Model.
@@ -44,12 +45,17 @@ type Model struct {
 type record struct {
 	// entity holds the identity; its Attributes map stays nil, the
 	// attributes live in attrs (see attr_store.go).
-	entity    Entity
-	present   bool
+	entity  Entity
+	present bool
+	// goneBy is the source of the last Gone (see lateWithdraw).
+	goneBy    sourceID
 	goneAt    time.Time
 	attrs     []attrEntry
 	relations []relationEntry
 	changes   []Change
+	// pinned says changes holds pinned changes, kept for
+	// PinnedRetention (history_pinned.go).
+	pinned    bool
 	notes     []Note
 	noteParts map[noteKey][]originCount
 	health    []HealthMark
@@ -195,11 +201,16 @@ func (m *Model) recordFor(id EntityID) *record {
 	return rec
 }
 
+// observe sets what one source says about an entity. A late withdraw
+// (lateWithdraw) brings nothing back.
 func (m *Model) observe(observation Observation) Update {
 	if m.enrichment[observation.Source] {
 		if rec := m.records[observation.Entity]; rec == nil || !rec.present {
 			return Update{}
 		}
+	}
+	if m.lateWithdraw(observation) {
+		return Update{}
 	}
 	rec := m.recordFor(observation.Entity)
 	appeared := !rec.present
@@ -265,11 +276,8 @@ func (m *Model) change(observation Observation) Update {
 	if change.At.IsZero() {
 		change.At = observation.At
 	}
-	rec.changes = append(rec.changes, change)
+	rec.changes = boundChanges(append(rec.changes, change), m.maxChanges)
 	m.history.addChange(change)
-	if overflow := len(rec.changes) - m.maxChanges; overflow > 0 {
-		rec.changes = append(rec.changes[:0:0], rec.changes[overflow:]...)
-	}
 	return Update{Touched: []EntityID{observation.Entity}}
 }
 
@@ -294,6 +302,7 @@ func (m *Model) remove(observation Observation) Update {
 	rec.goneAttrs = maps.Clone(observation.Attributes)
 	rec.present = false
 	rec.goneAt = observation.At
+	rec.goneBy = m.sources.id(observation.Source)
 	rec.served = nil
 	m.unindexKind(observation.Entity)
 	m.change(Observation{
@@ -301,6 +310,22 @@ func (m *Model) remove(observation Observation) Update {
 		Change: Change{Deleted: true, Actor: observation.Change.Actor},
 	})
 	return Update{Touched: touched}
+}
+
+// lateWithdraw reports an observation that says nothing (no attributes,
+// no UID) about an entity another source removed: that source taking
+// back what it said, applied after the removal (a prober round behind a
+// watch's Gone). It must not bring back an empty entity that nothing
+// would ever remove. The source that removed the entity may still
+// observe it again: that is the object created anew.
+func (m *Model) lateWithdraw(observation Observation) bool {
+	rec := m.records[observation.Entity]
+	if rec == nil || rec.present || rec.goneAt.IsZero() ||
+		len(observation.Attributes) > 0 || observation.UID != "" ||
+		observation.AltUID != "" {
+		return false
+	}
+	return m.sources.id(observation.Source) != rec.goneBy
 }
 
 func (m *Model) indexKind(id EntityID) { m.byKind.add(id) }

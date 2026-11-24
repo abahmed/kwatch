@@ -157,3 +157,21 @@ func TestGenericAttributesRecordWhenARunFinished(t *testing.T) {
 	assert.NotContains(t, desc.Attributes, AttrFinished,
 		"an unparseable time is not recorded")
 }
+
+// A run that failed keeps the message it states with its phase; a run
+// in progress does not, so a progress note never reads as a failure.
+func TestGenericAttributesKeepTheMessageOfAFailedRun(t *testing.T) {
+	run := func(phase string) Description {
+		w := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "argoproj.io/v1alpha1", "kind": "Workflow",
+			"metadata": map[string]any{"name": "w", "namespace": "ns"},
+			"status": map[string]any{"phase": phase,
+				"message": "child 'w-2' failed"},
+		}}
+		return describeWith(t, NewUnstructuredSchema("argoproj.io",
+			"Workflow"), WatchStatus, w)
+	}
+	assert.Equal(t, inventory.Text("child 'w-2' failed"),
+		run("Error").Attributes[AttrMessage])
+	assert.NotContains(t, run("Running").Attributes, AttrMessage)
+}

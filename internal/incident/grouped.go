@@ -182,6 +182,11 @@ func groupingText(
 	model inventory.Reader, p Incident, u memberUnits,
 ) (string, string) {
 	if members, ok := p.Leftovers(); ok && len(members) > 0 {
+		if p.Root.Kind == kube.KindNamespace {
+			return GroupedLeftover, "Grouped because all " + u.noun() +
+				" in namespace " + p.Root.Name + " were scaled to 0 " +
+				"while routes still send them traffic."
+		}
 		return GroupedLeftover, "Grouped because all " + u.noun() +
 			" were left behind by " + objectWords(p.Root) + "."
 	}

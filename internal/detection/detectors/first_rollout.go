@@ -23,7 +23,7 @@ func neverHealthyEvidence(
 ) []detection.Evidence {
 	created := timestamp(e, kube.AttrCreated)
 	if e.ID.Kind != kube.KindDeployment || ctx.Model == nil ||
-		created.IsZero() || !ctx.Synced(kube.KindReplicaSet) ||
+		created.IsZero() || !ctx.Readable(kube.KindReplicaSet) ||
 		replicaSetsOf(ctx, e.ID) != 1 {
 		return nil
 	}

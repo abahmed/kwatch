@@ -1,0 +1,8 @@
+{
+  "name": "removed-policy-engine-leftovers",
+  "description": "An uninstalled policy engine left four webhooks calling its gone Service, its Helm release stuck uninstalling and an expired certificate: one digest incident rooted at the Service.",
+  "root": "service/guard-system/guard-svc",
+  "tier": "digest",
+  "maxMessages": 1,
+  "tail": "1h0m0s"
+}

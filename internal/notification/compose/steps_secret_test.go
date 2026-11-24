@@ -49,7 +49,8 @@ func TestSecretStepKeepsPodsWhenPodsUseIt(t *testing.T) {
 	p, members := expiredSecret(detection.Critical, "pod/api-0")
 	steps := nextSteps(p, members)
 	if len(steps) != 1 || !strings.Contains(steps[0].Text, "pods") ||
-		steps[0].Command != "kubectl describe secret shop-tls -n shop" {
+		steps[0].Command != "kubectl get pods -o yaml -n shop | "+
+			"grep -n -B2 -E '(name|secretName): shop-tls$'" {
 		t.Errorf("steps = %+v", steps)
 	}
 }
@@ -58,7 +59,8 @@ func TestSecretStepWhenNothingUsesIt(t *testing.T) {
 	p, members := expiredSecret(detection.Warning)
 	steps := nextSteps(p, members)
 	if len(steps) != 1 || strings.Contains(steps[0].Text, "pods") ||
-		!strings.Contains(steps[0].Text, "nothing") ||
+		!strings.Contains(steps[0].Text, "no pod or Ingress") ||
+		!strings.Contains(steps[0].Text, "through the API") ||
 		!strings.HasPrefix(steps[0].Command, "kubectl get ingress,pods "+
 			"-n shop -o yaml | grep -c -F shop-tls") ||
 		steps[0].Mutating {

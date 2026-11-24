@@ -61,7 +61,7 @@ func TestWriteScaledToZeroBlamesNoRelease(t *testing.T) {
 		Path:  "spec.template.spec.containers[0].image",
 		After: "registry.example/api:2.3"}}}
 	p.Cause = &rootcause.CauseRecord{Rule: "rollout", Root: p.Root,
-		Mode: "Changed.Spec", Change: &release}
+		Mode: "Changed.Spec", Change: &release, Score: rootcause.High}
 
 	msg := Writer{}.Write(announce(p), writerNow)
 

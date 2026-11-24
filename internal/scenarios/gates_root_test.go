@@ -50,5 +50,15 @@ func foundLine(a scorecard.Accuracy, verdicts []verdict) string {
 		"higher: %d (%d hedges on ambiguous labels tolerated). Wrong root "+
 		"stated in some message: %d scenarios, %d of them labelled as "+
 		"legitimate revisions.\n", a.CorrectStated, a.CorrectFallback,
-		a.CorrectUnknown, a.WrongStated, a.ToleratedHedges, later, opted)
+		a.CorrectUnknown, a.WrongStated, a.ToleratedHedges, later, opted) +
+		statedLines(a)
+}
+
+// statedLines report, without a gate, the trade-off of confirming
+// causes: how many labelled cases a message states a wrong cause for,
+// and how many it states no cause for.
+func statedLines(a scorecard.Accuracy) string {
+	return fmt.Sprintf("Wrong cause stated: %d of %d labelled cases.\n"+
+		"No cause stated: %d of %d labelled cases.\n",
+		a.WrongCauseStated, a.Cases, a.NoCauseStated, a.Cases)
 }

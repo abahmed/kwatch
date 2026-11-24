@@ -15,7 +15,7 @@ import (
 // incident with no history, and whether people heard "failing again" or
 // a new story would depend on that internal revision. So an incident
 // remembers every root it left, and a failure at one of them finds it:
-// within RepageWindow of the resolve the incident reopens, after it the
+// within ReopenWindow of the resolve the incident reopens, after it the
 // new incident is linked to it as its previous one.
 
 // maxPastRoots bounds the roots an incident remembers; the latest win.
@@ -71,7 +71,7 @@ func (m *Manager) pastRootIncident(root inventory.EntityID) *Incident {
 }
 
 // returnsHere reopens previous, an incident that left root, for a
-// failure at root less than RepageWindow after it resolved: the outage
+// failure at root less than ReopenWindow after it resolved: the outage
 // is back, whatever root it was revised to. It moves back to root, where
 // the reasoning places the failure now, and reports whether it reopened.
 func (m *Manager) returnsHere(

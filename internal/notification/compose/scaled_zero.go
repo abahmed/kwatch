@@ -41,6 +41,15 @@ func scaledZeroSentences(f caseFacts) []sentence {
 	return nil
 }
 
+// staleChange reports members that no change explains any more: what
+// they say now is that a workload is scaled to zero or paused with an
+// edit, whatever was blamed when the incident began. Neither the lead
+// nor the steps blame or undo the change then: the lead states what
+// holds now, and no step reverts a release nothing fails under.
+func staleChange(members []detection.Finding) bool {
+	return onlyScaledToZero(members) || onlyPausedEdit(members)
+}
+
 // onlyScaledToZero reports members that only say a routed workload is
 // scaled to zero. Such a workload is not failing, and no release is
 // blamed for it: the lead states the scale-down (its own finding), and

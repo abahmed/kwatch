@@ -10,11 +10,14 @@ import (
 	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
+// secretCause is a pod crash blamed on secret db at score, with one
+// proof for it, so a possible cause is corroborated.
 func secretCause(score float64) incident.Incident {
 	p := podCrash(incident.Notify)
 	p.Root = inventory.CoreID("secret", "default", "db")
 	p.Cause = &rootcause.CauseRecord{Root: p.Root, Score: score,
-		Summary: "secret db is missing"}
+		Summary: "secret db is missing",
+		Proof:   []rootcause.Proof{{Text: "it is missing", Supports: true}}}
 	return p
 }
 
@@ -31,6 +34,15 @@ func TestLeadWordsFollowTheScorecardLevels(t *testing.T) {
 		{"possible only suggests", 0.46,
 			"crash looping; secret db is missing, which might be related"},
 	}
+	// Without the proof nothing corroborates a possible cause: it is
+	// not named as the cause.
+	uncorroborated := secretCause(0.46)
+	uncorroborated.Cause.Proof = nil
+	msg := Writer{}.Write(announce(uncorroborated), writerNow)
+	if !strings.HasSuffix(msg.Title, "; kwatch could not confirm a "+
+		"cause.") || strings.Contains(msg.Title, "secret db") {
+		t.Errorf("Title = %q names an uncorroborated cause", msg.Title)
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			msg := Writer{}.Write(announce(secretCause(tt.score)), writerNow)
@@ -42,7 +54,10 @@ func TestLeadWordsFollowTheScorecardLevels(t *testing.T) {
 	}
 }
 
-func TestCloseRivalsAreTwoPossibleCauses(t *testing.T) {
+// Two causes that scored almost alike are neither named as the cause:
+// the lead says the symptom and that no cause was confirmed, and only
+// the closing line names both, as possibilities.
+func TestCloseRivalsAreNotNamedAsTheCause(t *testing.T) {
 	p := secretCause(0.74)
 	p.Cause.Rival = &rootcause.CauseRecord{
 		Root:  inventory.CoreID("configmap", "default", "cfg"),
@@ -50,14 +65,17 @@ func TestCloseRivalsAreTwoPossibleCauses(t *testing.T) {
 
 	msg := Writer{}.Write(announce(p), writerNow)
 
-	want := "Pod api-1 in default is crash looping; two possible " +
-		"causes: secret db is missing or configmap cfg is missing."
+	want := "Pod api-1 in default is crash looping; kwatch could not " +
+		"confirm a cause."
 	if msg.Title != want {
 		t.Errorf("Title = %q, want %q", msg.Title, want)
 	}
-	if msg.Confidence != "possible" {
-		t.Errorf("Confidence = %q, a pair is never stated as high",
-			msg.Confidence)
+	if !strings.HasSuffix(msg.Note, "Possibilities kwatch could not "+
+		"confirm: secret db is missing or configmap cfg is missing.") {
+		t.Errorf("the possibilities close the message: %s", msg.Note)
+	}
+	if msg.Confidence != "" {
+		t.Errorf("Confidence = %q, no cause is stated", msg.Confidence)
 	}
 	if strings.Contains(msg.Note, "Rolling back") {
 		t.Errorf("no fix is offered for an undecided cause: %s", msg.Note)

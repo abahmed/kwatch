@@ -6,10 +6,6 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
-// RuleClaimRestoresFromSnapshot names the row that blames a claim
-// restored from a snapshot whose deletion waits.
-const RuleClaimRestoresFromSnapshot = "claim-restores-from-snapshot"
-
 // snapshotRestoreRows blame the claim that is restored from a
 // snapshot for the snapshot's deletion that waits.
 var snapshotRestoreRows = []Row{{
