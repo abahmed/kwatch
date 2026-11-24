@@ -81,7 +81,7 @@ func countErrors(lines []string, at time.Time, namespace string) windowCount {
 		shown:      map[string]string{},
 		unresolved: unresolvedIn(lines, namespace)}
 	for _, line := range lines {
-		if !IsErrorLine(line) {
+		if !IsSampledErrorLine(line) {
 			continue
 		}
 		w.errors++

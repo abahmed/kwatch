@@ -21,6 +21,11 @@ const (
 	// ErrorBurstFactor is how many times the workload's earlier error
 	// rate per window the last window must reach.
 	ErrorBurstFactor = 5.0
+	// ErrorBaselineRateMin is the least earlier error rate per window
+	// the factor is applied to. A quiet service has a rate near zero,
+	// and 5x of nothing is nothing; 8 makes it need 40 lines in one
+	// window (twice the floor), a jump no routine retry storm makes.
+	ErrorBaselineRateMin = 8.0
 	// ErrorBaselineMin is the least history a workload needs before a
 	// burst is judged: without it, a service that always logs this many
 	// errors would be flagged right after kwatch started.
@@ -57,7 +62,7 @@ func (LogErrors) Detect(
 		return nil
 	}
 	rate := baseline / (span / window)
-	if errors < ErrorBurstFactor*max(rate, 1) {
+	if errors < ErrorBurstFactor*max(rate, ErrorBaselineRateMin) {
 		return nil
 	}
 	since := ctx.Onset("log-error-burst", valueSince(e, kube.AttrLogErrors))
