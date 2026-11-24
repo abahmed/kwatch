@@ -6,12 +6,12 @@ multi-ecosystem-groups:
   all-dependencies:
     schedule:
       interval: "weekly"
+    commit-message:
+      prefix: "⬆️"
 
 updates:
   - package-ecosystem: "gomod"
     directory: "/"
-    commit-message:
-      prefix: "⬆️"
     patterns: ["*"]
     multi-ecosystem-group: "all-dependencies"
   # The release image and the e2e receiver and workload images. Base images
@@ -21,13 +21,9 @@ updates:
       - "/"
       - "/test/e2e/receiver"
       - "/test/e2e/workload"
-    commit-message:
-      prefix: "⬆️"
     patterns: ["*"]
     multi-ecosystem-group: "all-dependencies"
   - package-ecosystem: "github-actions"
     directory: "/"
-    commit-message:
-      prefix: "⬆️"
     patterns: ["*"]
     multi-ecosystem-group: "all-dependencies"
